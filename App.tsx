@@ -42,6 +42,7 @@ const App: React.FC = () => {
   const [activeOP, setActiveOP] = useState<string | null>(null);
   const [activeOPCodigo, setActiveOPCodigo] = useState<string | null>(null);
   const [activeOPData, setActiveOPData] = useState<any>(null); // Full OP data with meta
+  const [activeOPRealized, setActiveOPRealized] = useState<number>(0);
   const [operatorTurno, setOperatorTurno] = useState<string>('Turno Atual');
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [currentLoteId, setCurrentLoteId] = useState<string | null>(null);
@@ -243,11 +244,15 @@ const App: React.FC = () => {
     };
   }, [currentUser]);
 
-  // Fetch detailed Active OP data (including product info) when activeOP changes
+  // Fetch detailed Active OP data (including product info and production total) when activeOP changes
   useEffect(() => {
     const fetchOPDetails = async () => {
-      if (!activeOP) return;
+      if (!activeOP) {
+        setActiveOPRealized(0);
+        return;
+      }
 
+      // 1. Fetch OP meta and product info
       const { data, error } = await supabase
         .from('ordens_producao')
         .select('*, produtos(nome, codigo)')
@@ -258,6 +263,17 @@ const App: React.FC = () => {
         setActiveOPData(data as any);
       } else if (error) {
         console.error('Error fetching extended OP details:', error);
+      }
+
+      // 2. Fetch sum of produced items for this OP
+      const { data: prodData, error: prodError } = await supabase
+        .from('registros_producao')
+        .select('quantidade_boa')
+        .eq('op_id', activeOP);
+
+      if (prodData && !prodError) {
+        const total = prodData.reduce((acc, r) => acc + (r.quantidade_boa || 0), 0);
+        setActiveOPRealized(total);
       }
     };
 
@@ -525,7 +541,7 @@ const App: React.FC = () => {
 
               opState={opState}
               statusChangeAt={localStatusChangeAt}
-              realized={0} // TODO: Fetch from registros_producao
+              realized={activeOPRealized}
               oee={95} // TODO: Calculate OEE
               opId={activeOP}
               opCodigo={activeOPCodigo}
@@ -552,6 +568,10 @@ const App: React.FC = () => {
 
                   setLocalStatusChangeAt(now);
                   setLastPhaseStartTime(now);
+                  await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
+                    operatorId: currentUser.id,
+                    opId: activeOP
+                  }));
                   setOpState('PRODUCAO');
                 }
               }}
@@ -572,6 +592,10 @@ const App: React.FC = () => {
 
                   setLocalStatusChangeAt(now);
                   setLastPhaseStartTime(now);
+                  await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
+                    operatorId: currentUser.id,
+                    opId: activeOP
+                  }));
                   setOpState('PRODUCAO');
                 }
               }}
@@ -684,7 +708,13 @@ const App: React.FC = () => {
                   setAccumulatedStopTime(0);
 
                   setLocalStatusChangeAt(now);
-                  setLastPhaseStartTime(now); // Start tracking phase time
+                  setLastPhaseStartTime(now);
+                  await realtimeManager.broadcastMachineUpdate(
+                    createMachineUpdate(selectedMachineId, MachineStatus.SETUP, {
+                      operatorId: currentUser.id,
+                      opId: op.id
+                    })
+                  );
                   setOpState('SETUP');
                   setSetupSeconds(0);
                   setProductionSeconds(0);
@@ -750,6 +780,12 @@ const App: React.FC = () => {
 
                 setLocalStatusChangeAt(now);
                 setLastPhaseStartTime(now);
+                await realtimeManager.broadcastMachineUpdate(
+                  createMachineUpdate(currentMachine.id, MachineStatus.STOPPED, {
+                    operatorId: currentUser.id,
+                    opId: currentMachine.op_atual_id
+                  })
+                );
                 setOpState('PARADA');
               }
               closeModals();
@@ -761,28 +797,48 @@ const App: React.FC = () => {
             onClose={closeModals}
             opId={activeOPCodigo || 'N/A'}
             meta={activeOPData?.quantidade_meta || 500}
-            realized={0} // TODO: Fetch real produced count from registros_producao
+            realized={activeOPRealized}
             sectorName={currentUser?.sector || 'Produção'}
             onTransfer={async (produced, pending) => {
               // Transfer to next sector (mark as ready for transfer)
               if (currentMachine && activeOP) {
+                const delta = Math.max(0, produced - activeOPRealized);
+
                 await supabase.from('registros_producao').insert({
                   op_id: activeOP,
                   maquina_id: currentMachine.id,
                   operador_id: currentUser?.id,
-                  quantidade_boa: produced,
+                  quantidade_boa: delta,
                   quantidade_refugo: 0,
                   data_fim: new Date().toISOString(),
                   turno: 'Transferência'
                 });
 
-                // Release machine but keep OP in EM_ANDAMENTO
+                setActiveOPRealized(prev => prev + delta);
+
+                // Update OP with accumulated quantities
+                await supabase.from('ordens_producao').update({
+                  quantidade_produzida: produced,
+                  quantidade_refugo: 0,
+                  tempo_producao_segundos: accumulatedProductionTime,
+                  tempo_setup_segundos: accumulatedSetupTime,
+                  tempo_parada_segundos: accumulatedStopTime
+                }).eq('id', activeOP);
+
+                // Release machine but KEEP operator logged in
                 await supabase.from('maquinas').update({
                   status_atual: MachineStatus.AVAILABLE,
                   status_change_at: new Date().toISOString(),
-                  op_atual_id: null,
-                  operador_atual_id: null
+                  op_atual_id: null
+                  // ✅ operador_atual_id NOT cleared - operator stays logged in
                 }).eq('id', currentMachine.id);
+
+                await realtimeManager.broadcastMachineUpdate(
+                  createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
+                    operatorId: currentUser?.id, // ✅ Operator remains on machine
+                    opId: null
+                  })
+                );
 
                 setOpState('IDLE');
                 setActiveOP(null);
@@ -795,15 +851,20 @@ const App: React.FC = () => {
                 const currentHour = new Date().getHours();
                 const turno = (currentHour >= 6 && currentHour < 14) ? 'Manhã' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
 
+                const delta = Math.max(0, good - activeOPRealized);
+
+                // Save production log (historical record)
                 await supabase.from('registros_producao').insert({
                   op_id: activeOP, // activeOP is already the UUID
                   maquina_id: currentMachine.id,
                   operador_id: currentUser.id,
-                  quantidade_boa: good,
+                  quantidade_boa: delta,
                   quantidade_refugo: scrap,
                   data_fim: new Date().toISOString(),
                   turno: turno
                 });
+
+                setActiveOPRealized(prev => prev + delta);
 
                 // Generate Lot Record
                 const { data: lote } = await supabase.from('lotes_rastreabilidade').insert({
@@ -816,17 +877,30 @@ const App: React.FC = () => {
 
                 if (lote) setCurrentLoteId(lote.id);
 
-                // End assignment
-                // Update Machine Status & Timestamp (Reset to AVAILABLE)
+                // Update Machine Status & Timestamp (Reset to AVAILABLE but KEEP operator)
                 await supabase.from('maquinas').update({
                   status_atual: MachineStatus.AVAILABLE,
                   status_change_at: new Date().toISOString(),
-                  op_atual_id: null,
-                  operador_atual_id: null
+                  op_atual_id: null
+                  // ✅ operador_atual_id NOT cleared - operator stays logged in
                 }).eq('id', currentMachine.id);
 
-                // Update OP Status
-                await supabase.from('ordens_producao').update({ status: 'FINALIZADA' }).eq('id', activeOP);
+                await realtimeManager.broadcastMachineUpdate(
+                  createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
+                    operatorId: currentUser.id, // ✅ Operator remains on machine
+                    opId: null
+                  })
+                );
+
+                // Update OP Status with accumulated quantities and times
+                await supabase.from('ordens_producao').update({
+                  status: 'FINALIZADA',
+                  quantidade_produzida: good,
+                  quantidade_refugo: scrap,
+                  tempo_producao_segundos: accumulatedProductionTime,
+                  tempo_setup_segundos: accumulatedSetupTime,
+                  tempo_parada_segundos: accumulatedStopTime
+                }).eq('id', activeOP);
 
                 // --- AUTO-START NEXT OP ---
                 // Buscar a próxima OP na sequência (status != FINALIZADA, != CANCELADA, sequence > current OR just next by sequence)
@@ -884,16 +958,25 @@ const App: React.FC = () => {
             }}
             onSuspend={async (produced, pending) => {
               if (currentMachine && activeOP) {
-                // Save partial production record
-                await supabase.from('registros_producao').insert({
+                const delta = Math.max(0, produced - activeOPRealized);
+
+                // Save partial production record (the delta)
+                const { error: prodError } = await supabase.from('registros_producao').insert({
                   op_id: activeOP,
                   maquina_id: currentMachine.id,
                   operador_id: currentUser?.id,
-                  quantidade_boa: produced,
+                  quantidade_boa: delta,
                   quantidade_refugo: 0,
                   data_fim: new Date().toISOString(),
                   turno: 'Parcial'
                 });
+
+                if (prodError) {
+                  console.error('Erro ao salvar produção parcial:', prodError);
+                  alert(`Erro ao salvar produção: ${prodError.message}`);
+                }
+
+                setActiveOPRealized(prev => prev + delta);
 
                 await supabase
                   .from('op_operadores')
@@ -901,16 +984,30 @@ const App: React.FC = () => {
                   .eq('maquina_id', currentMachine.id)
                   .is('fim', null);
 
-                // Update OP with pending quantity info
+                // Update OP with accumulated quantities and status
                 await supabase.from('ordens_producao').update({
-                  status: 'SUSPENSA'
+                  status: 'SUSPENSA',
+                  quantidade_produzida: produced,
+                  quantidade_refugo: 0,
+                  tempo_producao_segundos: accumulatedProductionTime,
+                  tempo_setup_segundos: accumulatedSetupTime,
+                  tempo_parada_segundos: accumulatedStopTime
                 }).eq('id', activeOP);
 
-                // Update Machine Status & Timestamp
+                // Update Machine Status & Timestamp (KEEP operator logged in)
                 await supabase.from('maquinas').update({
                   status_atual: MachineStatus.SUSPENDED,
-                  status_change_at: new Date().toISOString()
+                  status_change_at: new Date().toISOString(),
+                  op_atual_id: null
+                  // ✅ operador_atual_id NOT cleared - operator stays logged in
                 }).eq('id', currentMachine.id);
+
+                await realtimeManager.broadcastMachineUpdate(
+                  createMachineUpdate(currentMachine.id, MachineStatus.SUSPENDED, {
+                    operatorId: currentUser?.id, // ✅ Operator remains on machine
+                    opId: null
+                  })
+                );
 
                 setOpState('SUSPENSA');
                 closeModals();
@@ -926,7 +1023,7 @@ const App: React.FC = () => {
               closeModals();
             }}
             opId={activeOPCodigo || activeOP || 'N/A'}
-            realized={0} // TODO: Get final count from DB state
+            realized={activeOPRealized}
             loteId={currentLoteId || ''}
             machine={currentMachine?.nome || 'Máquina'}
             operator={currentUser?.name || 'Operador'}

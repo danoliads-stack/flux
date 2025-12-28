@@ -403,10 +403,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const fetchProductionStats = async () => {
     if (!opId) return;
 
-    // Get OP details (quantidade_meta and ciclo_estimado)
+    // Get OP details (now includes persisted state fields)
     const { data: opData, error: opError } = await supabase
       .from('ordens_producao')
-      .select('quantidade_meta, ciclo_estimado, produtos(nome, codigo)')
+      .select('quantidade_meta, ciclo_estimado, quantidade_produzida, quantidade_refugo, produtos(nome, codigo)')
       .eq('id', opId)
       .single();
 
@@ -415,31 +415,42 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       console.error('Error fetching OP data:', opError);
     }
 
-    let currentProduced = 0;
-    let currentScrap = 0;
-
-    // Sum production records for this OP
-    const { data: prodRecords } = await supabase
-      .from('registros_producao')
-      .select('quantidade_boa, quantidade_refugo')
-      .eq('op_id', opId);
-
-    if (prodRecords && prodRecords.length > 0) {
-      currentProduced = prodRecords.reduce((sum, r) => sum + (r.quantidade_boa || 0), 0);
-      currentScrap = prodRecords.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
-      setTotalProduced(currentProduced);
-      setTotalScrap(currentScrap);
-    } else {
-      setTotalProduced(0);
-      setTotalScrap(0);
-    }
-
     if (opData) {
+      // Use persisted values from OP as primary source
+      const persistedProduced = opData.quantidade_produzida || 0;
+      const persistedScrap = opData.quantidade_refugo || 0;
+
+      // Also check registros_producao for validation/backup
+      const { data: prodRecords } = await supabase
+        .from('registros_producao')
+        .select('quantidade_boa, quantidade_refugo')
+        .eq('op_id', opId);
+
+      let recordsProduced = 0;
+      let recordsScrap = 0;
+      if (prodRecords && prodRecords.length > 0) {
+        recordsProduced = prodRecords.reduce((sum, r) => sum + (r.quantidade_boa || 0), 0);
+        recordsScrap = prodRecords.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
+      }
+
+      // Use persisted values (they're always the source of truth)
+      // Records are kept for historical audit trail
+      setTotalProduced(persistedProduced);
+      setTotalScrap(persistedScrap);
+
+      console.log('[fetchProductionStats] ✅ Using persisted OP state:', {
+        persistedProduced,
+        persistedScrap,
+        recordsProduced,
+        recordsScrap
+      });
+
       setOpQuantity(opData.quantidade_meta || 0);
       setCycleTime(opData.ciclo_estimado || 0);
+
       // Calculate estimated time (HH:MM format) - based on REMAINING quantity
       // Time Remaining = (Meta - Produced) * CycleTime
-      const remainingQty = Math.max(0, (opData.quantidade_meta || 0) - currentProduced);
+      const remainingQty = Math.max(0, (opData.quantidade_meta || 0) - persistedProduced);
       const totalSecondsRemaining = remainingQty * (opData.ciclo_estimado || 0);
 
       const hours = Math.floor(totalSecondsRemaining / 3600);
@@ -833,7 +844,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       )
       .subscribe();
 
-    // 5. Ordens de Produção (Updates Sequence)
+    // 5. Ordens de Produção (Updates Sequence and Production Stats)
     const opSubscription = supabase
       .channel('ordens_producao_realtime')
       .on(
@@ -842,6 +853,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         () => {
           console.log('Realtime OP update detected');
           fetchOPSequence();
+          fetchProductionStats(); // ✅ Also update production stats when OP changes
         }
       )
       .subscribe();
@@ -997,11 +1009,11 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
       {/* Machine Status indicator */}
       <div className="flex items-center gap-2">
-        <span className={`w-2.5 h-2.5 rounded-full shadow-glow-green ${opState === 'PRODUCAO' ? 'bg-secondary animate-pulse' : opState === 'PARADA' ? 'bg-danger shadow-glow-red' : 'bg-primary shadow-glow-blue'
+        <span className={`w-2.5 h-2.5 rounded-full shadow-glow-green ${opState === 'PRODUCAO' ? 'bg-secondary animate-pulse' : opState === 'PARADA' ? 'bg-danger shadow-glow-red' : opState === 'SUSPENSA' ? 'bg-orange-500 shadow-glow-orange' : 'bg-primary shadow-glow-blue'
           }`}></span>
         <span className={`text-sm font-bold tracking-wide uppercase ${opState === 'PRODUCAO' ? 'text-secondary' : opState === 'PARADA' ? 'text-danger' : 'text-primary'
           }`}>
-          {opState === 'PRODUCAO' ? 'Máquina Rodando' : opState === 'PARADA' ? 'Máquina Parada' : opState === 'SETUP' ? 'Em Ajuste (Setup)' : 'Máquina Disponível'}
+          {opState === 'PRODUCAO' ? 'Máquina Rodando' : opState === 'PARADA' ? 'Máquina Parada' : opState === 'SETUP' ? 'Em Ajuste (Setup)' : opState === 'SUSPENSA' ? 'OP Suspensa' : 'Máquina Disponível'}
         </span>
       </div>
 
@@ -1043,9 +1055,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="text-3xl md:text-5xl font-mono font-medium tracking-tight mb-2 text-white">{time}</div>
           <div className={`inline-block px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${opState === 'PRODUCAO'
             ? 'bg-secondary/10 text-secondary border-secondary/30'
-            : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
+            : opState === 'SUSPENSA' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
+              : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
             }`}>
-            {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : 'Aguardando'}
+            {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : 'Aguardando'}
           </div>
         </div>
       </div>
@@ -1152,19 +1165,19 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             onClick={() => {
               console.log('Production button clicked, opState:', opState);
               if (opState === 'SETUP') onStartProduction();
-              if (opState === 'PARADA') onRetomar();
+              if (opState === 'PARADA' || opState === 'SUSPENSA') onRetomar();
             }}
-            disabled={opState !== 'SETUP' && opState !== 'PARADA'}
+            disabled={opState !== 'SETUP' && opState !== 'PARADA' && opState !== 'SUSPENSA'}
             className={`rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between relative overflow-hidden ${opState === 'PRODUCAO'
               ? 'bg-green-900/10 border-2 border-green-500 shadow-lg shadow-green-500/20 cursor-default'
-              : (opState === 'SETUP' || opState === 'PARADA')
+              : (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA')
                 ? 'bg-primary/10 border-2 border-primary hover:bg-primary/20 cursor-pointer'
                 : 'bg-surface-dark border border-border-dark opacity-40 grayscale cursor-not-allowed'
               }`}
           >
             <div className="flex items-start justify-between">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center ${opState === 'PRODUCAO' ? 'bg-green-500/20 text-green-500' :
-                (opState === 'SETUP' || opState === 'PARADA') ? 'bg-primary/20 text-primary' :
+                (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA') ? 'bg-primary/20 text-primary' :
                   'bg-gray-700/20 text-gray-500'
                 }`}>
                 <span className={`material-icons-outlined text-2xl ${opState === 'PRODUCAO' ? 'animate-spin-slow' : ''}`}>
@@ -1180,10 +1193,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
             <div>
               <div className="font-display font-bold text-lg uppercase mb-1 text-white">
-                {opState === 'PRODUCAO' ? 'Produzindo...' : opState === 'PARADA' ? 'Retomar Produção' : 'Iniciar Produção'}
+                {opState === 'PRODUCAO' ? 'Produzindo...' : (opState === 'PARADA' || opState === 'SUSPENSA') ? 'Retomar Produção' : 'Iniciar Produção'}
               </div>
               <div className="text-xs text-text-sub-dark leading-snug">
-                {opState === 'PRODUCAO' ? 'Contagem ativa' : opState === 'PARADA' ? 'Voltar ao trabalho' : 'Clique para iniciar'}
+                {opState === 'PRODUCAO' ? 'Contagem ativa' : (opState === 'PARADA' || opState === 'SUSPENSA') ? 'Voltar ao trabalho' : 'Clique para iniciar'}
               </div>
             </div>
           </button>
