@@ -22,7 +22,19 @@ import { supabase } from './supabase';
 
 const App: React.FC = () => {
   const { user: currentUser, logout: handleLogout, loading: authLoading } = useAuth();
-  const [perspective, setPerspective] = useState<UserPerspective>('LOGIN');
+
+  // Persist perspective in sessionStorage (independent per tab)
+  const [perspective, setPerspective] = useState<UserPerspective>(() => {
+    const saved = sessionStorage.getItem('flux_perspective');
+    return (saved as UserPerspective) || 'LOGIN';
+  });
+
+  useEffect(() => {
+    if (perspective !== 'LOGIN') {
+      sessionStorage.setItem('flux_perspective', perspective);
+    }
+  }, [perspective]);
+
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [activeOP, setActiveOP] = useState<string | null>(null);
   const [activeOPCodigo, setActiveOPCodigo] = useState<string | null>(null);
@@ -109,7 +121,25 @@ const App: React.FC = () => {
         // Reset machine selection for non-operators
         setSelectedMachineId(null);
         localStorage.removeItem('flux_selected_machine');
-        setPerspective(currentUser.role as UserPerspective);
+
+        // Restore saved perspective if valid for this role, otherwise default to role
+        const savedPerspective = sessionStorage.getItem('flux_perspective');
+        const isAllowed = (p: string) => {
+          if (currentUser.role === 'ADMIN') return true;
+          if (currentUser.role === 'SUPERVISOR') return ['SUPERVISOR', 'REPORTS', 'OPERATOR'].includes(p);
+          if (currentUser.role === 'OPERATOR') return ['OPERATOR', 'MACHINE_SELECTION'].includes(p);
+          return false;
+        };
+
+        if (savedPerspective && isAllowed(savedPerspective)) {
+          setPerspective(savedPerspective as UserPerspective);
+        } else {
+          // Default views per role
+          const defaultPerspective: UserPerspective = currentUser.role === 'OPERATOR'
+            ? (selectedMachineId ? 'OPERATOR' : 'MACHINE_SELECTION')
+            : (currentUser.role as UserPerspective);
+          setPerspective(defaultPerspective);
+        }
       }
     } else {
       // User logged out - reset everything
@@ -179,6 +209,10 @@ const App: React.FC = () => {
     const channel = supabase
       .channel('schema-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maquinas' }, () => {
+        fetchMachines();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'registros_producao' }, () => {
+        // Refresh machines when production is logged (updates OEE/Realized if they are in the table)
         fetchMachines();
       })
       .subscribe();

@@ -69,6 +69,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const [totalProduzido, setTotalProduzido] = useState(0);
   const [scrapData, setScrapData] = useState<ScrapData[]>([]);
   const [operatorProduction, setOperatorProduction] = useState<OperatorProduction[]>([]);
+  const [machineProductionMap, setMachineProductionMap] = useState<Map<string, number>>(new Map());
 
   // Find current turno based on current time
   useEffect(() => {
@@ -164,10 +165,21 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         .sort((a, b) => b.totalProduced - a.totalProduced)
         .slice(0, 5);
       setOperatorProduction(operatorResult);
+
+      const machineMap = new Map<string, number>();
+      producaoData.forEach(r => {
+        const mId = r.maquina_id;
+        if (mId) {
+          const current = machineMap.get(mId) || 0;
+          machineMap.set(mId, current + (r.quantidade_boa || 0));
+        }
+      });
+      setMachineProductionMap(machineMap);
     } else {
       setTotalProduzido(0);
       setScrapData([]);
       setOperatorProduction([]);
+      setMachineProductionMap(new Map());
     }
   }, [turnoStartTime]);
 
@@ -268,8 +280,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 const isSetup = m.status_atual === MachineStatus.SETUP;
                 const isSuspended = m.status_atual === MachineStatus.SUSPENDED;
 
-                // Safe value access
-                const productionCount = m.realized ?? 0;
+                // Safe value access - Priority to live calculated map if exists
+                const machineLiveProd = machineProductionMap.get(m.id);
+                const productionCount = machineLiveProd !== undefined ? machineLiveProd : (m.realized ?? 0);
                 const oeeValue = m.oee ?? 0;
                 const currentOp = m.ordens_producao?.codigo || (m.op_atual_id ? 'Carregando...' : '--');
 
