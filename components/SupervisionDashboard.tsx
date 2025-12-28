@@ -61,6 +61,41 @@ const getTimeSince = (dateStr: string | undefined): string => {
   return `${days}d ${hours % 24}h`;
 };
 
+// Componente de Cronômetro para cada máquina
+const StatusTimer: React.FC<{ statusChangeAt?: string; status: string }> = ({ statusChangeAt, status }) => {
+  const [elapsed, setElapsed] = useState('00:00:00');
+
+  useEffect(() => {
+    if (!statusChangeAt || status === 'AVAILABLE' || status === 'IDLE') {
+      setElapsed('00:00:00');
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const start = new Date(statusChangeAt).getTime();
+      const diff = Math.max(0, Math.floor((now - start) / 1000));
+
+      const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+      const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+      const s = (diff % 60).toString().padStart(2, '0');
+      setElapsed(`${h}:${m}:${s}`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [statusChangeAt, status]);
+
+  if (!statusChangeAt || status === 'AVAILABLE' || status === 'IDLE') return null;
+
+  return (
+    <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-white/50 bg-white/5 px-1 py-0.5 rounded ml-1 animate-pulse-slow">
+      {elapsed}
+    </span>
+  );
+};
+
 
 const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines }) => {
   const [currentTurno, setCurrentTurno] = useState<Turno | null>(null);
@@ -308,6 +343,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                                     isSuspended ? 'pause_circle' : 'check_circle'
                             }</span> {translateStatus(m.status_atual)}
                           </span>
+                          <StatusTimer statusChangeAt={m.status_change_at} status={m.status_atual} />
                         </div>
                       </div>
                       <div className="text-right">
