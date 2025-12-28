@@ -36,6 +36,15 @@ const LoginScreen: React.FC = () => {
     setLoading(false);
   };
 
+  const handleClearCache = () => {
+    if (window.confirm('Isso irá limpar todos os dados salvos neste navegador e recarregar a aplicação. Resolver problemas de acesso?')) {
+      console.log('Clearing cache and reloading...');
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="h-screen w-full flex items-center justify-center relative bg-background-dark overflow-hidden font-body">
       {/* Dynamic Background Elements */}
@@ -186,6 +195,14 @@ const LoginScreen: React.FC = () => {
               <button className="text-[10px] font-bold text-text-sub-dark/80 hover:text-primary flex items-center gap-2 transition-all uppercase tracking-widest group/support">
                 <span className="flex w-2 h-2 rounded-full bg-primary/20 group-hover:bg-primary transition-colors"></span>
                 Support Center
+              </button>
+              <button
+                onClick={handleClearCache}
+                className="text-[10px] font-bold text-text-sub-dark/60 hover:text-red-400 flex items-center gap-2 transition-all uppercase tracking-widest group/clear"
+                title="Limpar dados locais e recarregar"
+              >
+                <span className="material-icons-outlined text-xs group-hover/clear:rotate-12 transition-transform">cleaning_services</span>
+                Reset App
               </button>
             </div>
           </div>

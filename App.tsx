@@ -773,7 +773,57 @@ const App: React.FC = () => {
                 // Update OP Status
                 await supabase.from('ordens_producao').update({ status: 'FINALIZADA' }).eq('id', activeOP);
 
-                setOpState('FINALIZADA');
+                // --- AUTO-START NEXT OP ---
+                // Buscar a próxima OP na sequência (status != FINALIZADA, != CANCELADA, sequence > current OR just next by sequence)
+                const { data: nextOPs } = await supabase
+                  .from('ordens_producao')
+                  .select('*')
+                  .eq('maquina_id', currentMachine.id)
+                  .neq('status', 'FINALIZADA')
+                  .neq('status', 'CANCELADA')
+                  .neq('id', activeOP) // Garante que não pega a mesma
+                  .order('posicao_sequencia', { ascending: true })
+                  .limit(1);
+
+                const nextOP = nextOPs && nextOPs.length > 0 ? nextOPs[0] : null;
+
+                if (nextOP) {
+                  console.log('Iniciando próxima OP automaticamente:', nextOP.codigo);
+
+                  // 1. Criar vínculo operador-máquina-OP
+                  await supabase.from('op_operadores').insert({
+                    op_id: nextOP.id,
+                    operador_id: currentUser.id,
+                    maquina_id: currentMachine.id,
+                    inicio: new Date().toISOString()
+                  });
+
+                  // 2. Atualizar Máquina para SETUP com nova OP
+                  const now = new Date().toISOString();
+                  await supabase.from('maquinas').update({
+                    status_atual: MachineStatus.SETUP,
+                    status_change_at: now,
+                    op_atual_id: nextOP.id,
+                    operador_atual_id: currentUser.id
+                  }).eq('id', currentMachine.id);
+
+                  // 3. Resetar estados locais e carregar nova OP
+                  setAccumulatedSetupTime(0);
+                  setAccumulatedProductionTime(0);
+                  setAccumulatedStopTime(0);
+                  setLocalStatusChangeAt(now);
+                  setLastPhaseStartTime(now);
+                  setOpState('SETUP');
+                  setSetupSeconds(0);
+                  setProductionSeconds(0);
+                  setActiveOP(nextOP.id);
+                  setActiveOPCodigo(nextOP.codigo);
+                  setActiveOPData(nextOP); // Será atualizado detalhadamente pelo useEffect
+                } else {
+                  setOpState('FINALIZADA');
+                  // Se não tem próxima, fica disponível
+                }
+
                 setActiveModal('label');
               }
             }}

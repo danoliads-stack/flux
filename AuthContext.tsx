@@ -1,6 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
 import { AppUser, UserRole } from './types';
+
+// Namespace para sessão de operador
+// Usando sessionStorage (isolado por aba) + localStorage como backup de persistência
+const OPERATOR_SESSION_KEY = 'flux_operator_session_v1';
 
 interface AuthContextType {
     user: AppUser | null;
@@ -13,121 +17,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Função global para limpar todas as sessões
-const clearAllSessionData = () => {
-    // Remove dados do operador
-    localStorage.removeItem('flux_operator_session');
-
-    // Remove outros dados relacionados à sessão
+// Limpa APENAS dados de operador
+const clearOperatorSession = () => {
+    sessionStorage.removeItem(OPERATOR_SESSION_KEY);
+    localStorage.removeItem(OPERATOR_SESSION_KEY);
     localStorage.removeItem('flux_selected_machine');
     localStorage.removeItem('flux_current_shift');
+    console.log('[Auth] Operator session cleared');
+};
 
-    // Limpa dados do Supabase auth
+// Limpa APENAS dados do Supabase Auth
+const clearSupabaseAuthData = () => {
     const supabaseKeys = Object.keys(localStorage).filter(key =>
-        key.startsWith('sb-') || key.includes('supabase')
+        key.startsWith('sb-') || key === 'flux_auth_session'
     );
     supabaseKeys.forEach(key => localStorage.removeItem(key));
-
-    // Limpa sessionStorage também
-    sessionStorage.clear();
-
-    console.log('All session data cleared');
+    // NÃO limpa sessionStorage aqui - pode ter sessão de operador
+    console.log('[Auth] Supabase auth data cleared');
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<AppUser | null>(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        // Check initial session for Admin/Supervisor
-        const checkSession = async () => {
-            console.log('Checking session...');
-            try {
-                // Force a timeout to prevent infinite hang - reduced to 3 seconds
-                const sessionPromise = supabase.auth.getSession();
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Session check timed out')), 3000)
-                );
-
-                const { data: { session }, error } = await Promise.race([
-                    sessionPromise,
-                    timeoutPromise
-                ]) as any;
-
-                console.log('Session result:', { session: !!session, error });
-
-                if (session) {
-                    await fetchProfile(session.user.id);
-                } else {
-                    // Check localStorage for Operator session (simple persistence)
-                    const savedOp = localStorage.getItem('flux_operator_session');
-                    if (savedOp) {
-                        try {
-                            console.log('Found saved operator session');
-                            const parsed = JSON.parse(savedOp);
-                            // Validate the saved session has required fields
-                            if (parsed && parsed.id && parsed.name && parsed.role) {
-                                setUser(parsed);
-                            } else {
-                                console.log('Invalid saved session');
-                                // Don't clear immediately here, waiting for explicit failure
-                            }
-                        } catch (e) {
-                            console.error('Error parsing saved operator session', e);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Critical error or timeout in checkSession:', err);
-
-                // CRITICAL FIX: Don't clear everything immediately on timeout.
-                // Try to recover operator session first.
-                console.log('Attempting offline/fallback operator recovery...');
-
-                const savedOp = localStorage.getItem('flux_operator_session');
-                let recovered = false;
-
-                if (savedOp) {
-                    try {
-                        const parsed = JSON.parse(savedOp);
-                        if (parsed && parsed.id && parsed.name && parsed.role) {
-                            console.log('Fallback: Using saved operator session despite connection error');
-                            setUser(parsed);
-                            recovered = true;
-                        }
-                    } catch (e) {
-                        console.error('Fallback parse error', e);
-                    }
-                }
-
-                // Only clear if we really couldn't recover anything
-                if (!recovered) {
-                    console.log('Could not recover session. Clearing data.');
-                    clearAllSessionData();
-                }
-            } finally {
-                console.log('Setting loading to false');
-                setLoading(false);
-            }
-        };
-
-        checkSession();
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state change:', event, session?.user?.id);
-            if (session) {
-                await fetchProfile(session.user.id);
-            } else if (event === 'SIGNED_OUT') {
-                // Limpa tudo quando fizer signout
-                clearAllSessionData();
-                setUser(null);
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
-
-    const fetchProfile = async (userId: string) => {
+    // Fetch profile do admin/supervisor
+    const fetchProfile = useCallback(async (userId: string): Promise<AppUser | null> => {
         const { data, error } = await supabase
             .from('profiles')
             .select('role, full_name')
@@ -135,28 +49,167 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .single();
 
         if (data && !error) {
-            setUser({
+            return {
                 id: userId,
                 name: data.full_name,
                 role: data.role as UserRole,
                 avatar: data.full_name.charAt(0),
                 sector: 'Administração'
-            });
+            };
         }
-    };
+        console.error('[Auth] Error fetching profile:', error);
+        return null;
+    }, []);
 
-    const loginAsAdmin = async (email: string, pass: string) => {
-        // Limpa sessão anterior antes do novo login
-        clearAllSessionData();
+    // Inicialização - Verificar sessão existente DESTA ABA
+    useEffect(() => {
+        let isMounted = true;
+
+        const initializeAuth = async () => {
+            console.log('[Auth] Initializing for this tab...');
+
+            try {
+                // 1. PRIMEIRO verificar sessão de OPERADOR no sessionStorage (específica desta aba)
+                const savedOp = sessionStorage.getItem(OPERATOR_SESSION_KEY);
+                if (savedOp) {
+                    try {
+                        const parsed = JSON.parse(savedOp);
+                        if (parsed?.id && parsed?.name && parsed?.role === 'OPERATOR') {
+                            console.log('[Auth] Found operator session in this tab:', parsed.name);
+                            if (isMounted) {
+                                setUser(parsed);
+                                setLoading(false);
+                            }
+                            return; // Operador tem prioridade nesta aba
+                        }
+                    } catch (e) {
+                        console.error('[Auth] Error parsing operator session:', e);
+                        sessionStorage.removeItem(OPERATOR_SESSION_KEY);
+                    }
+                }
+
+                // 2. Se não tem operador, verificar Supabase Auth (Admin/Supervisor)
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+                if (sessionError) {
+                    console.error('[Auth] getSession error:', sessionError);
+                }
+
+                if (session?.user) {
+                    console.log('[Auth] Found Supabase session for:', session.user.email);
+
+                    const profile = await fetchProfile(session.user.id);
+
+                    if (profile) {
+                        if (isMounted) setUser(profile);
+                    } else {
+                        // Sessão corrompida - tentar refresh
+                        console.warn('[Auth] Session exists but profile fetch failed. Attempting refresh...');
+                        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+                        if (refreshError || !refreshData.session) {
+                            console.error('[Auth] Refresh failed. Forcing signOut.');
+                            await supabase.auth.signOut();
+                            clearSupabaseAuthData();
+                        } else {
+                            const retryProfile = await fetchProfile(refreshData.session.user.id);
+                            if (isMounted && retryProfile) {
+                                setUser(retryProfile);
+                            }
+                        }
+                    }
+                } else {
+                    // 3. Fallback: verificar localStorage como backup (ex: usuário fechou aba e reabriu)
+                    const backupOp = localStorage.getItem(OPERATOR_SESSION_KEY);
+                    if (backupOp) {
+                        try {
+                            const parsed = JSON.parse(backupOp);
+                            if (parsed?.id && parsed?.name && parsed?.role === 'OPERATOR') {
+                                console.log('[Auth] Recovered operator session from backup:', parsed.name);
+                                // Restaurar no sessionStorage desta aba
+                                sessionStorage.setItem(OPERATOR_SESSION_KEY, backupOp);
+                                if (isMounted) setUser(parsed);
+                            }
+                        } catch (e) {
+                            console.error('[Auth] Error parsing backup operator session:', e);
+                            localStorage.removeItem(OPERATOR_SESSION_KEY);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[Auth] Critical error during initialization:', err);
+            } finally {
+                if (isMounted) {
+                    console.log('[Auth] Initialization complete');
+                    setLoading(false);
+                }
+            }
+        };
+
+        initializeAuth();
+
+        // Listener para mudanças de auth do Supabase (Admin/Supervisor)
+        // IMPORTANTE: Só reage se NÃO tiver operador logado nesta aba
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            // Se tem operador logado nesta aba, ignorar mudanças de auth do Supabase
+            const currentOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
+            if (currentOperator) {
+                console.log('[Auth] Ignoring Supabase auth change - operator is logged in this tab');
+                return;
+            }
+
+            console.log('[Auth] Supabase state change:', event, session?.user?.email);
+
+            if (event === 'SIGNED_IN' && session?.user) {
+                const profile = await fetchProfile(session.user.id);
+                if (profile && isMounted) {
+                    setUser(profile);
+                }
+            } else if (event === 'SIGNED_OUT') {
+                // Só faz logout se não tiver operador
+                if (!sessionStorage.getItem(OPERATOR_SESSION_KEY)) {
+                    if (isMounted) setUser(null);
+                }
+            } else if (event === 'TOKEN_REFRESHED') {
+                console.log('[Auth] Token refreshed successfully');
+            }
+        });
+
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
+    }, [fetchProfile]);
+
+    // Login Admin/Supervisor - Usa Supabase Auth
+    const loginAsAdmin = useCallback(async (email: string, pass: string) => {
+        console.log('[Auth] Admin login attempt:', email);
+
+        // Limpa sessão de operador DESTA ABA apenas
+        sessionStorage.removeItem(OPERATOR_SESSION_KEY);
         setUser(null);
 
-        const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-        return { error };
-    };
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password: pass
+        });
 
-    const loginAsOperator = async (matricula: string, pin: string) => {
-        // Limpa sessão anterior antes do novo login
-        clearAllSessionData();
+        if (error) {
+            console.error('[Auth] Admin login error:', error.message);
+            return { error };
+        }
+
+        console.log('[Auth] Admin login successful');
+        return { error: null };
+    }, []);
+
+    // Login Operador - NÃO usa Supabase Auth, usa tabela operadores + sessionStorage
+    const loginAsOperator = useCallback(async (matricula: string, pin: string) => {
+        console.log('[Auth] Operator login attempt:', matricula);
+
+        // NÃO faz signOut do Supabase Auth aqui - outras abas podem estar usando
+        // Apenas limpa a sessão de operador desta aba
+        sessionStorage.removeItem(OPERATOR_SESSION_KEY);
         setUser(null);
 
         const { data, error } = await supabase
@@ -168,6 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .single();
 
         if (error || !data) {
+            console.error('[Auth] Operator login error:', error?.message);
             return { error: 'Matrícula ou PIN inválido' };
         }
 
@@ -183,34 +237,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         setUser(opUser);
-        localStorage.setItem('flux_operator_session', JSON.stringify(opUser));
+        // Salva no sessionStorage (específico desta aba)
+        sessionStorage.setItem(OPERATOR_SESSION_KEY, JSON.stringify(opUser));
+        // Também salva no localStorage como backup (para recuperar se fechar e reabrir)
+        localStorage.setItem(OPERATOR_SESSION_KEY, JSON.stringify(opUser));
+
+        console.log('[Auth] Operator login successful:', opUser.name);
         return { error: null };
-    };
+    }, []);
 
-    const logout = async () => {
-        console.log('Logging out...');
+    // Logout - Apenas desta aba
+    const logout = useCallback(async () => {
+        console.log('[Auth] Logging out from this tab...');
 
-        // Primeiro limpa o estado local
+        const wasOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
+
+        // Limpa estado local primeiro
         setUser(null);
 
-        // Limpa todos os dados de sessão
-        clearAllSessionData();
+        // Limpa sessão de operador desta aba
+        sessionStorage.removeItem(OPERATOR_SESSION_KEY);
+        localStorage.removeItem('flux_selected_machine');
 
-        // Faz signout do Supabase (para admin)
-        try {
-            await supabase.auth.signOut();
-        } catch (e) {
-            console.error('Error signing out from Supabase:', e);
+        // Se era admin, faz signout do Supabase
+        if (!wasOperator) {
+            try {
+                await supabase.auth.signOut();
+            } catch (e) {
+                console.error('[Auth] Supabase signOut error:', e);
+            }
         }
 
-        console.log('Logout complete');
-    };
+        // Se era operador, limpa backup do localStorage também
+        if (wasOperator) {
+            localStorage.removeItem(OPERATOR_SESSION_KEY);
+        }
 
-    // Função exposta para limpar sessões manualmente se necessário
-    const clearAllSessions = () => {
-        clearAllSessionData();
+        console.log('[Auth] Logout complete');
+    }, []);
+
+    // Função para limpar TUDO (uso manual/debug)
+    const clearAllSessions = useCallback(() => {
+        clearOperatorSession();
+        clearSupabaseAuthData();
         setUser(null);
-    };
+        console.log('[Auth] All sessions cleared manually');
+    }, []);
 
     return (
         <AuthContext.Provider value={{ user, loading, loginAsAdmin, loginAsOperator, logout, clearAllSessions }}>

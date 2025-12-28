@@ -131,6 +131,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [opQuantity, setOpQuantity] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState('--:--');
 
+
   // Configuration Constants (In future this could be loaded from backend)
   const [labelIntervalMinutes, setLabelIntervalMinutes] = useState(90); // 90 minutes adjustable
   const MONITORING_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes fixed
@@ -138,6 +139,24 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // States
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [lastMonitorTime, setLastMonitorTime] = useState<Date>(new Date());
+
+  // OEE States
+  const [cycleTime, setCycleTime] = useState(0);
+  const [calculatedOEE, setCalculatedOEE] = useState(0);
+
+  // Calculate OEE Effect
+  useEffect(() => {
+    // Avoid division by zero
+    if (accumulatedProductionTime > 0 && cycleTime > 0) {
+      // OEE = (Total Produced * Ideal Cycle Time) / Run Time
+      // Result is a percentage (0-100+)
+      const theoreticalTime = totalProduced * cycleTime;
+      const efficiency = (theoreticalTime / accumulatedProductionTime) * 100;
+      setCalculatedOEE(Math.min(999, Math.max(0, efficiency))); // Cap at sensible limits if needed, but allow over-performance
+    } else if (accumulatedProductionTime === 0 && totalProduced === 0) {
+      setCalculatedOEE(0); // Start at 0
+    }
+  }, [accumulatedProductionTime, totalProduced, cycleTime]);
 
   // Checklist states
   const [checklists, setChecklists] = useState<Checklist[]>([]);
@@ -347,13 +366,35 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       console.error('Error fetching OP data:', opError);
     }
 
+    let currentProduced = 0;
+    let currentScrap = 0;
+
+    // Sum production records for this OP
+    const { data: prodRecords } = await supabase
+      .from('registros_producao')
+      .select('quantidade_boa, quantidade_refugo')
+      .eq('op_id', opId);
+
+    if (prodRecords && prodRecords.length > 0) {
+      currentProduced = prodRecords.reduce((sum, r) => sum + (r.quantidade_boa || 0), 0);
+      currentScrap = prodRecords.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
+      setTotalProduced(currentProduced);
+      setTotalScrap(currentScrap);
+    } else {
+      setTotalProduced(0);
+      setTotalScrap(0);
+    }
+
     if (opData) {
       setOpQuantity(opData.quantidade_meta || 0);
-      // Calculate estimated time (HH:MM format) - ciclo_estimado is in seconds per piece
-      // Total time = ciclo * quantidade
-      const totalMins = ((opData.ciclo_estimado || 0) * (opData.quantidade_meta || 0)) / 60;
-      const hours = Math.floor(totalMins / 60);
-      const minutes = Math.floor(totalMins % 60);
+      setCycleTime(opData.ciclo_estimado || 0);
+      // Calculate estimated time (HH:MM format) - based on REMAINING quantity
+      // Time Remaining = (Meta - Produced) * CycleTime
+      const remainingQty = Math.max(0, (opData.quantidade_meta || 0) - currentProduced);
+      const totalSecondsRemaining = remainingQty * (opData.ciclo_estimado || 0);
+
+      const hours = Math.floor(totalSecondsRemaining / 3600);
+      const minutes = Math.floor((totalSecondsRemaining % 3600) / 60);
       setEstimatedTime(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
 
 
@@ -367,22 +408,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           });
         }
       }
-    }
-
-    // Sum production records for this OP
-    const { data: prodRecords } = await supabase
-      .from('registros_producao')
-      .select('quantidade_boa, quantidade_refugo')
-      .eq('op_id', opId);
-
-    if (prodRecords && prodRecords.length > 0) {
-      const produced = prodRecords.reduce((sum, r) => sum + (r.quantidade_boa || 0), 0);
-      const scrap = prodRecords.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
-      setTotalProduced(produced);
-      setTotalScrap(scrap);
-    } else {
-      setTotalProduced(0);
-      setTotalScrap(0);
     }
   };
 
@@ -681,7 +706,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     fetchChecklists();
     fetchDiaryEntries();
     fetchProductionStats();
-  }, [machineId, opState, operatorName, opId]);
+  }, [machineId, opState, operatorName, opId, accumulatedProductionTime]); // Added accumulatedProductionTime to re-calc stats/OEE if needed
 
   // Real-time subscription for live updates
   useEffect(() => {
@@ -743,11 +768,25 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       )
       .subscribe();
 
+    // 5. Ordens de Produção (Updates Sequence)
+    const opSubscription = supabase
+      .channel('ordens_producao_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ordens_producao', filter: `maquina_id=eq.${machineId}` },
+        () => {
+          console.log('Realtime OP update detected');
+          fetchOPSequence();
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(prodSubscription);
       supabase.removeChannel(stopSubscription);
       supabase.removeChannel(checklistSubscription);
       supabase.removeChannel(diarySubscription);
+      supabase.removeChannel(opSubscription);
     };
   }, [machineId, operatorName]);
 
@@ -785,21 +824,24 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 sequencedOPs.slice(0, 5).map((op, idx) => (
                   <div
                     key={op.id}
-                    className={`p-1.5 rounded border text-[10px] flex items-center gap-1.5 ${op.id === opId
-                      ? 'bg-primary/20 border-primary text-white'
-                      : 'bg-background-dark border-border-dark/50 text-text-sub-dark'
+                    className={`p-2 rounded-md border text-xs flex items-center gap-2 transition-colors ${op.id === opId
+                      ? 'bg-primary/20 border-primary text-white shadow-[0_0_10px_rgba(34,211,238,0.2)]'
+                      : 'bg-[#1a1c23] border-[#2d3342] text-gray-300 hover:bg-[#252830] hover:border-gray-500'
                       }`}
                   >
-                    <span className={`min-w-4 h-4 flex items-center justify-center rounded text-[8px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-surface-dark'
+                    <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-[#2d3342] text-gray-400'
                       }`}>
                       {idx + 1}
                     </span>
                     <span className="font-bold truncate flex-1">{op.codigo}</span>
-                    {op.id === opId && <span className="material-icons-outlined text-primary text-xs">play_arrow</span>}
+                    {op.id === opId && <span className="material-icons-outlined text-primary text-sm animate-pulse">play_arrow</span>}
                   </div>
                 ))
               ) : (
-                <p className="text-text-sub-dark text-[10px] text-center py-2">Sem OPs</p>
+                <div className="flex flex-col items-center justify-center py-4 text-center opacity-50">
+                  <span className="material-icons-outlined text-gray-500 text-lg mb-1">playlist_remove</span>
+                  <p className="text-gray-500 text-[10px] italic">Sem OPs na fila</p>
+                </div>
               )}
             </div>
           </div>
@@ -987,8 +1029,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             <span className="material-icons-outlined text-6xl">trending_up</span>
           </div>
           <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">OEE (Eficiência)</div>
-          <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-500 ${oee < 85 ? 'text-danger' : 'text-warning'}`}>
-            {oee.toFixed(1)}%
+          <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-500 ${calculatedOEE < 85 ? 'text-danger' : 'text-warning'}`}>
+            {calculatedOEE.toFixed(1)}%
           </div>
           <div className="text-xs font-bold text-secondary">Live feed</div>
           <div className="text-xs text-text-sub-dark mt-1">Meta de OEE: 95%</div>
