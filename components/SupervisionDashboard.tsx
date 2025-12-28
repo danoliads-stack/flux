@@ -90,9 +90,12 @@ const StatusTimer: React.FC<{ statusChangeAt?: string; status: string }> = ({ st
   if (!statusChangeAt || status === 'AVAILABLE' || status === 'IDLE') return null;
 
   return (
-    <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-white/50 bg-white/5 px-1 py-0.5 rounded ml-1 animate-pulse-slow">
-      {elapsed}
-    </span>
+    <div className="flex items-center gap-1.5 mt-2 bg-white/5 px-2 py-1 rounded w-fit border border-white/5">
+      <span className="material-icons-outlined text-[14px] text-white/40">schedule</span>
+      <span className="text-[12px] font-mono font-bold text-white/90 tabular-nums tracking-wider animate-pulse-slow">
+        {elapsed}
+      </span>
+    </div>
   );
 };
 
@@ -294,7 +297,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
             {machines
               .sort((a, b) => {
                 const priority = (status: string | undefined) => {
@@ -322,21 +325,21 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 const currentOp = m.ordens_producao?.codigo || (m.op_atual_id ? 'Carregando...' : '--');
 
                 return (
-                  <div key={m.id} className={`bg-surface-dark rounded-lg border border-l-4 p-3 hover:shadow-glow transition-all cursor-pointer group ${isActive ? 'border-l-secondary' :
-                    isStopped ? 'border-l-danger border-danger/20' :
-                      isSetup ? 'border-l-warning' :
-                        isSuspended ? 'border-l-orange-500' : 'border-l-text-sub-dark'
+                  <div key={m.id} className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full ${isActive ? 'border-l-secondary shadow-secondary/5' :
+                    isStopped ? 'border-l-danger shadow-danger/5' :
+                      isSetup ? 'border-l-warning shadow-warning/5' :
+                        isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
                     }`}>
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="flex justify-between items-start mb-4">
                       <div className="min-w-0">
-                        <h3 className="text-sm font-bold text-white truncate">{m.nome}</h3>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider ${isActive ? 'text-secondary' :
+                        <h3 className="text-lg font-bold text-white mb-2 leading-tight">{m.nome}</h3>
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isActive ? 'text-secondary' :
                             isStopped ? 'text-danger' :
                               isSetup ? 'text-warning' :
                                 isSuspended ? 'text-orange-500' : 'text-text-sub-dark'
                             }`}>
-                            <span className="material-icons-outlined text-[10px]">{
+                            <span className="material-icons-outlined text-base">{
                               isActive ? 'settings_motion_mode' :
                                 isStopped ? 'warning' :
                                   isSetup ? 'build' :
@@ -347,58 +350,46 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[10px] font-bold text-white tabular-nums bg-white/5 px-1.5 py-0.5 rounded">
-                          {oeeValue.toFixed(0)}%
+                        <div className="text-xs font-bold text-white tabular-nums bg-white/5 px-2 py-1 rounded shadow-inner border border-white/5">
+                          {oeeValue.toFixed(0)}% OEE
                         </div>
                       </div>
                     </div>
 
                     {isStopped && (
-                      <div className="bg-danger/5 border border-danger/10 rounded p-1.5 mb-2">
-                        <p className="text-[9px] text-danger font-bold uppercase">Motivo:</p>
-                        <p className="text-[10px] text-white truncate">{m.stopReason || 'Aguardando justificativa...'}</p>
+                      <div className="bg-danger/10 border border-danger/20 rounded-lg p-3 mb-4">
+                        <p className="text-[10px] text-danger font-bold uppercase tracking-wider mb-1">Motivo da Parada:</p>
+                        <p className="text-sm text-white font-medium">{m.stopReason || 'Aguardando justificativa...'}</p>
                       </div>
                     )}
 
-                    <div className="space-y-3 mb-3">
+                    <div className="space-y-4 mb-4 bg-white/[0.02] p-4 rounded-xl border border-white/5">
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary border border-primary/20">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary border border-primary/20 shadow-sm">
                             {(m.operadores as any)?.nome?.charAt(0) || '?'}
                           </div>
-                          <span className="text-[10px] font-bold text-white truncate">{(m.operadores as any)?.nome || 'Sem Operador'}</span>
+                          <span className="text-sm font-bold text-white">{(m.operadores as any)?.nome || 'Sem Operador'}</span>
                         </div>
-                        <div className="flex justify-between text-[9px]">
-                          <span className="text-text-sub-dark uppercase tracking-tight font-medium">Prod. Turno</span>
-                          <span className="text-primary font-mono font-bold">
+                        <div className="flex justify-between text-xs mt-1">
+                          <span className="text-text-sub-dark uppercase tracking-widest font-bold opacity-60">Produção Turno</span>
+                          <span className="text-primary font-mono font-bold text-sm">
                             {operatorProduction.find(op => op.operatorId === m.operador_atual_id)?.totalProduced || 0} un
                           </span>
                         </div>
                       </div>
 
-                      <div className="pt-2 border-t border-white/5">
-                        <div className="flex justify-between text-[9px] mb-1">
-                          <span className="text-text-sub-dark uppercase font-medium">OP: {currentOp}</span>
-                          <span className="text-white font-bold">{productionCount} un</span>
+                      <div className="pt-3 border-t border-white/5">
+                        <div className="flex justify-between text-[11px] mb-2 font-bold uppercase tracking-wider text-text-sub-dark">
+                          <span>OP: {currentOp}</span>
+                          <span className="text-white font-mono">{productionCount} un</span>
                         </div>
-                        <div className="h-1 w-full bg-background-dark rounded-full overflow-hidden">
-                          <div className={`h-full transition-all duration-700 ${isActive ? 'bg-secondary' : 'bg-surface-dark-highlight'}`} style={{ width: '60%' }}></div>
+                        <div className="h-1.5 w-full bg-background-dark rounded-full overflow-hidden shadow-inner">
+                          <div className={`h-full transition-all duration-1000 ease-out ${isActive ? 'bg-secondary' : 'bg-surface-dark-highlight'}`} style={{ width: '60%' }}></div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-border-dark pt-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {m.operadores?.nome ? (
-                          <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[8px] font-bold text-white border border-border-dark shrink-0">
-                            {m.operadores.nome.charAt(0).toUpperCase()}
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-surface-dark-highlight flex items-center justify-center text-[8px] shrink-0">--</div>
-                        )}
-                        <span className="text-[10px] text-text-sub-dark truncate">{m.operadores?.nome || 'S/ Op'}</span>
-                      </div>
-                    </div>
                   </div>
                 );
               })}
