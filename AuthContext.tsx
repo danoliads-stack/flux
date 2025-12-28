@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
 import { AppUser, UserRole } from './types';
+import { SessionStorage } from './src/utils/storageManager';
 
 // Namespace para sessão de operador
 // Usando sessionStorage (isolado por aba) + localStorage como backup de persistência
@@ -66,28 +67,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let isMounted = true;
 
         const initializeAuth = async () => {
-            console.log('[Auth] 🔄 Initializing auth for this tab...');
+            console.log(`[Auth] 🔄 Initializing auth for tab ${SessionStorage.getTabId()}...`);
             const startTime = Date.now();
 
             try {
-                // 1. PRIMEIRO verificar sessão de OPERADOR no sessionStorage (específica desta aba)
-                const savedOp = sessionStorage.getItem(OPERATOR_SESSION_KEY);
-                if (savedOp) {
-                    try {
-                        const parsed = JSON.parse(savedOp);
-                        if (parsed?.id && parsed?.name && parsed?.role === 'OPERATOR') {
-                            console.log('[Auth] ✅ Found operator session in this tab:', parsed.name);
-                            if (isMounted) {
-                                setUser(parsed);
-                                setLoading(false);
-                                sessionStorage.setItem('flux_auth_initialized', 'true');
-                            }
-                            return; // Operador tem prioridade nesta aba
-                        }
-                    } catch (e) {
-                        console.error('[Auth] ❌ Error parsing operator session:', e);
-                        sessionStorage.removeItem(OPERATOR_SESSION_KEY);
+                // 1. PRIMEIRO verificar sessão de OPERADOR (SessionStorage helper)
+                const operator = SessionStorage.getOperator();
+                if (operator) {
+                    console.log('[Auth] ✅ Found operator session in this tab:', operator.name);
+                    if (isMounted) {
+                        setUser(operator);
+                        setLoading(false);
+                        SessionStorage.setAuthInitialized();
                     }
+                    return; // Operador tem prioridade nesta aba
                 }
 
                 // 2. Se não tem operador, verificar Supabase Auth (Admin/Supervisor)
@@ -134,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const elapsed = Date.now() - startTime;
                     console.log(`[Auth] ✅ Initialization complete in ${elapsed}ms`);
                     setLoading(false);
-                    sessionStorage.setItem('flux_auth_initialized', 'true');
+                    SessionStorage.setAuthInitialized();
                 }
             }
         };
@@ -230,12 +223,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         setUser(opUser);
-        // Salva APENAS no sessionStorage (específico desta aba)
-        // NÃO salva em localStorage para evitar vazamento entre abas
-        sessionStorage.setItem(OPERATOR_SESSION_KEY, JSON.stringify(opUser));
-
-        console.log('[Auth] ✅ Operator login successful:', opUser.name);
-        console.log('[Auth] ℹ️ Session isolated to this tab only');
+        // Usa SessionStorage helper (APENAS sessionStorage, não localStorage)
+        SessionStorage.setOperator(opUser);
         return { error: null };
     }, []);
 
