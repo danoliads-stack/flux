@@ -35,6 +35,7 @@ const Reports: React.FC = () => {
     // Data States
     const [checklistEvents, setChecklistEvents] = useState<ChecklistEvent[]>([]);
     const [operatorLogs, setOperatorLogs] = useState<OperatorLog[]>([]);
+    const [topStops, setTopStops] = useState<Array<[string, number]>>([]);
     const [stats, setStats] = useState({
         availability: 0,
         quality: 0,
@@ -64,40 +65,146 @@ const Reports: React.FC = () => {
 
     const fetchReportData = async () => {
         setLoading(true);
-        // Placeholder fetching logic - will implement specific queries based on period
-        // Ideally this would be complex consolidated queries, implementing basics first.
+        try {
+            // Calculate date range based on period type
+            const startDate = new Date(selectedDate);
+            let endDate = new Date(selectedDate);
 
-        // 1. Fetch Checklists
-        // Note: This relies on joins existing or direct fetching. Simplified for MVP.
-        const { data: checklists } = await supabase
-            .from('checklist_eventos')
-            .select('*, checklists(nome), operadores(nome)')
-            .eq('maquina_id', selectedMachine)
-            .order('created_at', { ascending: false })
-            .limit(50); // Need to apply date filter
+            if (periodType === 'day') {
+                endDate.setHours(23, 59, 59, 999);
+            } else if (periodType === 'month') {
+                endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0, 23, 59, 59, 999);
+            } else if (periodType === 'year') {
+                endDate = new Date(startDate.getFullYear(), 11, 31, 23, 59, 59, 999);
+            }
 
-        if (checklists) {
-            setChecklistEvents(checklists.map((c: any) => ({
-                id: c.id,
-                checklist_nome: c.checklists?.nome || 'Unknown',
-                status: c.status,
-                observacao: c.observacao,
-                created_at: c.created_at,
-                operator_name: c.operadores?.nome || 'Unknown Operator'
+            const startISO = startDate.toISOString();
+            const endISO = endDate.toISOString();
+
+            // 1. Fetch Checklists
+            const { data: checklists } = await supabase
+                .from('checklist_eventos')
+                .select('*, checklists(nome), operadores(nome)')
+                .eq('maquina_id', selectedMachine)
+                .gte('created_at', startISO)
+                .lte('created_at', endISO)
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (checklists) {
+                setChecklistEvents(checklists.map((c: any) => ({
+                    id: c.id,
+                    checklist_nome: c.checklists?.nome || 'Unknown',
+                    status: c.status,
+                    observacao: c.observacao,
+                    created_at: c.created_at,
+                    operator_name: c.operadores?.nome || 'Unknown Operator'
+                })));
+            }
+
+            // 2. Fetch Production Data for stats
+            const { data: producao } = await supabase
+                .from('registros_producao')
+                .select('quantidade_boa, quantidade_refugo')
+                .eq('maquina_id', selectedMachine)
+                .gte('created_at', startISO)
+                .lte('created_at', endISO);
+
+            let totalProduction = 0;
+            let totalScrap = 0;
+            if (producao) {
+                totalProduction = producao.reduce((sum, r) => sum + (r.quantidade_boa || 0), 0);
+                totalScrap = producao.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
+            }
+
+            // 3. Fetch Stops Data for availability calculation
+            const { data: stops } = await supabase
+                .from('paradas')
+                .select('duracao_minutos, tipos_parada(nome)')
+                .eq('maquina_id', selectedMachine)
+                .gte('inicio', startISO)
+                .lte('inicio', endISO);
+
+            let totalStopTime = 0;
+            const stopsByType: Record<string, number> = {};
+
+            if (stops) {
+                stops.forEach((stop: any) => {
+                    const duration = stop.duracao_minutos || 0;
+                    totalStopTime += duration;
+
+                    const stopType = stop.tipos_parada?.nome || 'Outros';
+                    stopsByType[stopType] = (stopsByType[stopType] || 0) + duration;
+                });
+            }
+
+            // Calculate period in minutes
+            const periodMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60);
+            const availability = periodMinutes > 0
+                ? ((periodMinutes - totalStopTime) / periodMinutes) * 100
+                : 100;
+
+            // Calculate quality (percentage of good production)
+            const totalProduced = totalProduction + totalScrap;
+            const quality = totalProduced > 0
+                ? (totalProduction / totalProduced) * 100
+                : 100;
+
+            // Simplified performance calculation (can be enhanced with cycle time data)
+            const performance = 92; // Placeholder - would need cycle time data
+
+            const oee = (availability / 100) * (quality / 100) * (performance / 100) * 100;
+
+            setStats({
+                availability,
+                quality,
+                performance,
+                oee,
+                totalProduction,
+                totalScrap
+            });
+
+            // Set stops for display (sorted by duration)
+            const sortedStops = Object.entries(stopsByType)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 5);
+            setTopStops(sortedStops);
+
+            // 4. Fetch Operators (using production records to identify active operators)
+            const { data: productionWithOperators } = await supabase
+                .from('registros_producao')
+                .select('operador_id, operadores(nome, turno)')
+                .eq('maquina_id', selectedMachine)
+                .gte('created_at', startISO)
+                .lte('created_at', endISO);
+
+            const operatorMap = new Map<string, any>();
+            if (productionWithOperators) {
+                productionWithOperators.forEach((p: any) => {
+                    if (p.operador_id && p.operadores) {
+                        if (!operatorMap.has(p.operador_id)) {
+                            operatorMap.set(p.operador_id, {
+                                id: p.operador_id,
+                                name: p.operadores.nome,
+                                shift: p.operadores.turno || 'N/A'
+                            });
+                        }
+                    }
+                });
+            }
+
+            setOperatorLogs(Array.from(operatorMap.values()).map(op => ({
+                operator_name: op.name,
+                shift: op.shift,
+                login_time: startISO,  // Simplified - would need login tracking
+                logout_time: endISO
             })));
+
+        } catch (error) {
+            console.error('[Reports] Error fetching data:', error);
+        } finally {
+            setLoading(false);
         }
-
-        // Mock Stats for demonstration until proper aggregation is ready
-        setStats({
-            availability: 85 + Math.random() * 10,
-            quality: 98 + Math.random() * 2,
-            performance: 92 + Math.random() * 5,
-            oee: 82 + Math.random() * 5,
-            totalProduction: Math.floor(1200 + Math.random() * 500),
-            totalScrap: Math.floor(20 + Math.random() * 30)
-        });
-
-        setLoading(false);
     };
 
     return (
@@ -247,8 +354,8 @@ const Reports: React.FC = () => {
                                                 </div>
                                             </div>
                                             <span className={`px-2 py-1 rounded text-xs font-bold uppercase border ${event.status === 'ok' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                                                    event.status === 'problema' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                                                        'bg-gray-500/10 text-gray-500 border-gray-500/20'
+                                                event.status === 'problema' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                                    'bg-gray-500/10 text-gray-500 border-gray-500/20'
                                                 }`}>
                                                 {event.status === 'ok' ? 'OK' : event.status === 'problema' ? 'Problema' : 'Não Realizado'}
                                             </span>
@@ -289,25 +396,24 @@ const Reports: React.FC = () => {
                             </h3>
                         </div>
                         <div className="p-4 space-y-3">
-                            {/* Mock Operator List */}
-                            <div className="flex items-center gap-3 p-3 bg-[#0b0c10] rounded-lg border border-border-dark">
-                                <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">
-                                    JS
+                            {operatorLogs.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    <span className="material-icons-outlined text-2xl mb-2 opacity-50">person_off</span>
+                                    <p className="text-xs">Nenhum operador no período</p>
                                 </div>
-                                <div>
-                                    <div className="font-bold text-white text-sm">João Silva</div>
-                                    <div className="text-xs text-gray-500">Turno Manhã • 06:00 - 14:00</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-[#0b0c10] rounded-lg border border-border-dark">
-                                <div className="w-10 h-10 rounded-full bg-secondary/20 text-secondary flex items-center justify-center font-bold">
-                                    MC
-                                </div>
-                                <div>
-                                    <div className="font-bold text-white text-sm">Maria Costa</div>
-                                    <div className="text-xs text-gray-500">Turno Tarde • 14:00 - 22:00</div>
-                                </div>
-                            </div>
+                            ) : (
+                                operatorLogs.map((op, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 p-3 bg-[#0b0c10] rounded-lg border border-border-dark">
+                                        <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm">
+                                            {op.operator_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-white text-sm">{op.operator_name}</div>
+                                            <div className="text-xs text-gray-500">{op.shift ? `Turno ${op.shift}` : 'Turno N/A'}</div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
 
@@ -319,32 +425,41 @@ const Reports: React.FC = () => {
                             </h3>
                         </div>
                         <div className="p-4">
-                            {/* Mock Stop chart/list */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between text-xs mb-1">
-                                    <span className="text-gray-400">Manutenção Mecânica</span>
-                                    <span className="text-white font-mono">45min</span>
+                            {topStops.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    <span className="material-icons-outlined text-2xl mb-2 opacity-50">check_circle</span>
+                                    <p className="text-xs">Sem paradas no período</p>
                                 </div>
-                                <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-                                    <div className="bg-red-500 h-full w-[60%]"></div>
-                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {topStops.map(([type, duration], idx) => {
+                                        const maxDuration = topStops[0][1];
+                                        const percentage = (duration / maxDuration) * 100;
+                                        const hours = Math.floor(duration / 60);
+                                        const minutes = Math.round(duration % 60);
+                                        const timeStr = hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
 
-                                <div className="flex items-center justify-between text-xs mb-1 pt-2">
-                                    <span className="text-gray-400">Falta de Material</span>
-                                    <span className="text-white font-mono">20min</span>
+                                        return (
+                                            <div key={idx}>
+                                                <div className="flex items-center justify-between text-xs mb-1">
+                                                    <span className="text-gray-400">{type}</span>
+                                                    <span className="text-white font-mono">{timeStr}</span>
+                                                </div>
+                                                <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full ${idx === 0 ? 'bg-red-500' :
+                                                                idx === 1 ? 'bg-orange-500' :
+                                                                    idx === 2 ? 'bg-yellow-500' :
+                                                                        'bg-blue-500'
+                                                            }`}
+                                                        style={{ width: `${percentage}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-                                    <div className="bg-orange-500 h-full w-[30%]"></div>
-                                </div>
-
-                                <div className="flex items-center justify-between text-xs mb-1 pt-2">
-                                    <span className="text-gray-400">Setup / Ajuste</span>
-                                    <span className="text-white font-mono">15min</span>
-                                </div>
-                                <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-                                    <div className="bg-yellow-500 h-full w-[20%]"></div>
-                                </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>
