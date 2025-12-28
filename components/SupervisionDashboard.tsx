@@ -90,9 +90,8 @@ const StatusTimer: React.FC<{ statusChangeAt?: string; status: string }> = ({ st
   if (!statusChangeAt || status === 'AVAILABLE' || status === 'IDLE') return null;
 
   return (
-    <div className="flex items-center gap-1.5 mt-2 bg-white/5 px-2 py-1 rounded w-fit border border-white/5">
-      <span className="material-icons-outlined text-[14px] text-white/40">schedule</span>
-      <span className="text-[12px] font-mono font-bold text-white/90 tabular-nums tracking-wider animate-pulse-slow">
+    <div className="mt-1.5 bg-white/5 px-2 py-0.5 rounded w-fit border border-white/5">
+      <span className="text-[12px] font-mono font-bold text-white/40 tabular-nums tracking-wider animate-pulse-slow">
         {elapsed}
       </span>
     </div>
@@ -331,18 +330,18 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                         isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
                     }`}>
                     <div className="flex justify-between items-start mb-4">
-                      <div className="min-w-0">
-                        <h3 className="text-lg font-bold text-white mb-2 leading-tight">{m.nome}</h3>
-                        <div className="flex flex-col gap-1">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-bold text-white mb-2 leading-tight text-left">{m.nome}</h3>
+                        <div className="flex flex-col gap-1 items-start">
                           <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isActive ? 'text-secondary' :
                             isStopped ? 'text-danger' :
                               isSetup ? 'text-warning' :
                                 isSuspended ? 'text-orange-500' : 'text-text-sub-dark'
                             }`}>
                             <span className="material-icons-outlined text-base">{
-                              isActive ? 'settings_motion_mode' :
-                                isStopped ? 'warning' :
-                                  isSetup ? 'build' :
+                              isActive ? 'play_arrow' :
+                                isStopped ? 'error' :
+                                  isSetup ? 'settings' :
                                     isSuspended ? 'pause_circle' : 'check_circle'
                             }</span> {translateStatus(m.status_atual)}
                           </span>
