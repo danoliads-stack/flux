@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { realtimeManager, createMachineUpdate } from '../src/utils/realtimeManager';
 
 interface Setor {
     id: string;
@@ -67,12 +68,24 @@ const AdminMaquinas: React.FC = () => {
 
     const handleEditMaquina = async () => {
         if (!editingMaquina) return;
-        await supabase.from('maquinas').update({
+
+        const { error } = await supabase.from('maquinas').update({
             nome: editingMaquina.nome.trim(),
             codigo: editingMaquina.codigo.trim(),
             setor_id: editingMaquina.setor_id || null,
             status_atual: editingMaquina.status_atual
         }).eq('id', editingMaquina.id);
+
+        if (!error) {
+            // Broadcast mudança para outras abas
+            await realtimeManager.broadcastMachineUpdate(
+                createMachineUpdate(
+                    editingMaquina.id,
+                    editingMaquina.status_atual
+                )
+            );
+        }
+
         setIsEditModalOpen(false);
         setEditingMaquina(null);
         fetchData();
