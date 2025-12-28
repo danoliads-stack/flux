@@ -24,16 +24,32 @@ const App: React.FC = () => {
   const { user: currentUser, logout: handleLogout, loading: authLoading } = useAuth();
 
   // Persist perspective in sessionStorage (independent per tab)
-  const [perspective, setPerspective] = useState<UserPerspective>(() => {
-    const saved = sessionStorage.getItem('flux_perspective');
-    return (saved as UserPerspective) || 'LOGIN';
-  });
+  // Aguarda AuthContext finalizar para evitar race conditions
+  const [perspective, setPerspective] = useState<UserPerspective>('LOGIN');
+  const [perspectiveInitialized, setPerspectiveInitialized] = useState(false);
 
+  // Restaura perspectiva apenas após AuthContext inicializar
   useEffect(() => {
-    if (perspective !== 'LOGIN') {
+    if (!authLoading && !perspectiveInitialized) {
+      const authInitialized = sessionStorage.getItem('flux_auth_initialized');
+      if (authInitialized === 'true') {
+        const saved = sessionStorage.getItem('flux_perspective');
+        if (saved && saved !== 'LOGIN') {
+          console.log('[App] 🔄 Restoring perspective:', saved);
+          setPerspective(saved as UserPerspective);
+        }
+        setPerspectiveInitialized(true);
+      }
+    }
+  }, [authLoading, perspectiveInitialized]);
+
+  // Salva perspectiva quando mudar
+  useEffect(() => {
+    if (perspectiveInitialized && perspective !== 'LOGIN') {
+      console.log('[App] 💾 Saving perspective:', perspective);
       sessionStorage.setItem('flux_perspective', perspective);
     }
-  }, [perspective]);
+  }, [perspective, perspectiveInitialized]);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [activeOP, setActiveOP] = useState<string | null>(null);
@@ -107,8 +123,11 @@ const App: React.FC = () => {
   // Update perspective based on user role when user changes
   useEffect(() => {
     if (perspective === 'TRACEABILITY') return; // Don't override if in traceability view
+    if (!perspectiveInitialized) return; // Aguarda inicialização de perspectiva
 
     if (currentUser) {
+      console.log('[App] 👤 User changed, role:', currentUser.role);
+
       if (currentUser.role === 'OPERATOR') {
         // Always reset to machine selection when operator logs in
         // The selectedMachineId should be null for new sessions
@@ -131,23 +150,27 @@ const App: React.FC = () => {
           return false;
         };
 
-        if (savedPerspective && isAllowed(savedPerspective)) {
+        if (savedPerspective && isAllowed(savedPerspective) && savedPerspective !== 'LOGIN') {
+          console.log('[App] ✅ Keeping saved perspective:', savedPerspective);
           setPerspective(savedPerspective as UserPerspective);
         } else {
           // Default views per role
           const defaultPerspective: UserPerspective = currentUser.role === 'OPERATOR'
             ? (selectedMachineId ? 'OPERATOR' : 'MACHINE_SELECTION')
             : (currentUser.role as UserPerspective);
+          console.log('[App] 🔄 Setting default perspective:', defaultPerspective);
           setPerspective(defaultPerspective);
         }
       }
     } else {
       // User logged out - reset everything
+      console.log('[App] 🔓 User logged out, resetting perspective');
       setSelectedMachineId(null);
       localStorage.removeItem('flux_selected_machine');
+      sessionStorage.removeItem('flux_perspective');
       setPerspective('LOGIN');
     }
-  }, [currentUser]);
+  }, [currentUser, perspectiveInitialized]);
 
   const userPermissions = useMemo(() => {
     if (!currentUser) return [];

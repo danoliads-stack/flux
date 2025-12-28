@@ -66,7 +66,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let isMounted = true;
 
         const initializeAuth = async () => {
-            console.log('[Auth] Initializing for this tab...');
+            console.log('[Auth] 🔄 Initializing auth for this tab...');
+            const startTime = Date.now();
 
             try {
                 // 1. PRIMEIRO verificar sessão de OPERADOR no sessionStorage (específica desta aba)
@@ -75,15 +76,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     try {
                         const parsed = JSON.parse(savedOp);
                         if (parsed?.id && parsed?.name && parsed?.role === 'OPERATOR') {
-                            console.log('[Auth] Found operator session in this tab:', parsed.name);
+                            console.log('[Auth] ✅ Found operator session in this tab:', parsed.name);
                             if (isMounted) {
                                 setUser(parsed);
                                 setLoading(false);
+                                sessionStorage.setItem('flux_auth_initialized', 'true');
                             }
                             return; // Operador tem prioridade nesta aba
                         }
                     } catch (e) {
-                        console.error('[Auth] Error parsing operator session:', e);
+                        console.error('[Auth] ❌ Error parsing operator session:', e);
                         sessionStorage.removeItem(OPERATOR_SESSION_KEY);
                     }
                 }
@@ -92,56 +94,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
                 if (sessionError) {
-                    console.error('[Auth] getSession error:', sessionError);
+                    console.error('[Auth] ❌ getSession error:', sessionError);
                 }
 
                 if (session?.user) {
-                    console.log('[Auth] Found Supabase session for:', session.user.email);
+                    console.log('[Auth] ✅ Found Supabase session for:', session.user.email);
 
                     const profile = await fetchProfile(session.user.id);
 
                     if (profile) {
-                        if (isMounted) setUser(profile);
+                        if (isMounted) {
+                            setUser(profile);
+                            console.log('[Auth] ✅ Profile loaded:', profile.role);
+                        }
                     } else {
                         // Sessão corrompida - tentar refresh
-                        console.warn('[Auth] Session exists but profile fetch failed. Attempting refresh...');
+                        console.warn('[Auth] ⚠️ Session exists but profile fetch failed. Attempting refresh...');
                         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
 
                         if (refreshError || !refreshData.session) {
-                            console.error('[Auth] Refresh failed. Forcing signOut.');
+                            console.error('[Auth] ❌ Refresh failed. Forcing signOut.');
                             await supabase.auth.signOut();
                             clearSupabaseAuthData();
                         } else {
                             const retryProfile = await fetchProfile(refreshData.session.user.id);
                             if (isMounted && retryProfile) {
                                 setUser(retryProfile);
+                                console.log('[Auth] ✅ Profile recovered after refresh:', retryProfile.role);
                             }
                         }
                     }
                 } else {
-                    // 3. Fallback: verificar localStorage como backup (ex: usuário fechou aba e reabriu)
-                    const backupOp = localStorage.getItem(OPERATOR_SESSION_KEY);
-                    if (backupOp) {
-                        try {
-                            const parsed = JSON.parse(backupOp);
-                            if (parsed?.id && parsed?.name && parsed?.role === 'OPERATOR') {
-                                console.log('[Auth] Recovered operator session from backup:', parsed.name);
-                                // Restaurar no sessionStorage desta aba
-                                sessionStorage.setItem(OPERATOR_SESSION_KEY, backupOp);
-                                if (isMounted) setUser(parsed);
-                            }
-                        } catch (e) {
-                            console.error('[Auth] Error parsing backup operator session:', e);
-                            localStorage.removeItem(OPERATOR_SESSION_KEY);
-                        }
-                    }
+                    console.log('[Auth] ℹ️ No active session found');
                 }
             } catch (err) {
-                console.error('[Auth] Critical error during initialization:', err);
+                console.error('[Auth] ❌ Critical error during initialization:', err);
             } finally {
                 if (isMounted) {
-                    console.log('[Auth] Initialization complete');
+                    const elapsed = Date.now() - startTime;
+                    console.log(`[Auth] ✅ Initialization complete in ${elapsed}ms`);
                     setLoading(false);
+                    sessionStorage.setItem('flux_auth_initialized', 'true');
                 }
             }
         };
@@ -237,43 +230,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         setUser(opUser);
-        // Salva no sessionStorage (específico desta aba)
+        // Salva APENAS no sessionStorage (específico desta aba)
+        // NÃO salva em localStorage para evitar vazamento entre abas
         sessionStorage.setItem(OPERATOR_SESSION_KEY, JSON.stringify(opUser));
-        // Também salva no localStorage como backup (para recuperar se fechar e reabrir)
-        localStorage.setItem(OPERATOR_SESSION_KEY, JSON.stringify(opUser));
 
-        console.log('[Auth] Operator login successful:', opUser.name);
+        console.log('[Auth] ✅ Operator login successful:', opUser.name);
+        console.log('[Auth] ℹ️ Session isolated to this tab only');
         return { error: null };
     }, []);
 
     // Logout - Apenas desta aba
     const logout = useCallback(async () => {
-        console.log('[Auth] Logging out from this tab...');
+        console.log('[Auth] 🔓 Logging out from this tab...');
 
         const wasOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
 
         // Limpa estado local primeiro
         setUser(null);
 
-        // Limpa sessão de operador desta aba
-        sessionStorage.removeItem(OPERATOR_SESSION_KEY);
+        // Limpa TUDO do sessionStorage desta aba (exceto flag de inicialização)
+        const authInitialized = sessionStorage.getItem('flux_auth_initialized');
+        sessionStorage.clear();
+        if (authInitialized) sessionStorage.setItem('flux_auth_initialized', 'true');
+
+        // Limpa dados relacionados de localStorage
         localStorage.removeItem('flux_selected_machine');
 
-        // Se era admin, faz signout do Supabase
+        // Limpa timers, OPs ativas, etc.
+        const fluxKeys = Object.keys(localStorage).filter(k =>
+            k.startsWith('flux_') && !k.startsWith('sb-')
+        );
+        fluxKeys.forEach(k => localStorage.removeItem(k));
+
+        // Se era admin/supervisor, faz signout do Supabase
         if (!wasOperator) {
             try {
                 await supabase.auth.signOut();
+                console.log('[Auth] ✅ Supabase signOut complete');
             } catch (e) {
-                console.error('[Auth] Supabase signOut error:', e);
+                console.error('[Auth] ❌ Supabase signOut error:', e);
             }
         }
 
-        // Se era operador, limpa backup do localStorage também
-        if (wasOperator) {
-            localStorage.removeItem(OPERATOR_SESSION_KEY);
-        }
-
-        console.log('[Auth] Logout complete');
+        console.log('[Auth] ✅ Logout complete');
     }, []);
 
     // Função para limpar TUDO (uso manual/debug)
