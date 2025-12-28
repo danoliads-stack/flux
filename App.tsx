@@ -810,6 +810,7 @@ const App: React.FC = () => {
                   operador_id: currentUser?.id,
                   quantidade_boa: delta,
                   quantidade_refugo: 0,
+                  data_inicio: lastPhaseStartTime || new Date().toISOString(), // ✅ Added data_inicio
                   data_fim: new Date().toISOString(),
                   turno: 'Transferência'
                 });
@@ -860,6 +861,7 @@ const App: React.FC = () => {
                   operador_id: currentUser.id,
                   quantidade_boa: delta,
                   quantidade_refugo: scrap,
+                  data_inicio: lastPhaseStartTime || new Date().toISOString(), // ✅ Added data_inicio
                   data_fim: new Date().toISOString(),
                   turno: turno
                 });
@@ -967,6 +969,7 @@ const App: React.FC = () => {
                   operador_id: currentUser?.id,
                   quantidade_boa: delta,
                   quantidade_refugo: 0,
+                  data_inicio: lastPhaseStartTime || new Date().toISOString(), // ✅ Added data_inicio
                   data_fim: new Date().toISOString(),
                   turno: 'Parcial'
                 });
