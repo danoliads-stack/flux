@@ -130,6 +130,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [totalScrap, setTotalScrap] = useState(0);
   const [opQuantity, setOpQuantity] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState('--:--');
+  const [operatorShiftProduction, setOperatorShiftProduction] = useState(0);
 
 
   // Configuration Constants (In future this could be loaded from backend)
@@ -347,6 +348,54 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         status: op.status,
         produto_nome: Array.isArray(op.produtos) ? op.produtos[0]?.nome : (op.produtos as any)?.nome
       })));
+    }
+  };
+
+  // Fetch operator shift production
+  const fetchOperatorShiftProduction = async () => {
+    if (!operatorId) return;
+
+    // Get current turno start
+    const { data: turnos } = await supabase
+      .from('turnos')
+      .select('*')
+      .eq('ativo', true);
+
+    if (turnos && turnos.length > 0) {
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      const activeTurno = turnos.find(t => {
+        const inicio = t.hora_inicio.substring(0, 5);
+        const fim = t.hora_fim.substring(0, 5);
+        if (inicio > fim) {
+          return currentTime >= inicio || currentTime < fim;
+        }
+        return currentTime >= inicio && currentTime < fim;
+      });
+
+      if (activeTurno) {
+        const [h, m] = activeTurno.hora_inicio.split(':').map(Number);
+        const shiftStart = new Date();
+        shiftStart.setHours(h, m, 0, 0);
+
+        const inicioStr = activeTurno.hora_inicio.substring(0, 5);
+        const fimStr = activeTurno.hora_fim.substring(0, 5);
+        if (inicioStr > fimStr && currentTime < inicioStr) {
+          shiftStart.setDate(shiftStart.getDate() - 1);
+        }
+
+        const { data: prodData } = await supabase
+          .from('registros_producao')
+          .select('quantidade_boa')
+          .eq('operador_id', operatorId)
+          .gte('created_at', shiftStart.toISOString());
+
+        if (prodData) {
+          const total = prodData.reduce((acc, r) => acc + (r.quantidade_boa || 0), 0);
+          setOperatorShiftProduction(total);
+        }
+      }
     }
   };
 
@@ -706,7 +755,23 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     fetchChecklists();
     fetchDiaryEntries();
     fetchProductionStats();
-  }, [machineId, opState, operatorName, opId, accumulatedProductionTime]); // Added accumulatedProductionTime to re-calc stats/OEE if needed
+    fetchOperatorShiftProduction();
+  }, [machineId, opState, operatorName, opId, accumulatedProductionTime]);
+
+  // Real-time shift production update
+  useEffect(() => {
+    if (!operatorId) return;
+    const channel = supabase
+      .channel(`op-shift-${operatorId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'registros_producao',
+        filter: `operador_id=eq.${operatorId}`
+      }, () => fetchOperatorShiftProduction())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [operatorId]);
 
   // Real-time subscription for live updates
   useEffect(() => {
@@ -986,7 +1051,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-icons-outlined text-6xl">flag</span>
@@ -1034,6 +1099,16 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
           <div className="text-xs font-bold text-secondary">Live feed</div>
           <div className="text-xs text-text-sub-dark mt-1">Meta de OEE: 95%</div>
+        </div>
+
+        <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group border-l-primary/30">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="material-icons-outlined text-6xl text-primary">person</span>
+          </div>
+          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Sua Produção (Turno)</div>
+          <div className="text-4xl md:text-5xl font-display font-bold text-primary mb-1">{operatorShiftProduction}</div>
+          <div className="text-xs font-bold text-secondary capitalize">{shiftName?.toLowerCase() || 'Turno atual'}</div>
+          <div className="text-xs text-text-sub-dark mt-1">Total acumulado hoje</div>
         </div>
       </div>
 

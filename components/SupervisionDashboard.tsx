@@ -289,12 +289,17 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                                 isSuspended ? 'text-orange-500' : 'text-text-sub-dark'
                             }`}>
                             <span className="material-icons-outlined text-[10px]">{
-                              isActive ? 'settings' :
-                                isStopped ? 'block' :
+                              isActive ? 'settings_motion_mode' :
+                                isStopped ? 'warning' :
                                   isSetup ? 'build' :
                                     isSuspended ? 'pause_circle' : 'check_circle'
                             }</span> {translateStatus(m.status_atual)}
                           </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] font-bold text-white tabular-nums bg-white/5 px-1.5 py-0.5 rounded">
+                          {oeeValue.toFixed(0)}%
                         </div>
                       </div>
                     </div>
@@ -306,24 +311,30 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       </div>
                     )}
 
-                    <div className="space-y-1 mb-2">
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-text-sub-dark">OP:</span>
-                        <span className="font-bold text-white truncate ml-2">{currentOp}</span>
+                    <div className="space-y-3 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary border border-primary/20">
+                            {(m.operadores as any)?.nome?.charAt(0) || '?'}
+                          </div>
+                          <span className="text-[10px] font-bold text-white truncate">{(m.operadores as any)?.nome || 'Sem Operador'}</span>
+                        </div>
+                        <div className="flex justify-between text-[9px]">
+                          <span className="text-text-sub-dark uppercase tracking-tight font-medium">Prod. Turno</span>
+                          <span className="text-primary font-mono font-bold">
+                            {operatorProduction.find(op => op.operatorId === m.operador_atual_id)?.totalProduced || 0} un
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-text-sub-dark">Prod:</span>
-                        <span className="font-bold text-white tabular-nums">{productionCount} un</span>
-                      </div>
-                    </div>
 
-                    <div className="bg-background-dark rounded p-2 mb-2">
-                      <div className="flex justify-between text-[9px] mb-1">
-                        <span className="text-text-sub-dark">OEE</span>
-                        <span className="text-white font-bold tabular-nums">{oeeValue.toFixed(0)}%</span>
-                      </div>
-                      <div className="h-1 w-full bg-surface-dark-highlight rounded-full overflow-hidden">
-                        <div className={`h-full transition-all duration-700 ${oeeValue < 85 ? 'bg-danger' : 'bg-secondary'}`} style={{ width: `${Math.min(oeeValue, 100)}%` }}></div>
+                      <div className="pt-2 border-t border-white/5">
+                        <div className="flex justify-between text-[9px] mb-1">
+                          <span className="text-text-sub-dark uppercase font-medium">OP: {currentOp}</span>
+                          <span className="text-white font-bold">{productionCount} un</span>
+                        </div>
+                        <div className="h-1 w-full bg-background-dark rounded-full overflow-hidden">
+                          <div className={`h-full transition-all duration-700 ${isActive ? 'bg-secondary' : 'bg-surface-dark-highlight'}`} style={{ width: '60%' }}></div>
+                        </div>
                       </div>
                     </div>
 
@@ -346,58 +357,50 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         </div>
 
         <div className="w-full xl:w-[320px] shrink-0 space-y-6">
-          <h2 className="text-xl font-display font-bold text-white uppercase tracking-wider">Performance</h2>
+          <h2 className="text-xl font-display font-bold text-white uppercase tracking-wider">Performance do Turno</h2>
 
-          <div className="bg-surface-dark rounded-xl border border-border-dark p-6">
-            <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-widest">Refugo Recente</h3>
-            <div className="space-y-4">
-              {scrapData.length > 0 ? scrapData.map((item, i) => (
-                <div key={i}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium text-text-sub-dark">{item.opCode} ({item.machineName})</span>
-                    <span className="text-danger font-bold">{item.scrapRate.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-background-dark rounded-full">
-                    <div className="h-full bg-danger rounded-full" style={{ width: `${Math.min(item.scrapRate * 2, 100)}%` }}></div>
-                  </div>
-                </div>
-              )) : (
-                <div className="text-center text-text-sub-dark text-xs py-4">
-                  <span className="material-icons-outlined text-2xl mb-2 block opacity-50">check_circle</span>
-                  Sem refúgo registrado neste turno
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-surface-dark rounded-xl border border-border-dark p-6">
-            <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-widest">Produção p/ Operador</h3>
-            <div className="space-y-4">
+          <div className="bg-surface-dark rounded-xl border border-border-dark p-6 h-full">
+            <h3 className="text-sm font-bold text-white mb-6 uppercase tracking-widest flex items-center gap-2">
+              <span className="material-icons-outlined text-primary">groups</span>
+              Produção p/ Operador
+            </h3>
+            <div className="space-y-6">
               {operatorProduction.length > 0 ? operatorProduction.map((op, i) => {
                 const maxProduced = operatorProduction[0]?.totalProduced || 1;
                 return (
-                  <div key={op.operatorId} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-surface-dark-highlight border border-border-dark flex items-center justify-center text-[10px] font-bold text-white">
+                  <div key={op.operatorId} className="flex items-center gap-3 group">
+                    <div className="w-10 h-10 rounded-full bg-surface-dark-highlight border border-border-dark flex items-center justify-center text-xs font-bold text-white group-hover:border-primary/50 transition-colors">
                       {op.operatorName.charAt(0)}
                     </div>
                     <div className="flex-1">
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="font-bold text-white">{op.operatorName}</span>
-                        <span className="text-primary tabular-nums">{op.totalProduced} un</span>
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className="font-bold text-white group-hover:text-primary transition-colors">{op.operatorName}</span>
+                        <span className="text-primary tabular-nums font-mono">{op.totalProduced} un</span>
                       </div>
-                      <div className="h-1 w-full bg-background-dark rounded-full">
-                        <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (op.totalProduced / maxProduced) * 100)}%` }}></div>
+                      <div className="h-1.5 w-full bg-background-dark rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all duration-1000 ease-out"
+                          style={{ width: `${Math.min(100, (op.totalProduced / maxProduced) * 100)}%` }}
+                        ></div>
                       </div>
                     </div>
                   </div>
                 );
               }) : (
-                <div className="text-center text-text-sub-dark text-xs py-4">
-                  <span className="material-icons-outlined text-2xl mb-2 block opacity-50">person_off</span>
+                <div className="text-center text-text-sub-dark text-xs py-8 border border-dashed border-border-dark rounded-lg">
+                  <span className="material-icons-outlined text-3xl mb-2 block opacity-30">person_off</span>
                   Nenhuma produção registrada neste turno
                 </div>
               )}
             </div>
+            {operatorProduction.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-border-dark">
+                <p className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold mb-1">Média por Operador</p>
+                <p className="text-xl font-display font-bold text-white">
+                  {(operatorProduction.reduce((acc, curr) => acc + curr.totalProduced, 0) / operatorProduction.length).toFixed(0)} <span className="text-xs text-text-sub-dark font-sans font-normal">un/turno</span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
