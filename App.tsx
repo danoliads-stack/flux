@@ -17,6 +17,7 @@ import Preloader from './components/Preloader';
 import { ROLE_CONFIGS } from './constants';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabase';
+import { realtimeManager, createMachineUpdate } from './src/utils/realtimeManager';
 
 
 
@@ -214,19 +215,31 @@ const App: React.FC = () => {
 
     fetchMachines();
 
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maquinas' }, () => {
+    // Subscribe to realtime updates usando o manager centralizado
+    const unsubscribe = realtimeManager.subscribeMachineUpdates((update) => {
+      console.log('[App] 🔄 Machine update received:', update);
+
+      // Atualiza apenas a máquina específica na lista
+      setLiveMachines(prev => prev.map(m =>
+        m.id === update.machineId
+          ? {
+            ...m,
+            status: update.status as MachineStatus,
+            operador_atual_id: update.operatorId || null,
+            op_atual_id: update.opId || null
+          }
+          : m
+      ));
+
+      // Se for a máquina selecionada ou update veio do banco, faz refresh completo
+      if (update.machineId === selectedMachineId || update.source === 'database') {
+        console.log('[App] 🔃 Refreshing machines due to update');
         fetchMachines();
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'registros_producao' }, () => {
-        // Refresh machines when production is logged (updates OEE/Realized if they are in the table)
-        fetchMachines();
-      })
-      .subscribe();
+      }
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
   }, [currentUser]);
 
