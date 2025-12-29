@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { UserPerspective, MachineStatus, AppUser, Permission, MachineData, ProductionOrder, OPState } from './types';
+import { MachineStatus, AppUser, Permission, MachineData, ProductionOrder, OPState } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import OperatorDashboard from './components/OperatorDashboard';
@@ -16,87 +16,66 @@ import TraceabilityPage from './components/TraceabilityPage';
 import Preloader from './components/Preloader';
 import { ROLE_CONFIGS } from './constants';
 import { useAuth } from './AuthContext';
-import { supabase } from './supabase';
+import { supabase } from './src/lib/supabase-client';
 import { realtimeManager, createMachineUpdate } from './src/utils/realtimeManager';
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { useAppStore } from './src/store/useAppStore';
+
+// --- PROTECTED ROUTE COMPONENT ---
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  user: AppUser | null;
+  permission?: Permission;
+  userPermissions: Permission[];
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, user, permission, userPermissions }) => {
+  if (!user) return <Navigate to="/login" replace />;
+  if (permission && !userPermissions?.includes(permission)) return <Navigate to="/" replace />;
+  return <>{children}</>;
+};
 
 
 
 const App: React.FC = () => {
   const { user: currentUser, logout: handleLogout, loading: authLoading } = useAuth();
-
-  // Persist perspective in sessionStorage (independent per tab)
-  const [perspective, setPerspective] = useState<UserPerspective>(() => {
-    // Tenta restaurar perspectiva salva apenas se não for primeira carga
-    const saved = sessionStorage.getItem('flux_perspective');
-    return (saved as UserPerspective) || 'LOGIN';
-  });
-
-  // Salva perspectiva quando mudar
-  useEffect(() => {
-    if (perspective !== 'LOGIN') {
-      sessionStorage.setItem('flux_perspective', perspective);
-    }
-  }, [perspective]);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [activeOP, setActiveOP] = useState<string | null>(null);
-  const [activeOPCodigo, setActiveOPCodigo] = useState<string | null>(null);
-  const [activeOPData, setActiveOPData] = useState<any>(null); // Full OP data with meta
-  const [activeOPRealized, setActiveOPRealized] = useState<number>(0);
+
+  // --- ZUSTAND STORE ---
+  const {
+    selectedMachineId, setSelectedMachine,
+    currentMachine, setCurrentMachine,
+    activeOP, setActiveOP,
+    activeOPCodigo,
+    activeOPData,
+    opState, setOpState,
+    statusChangeAt: localStatusChangeAt, syncTimers,
+    accumulatedSetupTime, accumulatedProductionTime, accumulatedStopTime,
+    // Production Data from Store
+    totalProduced,
+    setProductionData
+  } = useAppStore();
+
   const [operatorTurno, setOperatorTurno] = useState<string>('Turno Atual');
-  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [currentLoteId, setCurrentLoteId] = useState<string | null>(null);
 
-  // --- CENTRAL OPS STATE ---
-  const [opState, setOpState] = useState<OPState>('IDLE');
-  const [localStatusChangeAt, setLocalStatusChangeAt] = useState<string | null>(null); // Local timestamp for current phase timer
-
-  // Accumulated Times (in seconds) - persisted per OP session
-  const [accumulatedSetupTime, setAccumulatedSetupTime] = useState(0);
-  const [accumulatedProductionTime, setAccumulatedProductionTime] = useState(0);
-  const [accumulatedStopTime, setAccumulatedStopTime] = useState(0);
+  // Last phase start time (synced with store statusChangeAt for relative calc)
+  const lastPhaseStartTime = localStatusChangeAt;
 
   // Last phase start time (for calculating time to add when transitioning)
-  const [lastPhaseStartTime, setLastPhaseStartTime] = useState<string | null>(null);
+  // Legacy states removed in favor of store
 
-  // Legacy states (kept for compatibility)
-  const [setupSeconds, setSetupSeconds] = useState(0);
-  const [productionSeconds, setProductionSeconds] = useState(0);
-  const [timerStartDate, setTimerStartDate] = useState<Date | null>(null);
 
   const [liveMachines, setLiveMachines] = useState<MachineData[]>([]);
 
-  // PERSISTENCE: Save accumulated times to localStorage whenever they change
-  useEffect(() => {
-    if (activeOP) {
-      localStorage.setItem(`flux_acc_setup_${activeOP}`, accumulatedSetupTime.toString());
-      localStorage.setItem(`flux_acc_prod_${activeOP}`, accumulatedProductionTime.toString());
-      localStorage.setItem(`flux_acc_stop_${activeOP}`, accumulatedStopTime.toString());
-      if (lastPhaseStartTime) {
-        localStorage.setItem(`flux_phase_start_${activeOP}`, lastPhaseStartTime);
-      }
-      if (localStatusChangeAt) {
-        localStorage.setItem(`flux_status_change_${activeOP}`, localStatusChangeAt);
-      }
-    }
-  }, [activeOP, accumulatedSetupTime, accumulatedProductionTime, accumulatedStopTime, lastPhaseStartTime, localStatusChangeAt]);
-
-  // PERSISTENCE: Load accumulated times from localStorage when OP is activated
-  useEffect(() => {
-    if (activeOP) {
-      const savedSetup = localStorage.getItem(`flux_acc_setup_${activeOP}`);
-      const savedProd = localStorage.getItem(`flux_acc_prod_${activeOP}`);
-      const savedStop = localStorage.getItem(`flux_acc_stop_${activeOP}`);
-      const savedPhaseStart = localStorage.getItem(`flux_phase_start_${activeOP}`);
-      const savedStatusChange = localStorage.getItem(`flux_status_change_${activeOP}`);
-
-      if (savedSetup) setAccumulatedSetupTime(parseInt(savedSetup));
-      if (savedProd) setAccumulatedProductionTime(parseInt(savedProd));
-      if (savedStop) setAccumulatedStopTime(parseInt(savedStop));
-      if (savedPhaseStart) setLastPhaseStartTime(savedPhaseStart);
-      if (savedStatusChange) setLocalStatusChangeAt(savedStatusChange);
-    }
-  }, [activeOP]);
+  // PERSISTENCE: Replaced by Zustand persist middleware
+  // We keep this effect only to sync legacy localStorage if completely necessary during migration, 
+  // but for now we rely on the store. 
+  // TODO: Fully clean up this block after verification.
 
   // Detect public traceability link
   useEffect(() => {
@@ -104,60 +83,35 @@ const App: React.FC = () => {
     const lote = params.get('lote');
     if (lote) {
       setCurrentLoteId(lote);
-      setPerspective('TRACEABILITY');
+      navigate(`/r/${lote}`);
     }
-  }, []);
+  }, [navigate]);
 
-  // Update perspective based on user role when user changes
+  // Handle role-based redirection when user logs in/out
   useEffect(() => {
-    if (perspective === 'TRACEABILITY') return; // Don't override if in traceability view
+    if (location.pathname.startsWith('/r/')) return; // Traceability links
 
     if (currentUser) {
       console.log('[App] 👤 User changed, role:', currentUser.role);
 
-      if (currentUser.role === 'OPERATOR') {
-        // Always reset to machine selection when operator logs in
-        // The selectedMachineId should be null for new sessions
-        if (!selectedMachineId) {
-          setPerspective('MACHINE_SELECTION');
-        } else {
-          setPerspective('OPERATOR');
-        }
-      } else {
-        // Reset machine selection for non-operators
-        setSelectedMachineId(null);
-        localStorage.removeItem('flux_selected_machine');
-
-        // Restore saved perspective if valid for this role, otherwise default to role
-        const savedPerspective = sessionStorage.getItem('flux_perspective');
-        const isAllowed = (p: string) => {
-          if (currentUser.role === 'ADMIN') return true;
-          if (currentUser.role === 'SUPERVISOR') return ['SUPERVISOR', 'REPORTS', 'OPERATOR'].includes(p);
-          if (currentUser.role === 'OPERATOR') return ['OPERATOR', 'MACHINE_SELECTION'].includes(p);
-          return false;
-        };
-
-        if (savedPerspective && isAllowed(savedPerspective) && savedPerspective !== 'LOGIN') {
-          console.log('[App] ✅ Keeping saved perspective:', savedPerspective);
-          setPerspective(savedPerspective as UserPerspective);
-        } else {
-          // Default views per role
-          const defaultPerspective: UserPerspective = currentUser.role === 'OPERATOR'
-            ? (selectedMachineId ? 'OPERATOR' : 'MACHINE_SELECTION')
-            : (currentUser.role as UserPerspective);
-          console.log('[App] 🔄 Setting default perspective:', defaultPerspective);
-          setPerspective(defaultPerspective);
+      // Default redirections based on login
+      if (location.pathname === '/' || location.pathname === '/login') {
+        if (currentUser.role === 'OPERATOR') {
+          navigate('/maquinas');
+        } else if (currentUser.role === 'ADMIN') {
+          navigate('/administracao');
+        } else if (currentUser.role === 'SUPERVISOR') {
+          navigate('/supervisao');
         }
       }
-    } else {
-      // User logged out - reset everything
-      console.log('[App] 🔓 User logged out, resetting perspective');
-      setSelectedMachineId(null);
-      localStorage.removeItem('flux_selected_machine');
-      sessionStorage.removeItem('flux_perspective');
-      setPerspective('LOGIN');
+    } else if (!authLoading) {
+      // User logged out
+      console.log('[App] 🔓 User logged out, redirecting to login');
+      if (location.pathname !== '/login' && !location.pathname.startsWith('/r/')) {
+        navigate('/login');
+      }
     }
-  }, [currentUser]);
+  }, [currentUser, authLoading, navigate]);
 
   const userPermissions = useMemo(() => {
     if (!currentUser) return [];
@@ -248,7 +202,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchOPDetails = async () => {
       if (!activeOP) {
-        setActiveOPRealized(0);
+        setProductionData({ totalProduced: 0 });
         return;
       }
 
@@ -260,9 +214,11 @@ const App: React.FC = () => {
         .single();
 
       if (data && !error) {
-        setActiveOPData(data as any);
-      } else if (error) {
-        console.error('Error fetching extended OP details:', error);
+        // Only update if data is different/missing to avoid loops? 
+        // Actually store setActiveOP already sets basic data, but this fetches relations.
+        // We can update activeOPData directly in store if needed, or just let it be.
+        // For now, let's assume setActiveOP handled it, or update it:
+        useAppStore.getState().setActiveOP(data as any);
       }
 
       // 2. Fetch sum of produced items for this OP
@@ -273,25 +229,17 @@ const App: React.FC = () => {
 
       if (prodData && !prodError) {
         const total = prodData.reduce((acc, r) => acc + (r.quantidade_boa || 0), 0);
-        setActiveOPRealized(total);
+        setProductionData({ totalProduced: total });
       }
     };
 
     fetchOPDetails();
   }, [activeOP]);
 
-  const currentMachine = useMemo(() =>
-    liveMachines.find(m => m.id === selectedMachineId) || null
-    , [liveMachines, selectedMachineId]);
+  // currentMachine is now from store
 
-  // ✅ FIX: Sync localStatusChangeAt from database when machine loads/updates
-  useEffect(() => {
-    if (currentMachine?.status_change_at && !localStatusChangeAt) {
-      console.log('[App] ⏱️ Syncing timer from DB:', currentMachine.status_change_at);
-      setLocalStatusChangeAt(currentMachine.status_change_at);
-      setLastPhaseStartTime(currentMachine.status_change_at);
-    }
-  }, [currentMachine?.status_change_at]);
+
+
 
   // ✅ FIX: Sync activeOP from currentMachine.op_atual_id when machine updates (e.g., page reload)
   useEffect(() => {
@@ -300,100 +248,32 @@ const App: React.FC = () => {
         console.log('[App] 📋 Syncing active OP from machine:', currentMachine.op_atual_id);
         const { data: opData } = await supabase
           .from('ordens_producao')
-          .select('*')
+          .select('*, produtos(nome, codigo)')
           .eq('id', currentMachine.op_atual_id)
           .single();
 
         if (opData) {
-          setActiveOP(opData.id);
-          setActiveOPCodigo(opData.codigo);
-          setActiveOPData(opData);
+          // Update Store
+          setActiveOP(opData as any);
 
           // Also set opState based on machine status
+          let mappedState: OPState = 'IDLE';
           switch (currentMachine.status_atual) {
-            case MachineStatus.SETUP: setOpState('SETUP'); break;
-            case MachineStatus.RUNNING: setOpState('PRODUCAO'); break;
-            case MachineStatus.STOPPED: setOpState('PARADA'); break;
-            case MachineStatus.SUSPENDED: setOpState('SUSPENSA'); break;
-            default: setOpState('IDLE');
+            case MachineStatus.SETUP: mappedState = 'SETUP'; break;
+            case MachineStatus.RUNNING: mappedState = 'PRODUCAO'; break;
+            case MachineStatus.STOPPED: mappedState = 'PARADA'; break;
+            case MachineStatus.SUSPENDED: mappedState = 'SUSPENSA'; break;
+            default: mappedState = 'IDLE';
           }
+          setOpState(mappedState);
         }
       }
     };
     syncOP();
   }, [currentMachine?.op_atual_id, activeOP]);
 
-  // Centralized Timer with Persistence
-  useEffect(() => {
-    let interval: any;
-    const updateTimer = () => {
-      if (!timerStartDate) return;
-      const now = new Date();
-      const diffSeconds = Math.floor((now.getTime() - timerStartDate.getTime()) / 1000);
+  // Legacy Timer Logic Removed - Handled by Store and OperatorDashboard
 
-      if (opState === 'SETUP') {
-        const initialSeconds = parseInt(localStorage.getItem(`flux_setup_offset_${selectedMachineId}`) || '0');
-        setSetupSeconds(initialSeconds + diffSeconds);
-      } else if (opState === 'PRODUCAO') {
-        const initialSeconds = parseInt(localStorage.getItem(`flux_production_offset_${selectedMachineId}`) || '0');
-        setProductionSeconds(initialSeconds + diffSeconds);
-      }
-    };
-
-    if (opState === 'SETUP' || opState === 'PRODUCAO') {
-      // Immediate update
-      updateTimer();
-      // Interval update
-      interval = setInterval(updateTimer, 1000);
-    }
-
-    return () => clearInterval(interval);
-  }, [opState, timerStartDate, selectedMachineId]);
-
-  // Manage Timer Start/Resume Logic on Status Change
-  useEffect(() => {
-    if (!selectedMachineId) return;
-
-    const storageKey = `flux_timer_start_${selectedMachineId}`;
-    const savedStart = localStorage.getItem(storageKey);
-
-    if (opState === 'SETUP' || opState === 'PRODUCAO') {
-      if (savedStart) {
-        // Resume from saved start
-        setTimerStartDate(new Date(parseInt(savedStart)));
-      } else {
-        // New start
-        const now = new Date();
-        setTimerStartDate(now);
-        localStorage.setItem(storageKey, now.getTime().toString());
-      }
-    } else {
-      // Pause/Stop: Clear current timer start but KEEP the accumulated offset if creating a pause logic (not implemented here fully yet)
-      // For now, if we go to IDLE or PARADA, we stop the active timer.
-      // Ideally, on PARADA we might want to keep the productionSeconds frozen but ready to resume.
-      // BUT, checking the requirement: "production continues running... until explicitly finalized"
-
-      // If we are strictly stopped (PARADA), we don't increment, but we shouldn't lose the accumulated time.
-      if (opState === 'PARADA' && timerStartDate) {
-        // Accumulate current session into offset
-        const now = new Date();
-        const diff = Math.floor((now.getTime() - timerStartDate.getTime()) / 1000);
-        const currentOffset = parseInt(localStorage.getItem(`flux_production_offset_${selectedMachineId}`) || '0');
-        localStorage.setItem(`flux_production_offset_${selectedMachineId}`, (currentOffset + diff).toString());
-        localStorage.removeItem(storageKey); // Stop current session
-        setTimerStartDate(null);
-      }
-      else if (opState === 'FINALIZADA') {
-        // Clear everything
-        localStorage.removeItem(storageKey);
-        localStorage.removeItem(`flux_production_offset_${selectedMachineId}`);
-        localStorage.removeItem(`flux_setup_offset_${selectedMachineId}`);
-        setProductionSeconds(0);
-        setSetupSeconds(0);
-        setTimerStartDate(null);
-      }
-    }
-  }, [opState, selectedMachineId]);
 
   // Sync opState to DB status_atual
   useEffect(() => {
@@ -441,7 +321,10 @@ const App: React.FC = () => {
 
   const handleMachineSelect = async (machine: MachineData) => {
     console.log('Selecting machine:', machine.nome, 'Current status:', machine.status_atual);
-    setSelectedMachineId(machine.id);
+
+    // Update Store
+    setSelectedMachine(machine.id);
+    setCurrentMachine(machine);
     localStorage.setItem('flux_selected_machine', machine.id);
 
     // Map MachineStatus to OPState
@@ -455,32 +338,38 @@ const App: React.FC = () => {
     }
     setOpState(initialOPState);
 
-    // Initial load of offsets
-    const savedSetupOffset = parseInt(localStorage.getItem(`flux_setup_offset_${machine.id}`) || '0');
-    const savedProdOffset = parseInt(localStorage.getItem(`flux_production_offset_${machine.id}`) || '0');
-    setSetupSeconds(savedSetupOffset);
-    setProductionSeconds(savedProdOffset);
+    // Sync Timers from Machine Data
+    if (machine.status_change_at) {
+      syncTimers({ statusChangeAt: machine.status_change_at });
+    }
 
     // If machine has an active OP, fetch its data
     if (machine.op_atual_id) {
       const { data: opData } = await supabase
         .from('ordens_producao')
-        .select('*')
+        .select('*, produtos(nome, codigo)')
         .eq('id', machine.op_atual_id)
         .single();
 
       if (opData) {
-        setActiveOP(opData.id); // Store UUID
-        setActiveOPCodigo(opData.codigo); // Store Code for display
-        setActiveOPData(opData);
+        setActiveOP(opData); // Store Action
       }
     } else {
-      setActiveOP(null);
-      setActiveOPCodigo(null);
-      setActiveOPData(null);
+      // ✅ FIX: Se a máquina está em status de produção/setup mas SEM OP, reseta ela
+      if (initialOPState === 'PRODUCAO' || initialOPState === 'SETUP' || initialOPState === 'PARADA') {
+        console.warn('[App] ⚠️ Máquina em estado inconsistente (sem OP). Resetando para IDLE.');
+        setOpState('IDLE');
+        await updateSelectedMachine({
+          status_atual: MachineStatus.AVAILABLE,
+          status_change_at: new Date().toISOString()
+        });
+        setActiveOP(null);
+      } else {
+        setActiveOP(null);
+      }
     }
 
-    setPerspective('OPERATOR');
+    navigate(`/maquinas/${machine.id}`);
   };
 
   // Recover selected machine only on initial load, and only if user is the same
@@ -510,16 +399,10 @@ const App: React.FC = () => {
 
   // Return to machine selection
   const handleChangeMachine = () => {
-    setSelectedMachineId(null);
+    // Reset Store via Action (optional, or just clear selected)
+    setSelectedMachine(null);
     localStorage.removeItem('flux_selected_machine');
-    setActiveOP(null);
-    setActiveOPCodigo(null);
-    setActiveOPData(null);
-    setOpState('IDLE');
-    setSetupSeconds(0);
-    setProductionSeconds(0);
-    setTimerStartDate(null);
-    setPerspective('MACHINE_SELECTION');
+    navigate('/maquinas');
   };
 
   // Emergency clear function for stuck loading
@@ -534,31 +417,14 @@ const App: React.FC = () => {
 
 
 
-  if (perspective === 'LOGIN' || (!currentUser && perspective !== 'TRACEABILITY')) {
-    return <LoginScreen />;
-  }
-
-  if (perspective === 'MACHINE_SELECTION' && currentUser) {
-    return (
-      <MachineSelection
-        user={currentUser}
-        machines={liveMachines}
-        onSelect={handleMachineSelect}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
   if (authLoading) {
     return <Preloader />;
   }
 
   return (
     <div className="flex h-screen bg-background-dark text-white overflow-hidden font-sans selection:bg-primary/30 selection:text-white">
-      {perspective !== 'TRACEABILITY' && (
+      {location.pathname !== '/login' && !location.pathname.startsWith('/r/') && (
         <Sidebar
-          perspective={perspective}
-          setPerspective={setPerspective}
           onLogout={handleLogout}
           userRole={currentUser?.role || 'OPERATOR'}
           userPermissions={userPermissions}
@@ -566,153 +432,173 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        {perspective !== 'TRACEABILITY' && (
+        {location.pathname !== '/login' && !location.pathname.startsWith('/r/') && (
           <Header
-            perspective={perspective}
             onLogout={handleLogout}
             user={currentUser}
           />
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {perspective === 'OPERATOR' && hasPermission(Permission.VIEW_OPERATOR_DASHBOARD) && currentMachine && (
-            <OperatorDashboard
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/login" element={<LoginScreen />} />
 
-              opState={opState}
-              statusChangeAt={localStatusChangeAt}
-              realized={activeOPRealized}
-              oee={95} // TODO: Calculate OEE
-              opId={activeOP}
-              opCodigo={activeOPCodigo}
-              onOpenSetup={() => setActiveModal('setup')}
-              onOpenStop={() => setActiveModal('stop')}
-              onOpenFinalize={() => setActiveModal('finalize')}
-              onStop={async () => {
-                setActiveModal('stop');
-              }}
-              onRetomar={async () => {
-                if (currentMachine) {
-                  const now = new Date().toISOString();
+              <Route path="/maquinas" element={
+                <ProtectedRoute user={currentUser} userPermissions={userPermissions}>
+                  <MachineSelection
+                    user={currentUser!}
+                    machines={liveMachines}
+                    onSelect={handleMachineSelect}
+                    onLogout={handleLogout}
+                  />
+                </ProtectedRoute>
+              } />
 
-                  // Accumulate stop time from PARADA phase
-                  if (lastPhaseStartTime && opState === 'PARADA') {
-                    const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
-                    setAccumulatedStopTime(prev => prev + elapsed);
-                  }
+              <Route path="/maquinas/:id" element={
+                <ProtectedRoute user={currentUser} permission={Permission.VIEW_OPERATOR_DASHBOARD} userPermissions={userPermissions}>
+                  {currentMachine ? (
+                    <OperatorDashboard
+                      opState={opState}
+                      statusChangeAt={localStatusChangeAt}
+                      realized={totalProduced}
+                      oee={95} // TODO: Calculate OEE
+                      opId={activeOP}
+                      opCodigo={activeOPCodigo}
+                      onOpenSetup={() => setActiveModal('setup')}
+                      onOpenStop={() => setActiveModal('stop')}
+                      onOpenFinalize={() => setActiveModal('finalize')}
+                      onStop={async () => {
+                        setActiveModal('stop');
+                      }}
+                      onRetomar={async () => {
+                        if (currentMachine) {
+                          const now = new Date().toISOString();
 
-                  // ✅ FIX: Restaurar estado anterior (Setup ou Produção)
-                  const lastState = localStorage.getItem(`flux_pre_stop_state_${currentMachine.id}`);
-                  const nextStatus = lastState === 'SETUP' ? MachineStatus.SETUP : MachineStatus.RUNNING;
-                  const nextOpState = lastState === 'SETUP' ? 'SETUP' : 'PRODUCAO';
+                          // Accumulate Stop Time
+                          let newAccStop = accumulatedStopTime;
+                          if (localStatusChangeAt && opState === 'PARADA') {
+                            const elapsed = Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+                            newAccStop += elapsed;
+                          }
 
-                  console.log(`[App] Retomar: restoring state to ${nextOpState} (from ${lastState})`);
+                          const lastState = localStorage.getItem(`flux_pre_stop_state_${currentMachine.id}`);
+                          const nextStatus = lastState === 'SETUP' ? MachineStatus.SETUP : MachineStatus.RUNNING;
+                          const nextOpState = lastState === 'SETUP' ? 'SETUP' : 'PRODUCAO';
 
-                  await supabase.from('maquinas').update({
-                    status_atual: nextStatus,
-                    status_change_at: now
-                  }).eq('id', currentMachine.id);
+                          await supabase.from('maquinas').update({
+                            status_atual: nextStatus,
+                            status_change_at: now
+                          }).eq('id', currentMachine.id);
 
-                  setLocalStatusChangeAt(now);
-                  setLastPhaseStartTime(now);
-                  await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, nextStatus, {
-                    operatorId: currentUser.id,
-                    opId: activeOP
-                  }));
-                  setOpState(nextOpState);
-                }
-              }}
-              onStartProduction={async () => {
-                if (currentMachine) {
-                  const now = new Date().toISOString();
+                          syncTimers({
+                            statusChangeAt: now,
+                            accStop: newAccStop
+                          });
 
-                  // Accumulate setup time from SETUP phase
-                  if (lastPhaseStartTime && opState === 'SETUP') {
-                    const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
-                    setAccumulatedSetupTime(prev => prev + elapsed);
-                  }
+                          await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, nextStatus, {
+                            operatorId: currentUser!.id,
+                            opId: activeOP
+                          }));
 
-                  await supabase.from('maquinas').update({
-                    status_atual: MachineStatus.RUNNING,
-                    status_change_at: now
-                  }).eq('id', currentMachine.id);
+                          setOpState(nextOpState);
+                        }
+                      }}
+                      onStartProduction={async () => {
+                        if (currentMachine) {
+                          const now = new Date().toISOString();
 
-                  setLocalStatusChangeAt(now);
-                  setLastPhaseStartTime(now);
-                  await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
-                    operatorId: currentUser.id,
-                    opId: activeOP
-                  }));
-                  setOpState('PRODUCAO');
-                }
-              }}
-              machineId={currentMachine.id}
-              machineName={currentMachine.nome || 'Máquina'}
-              sectorName={currentUser.sector || 'Produção'}
-              operatorName={currentUser.name || 'Operador'}
-              shiftName={operatorTurno}
-              meta={activeOPData?.quantidade_meta || 0}
-              operatorId={currentUser.id}
-              sectorId={currentMachine.setor_id}
-              loteId={currentLoteId || 'LOTE-PADRAO'}
-              onChangeMachine={handleChangeMachine}
-              // Accumulated times
-              accumulatedSetupTime={accumulatedSetupTime}
-              accumulatedProductionTime={accumulatedProductionTime}
-              accumulatedStopTime={accumulatedStopTime}
-              // Generate label at any time
-              onGenerateLabel={() => setActiveModal('label')}
-              onRegisterChecklist={async (status, obs) => {
-                const { data: opData } = await supabase.from('ordens_producao').select('id').eq('codigo', activeOP).single();
-                await supabase.from('checklist_eventos').insert({
-                  op_id: opData?.id,
-                  operador_id: currentUser.id,
-                  maquina_id: currentMachine.id,
-                  setor_id: currentMachine.setor_id,
-                  tipo_acionamento: 'tempo',
-                  referencia_acionamento: 'Manual',
-                  status,
-                  observacao: obs
-                });
-              }}
-              onRegisterLogbook={async (desc) => {
-                console.log('Saving diary entry:', { desc, activeOP, machineId: currentMachine.id });
-                const { error } = await supabase.from('diario_bordo_eventos').insert({
-                  op_id: activeOP || null, // activeOP já é o UUID
-                  operador_id: currentUser.id,
-                  maquina_id: currentMachine.id,
-                  setor_id: currentMachine.setor_id,
-                  descricao: desc
-                });
-                if (error) {
-                  console.error('Error saving diary entry:', error);
-                  throw error;
-                }
-                console.log('Diary entry saved successfully');
-              }}
-            />
-          )}
-          {perspective === 'SUPERVISOR' && hasPermission(Permission.VIEW_SUPERVISOR_DASHBOARD) && (
-            <SupervisionDashboard machines={liveMachines} />
-          )}
-          {perspective === 'ADMIN' && hasPermission(Permission.VIEW_ADMIN_DASHBOARD) && (
-            <AdminDashboard />
-          )}
-          {perspective === 'REPORTS' && (
-            <Reports />
-          )}
-          {perspective === 'TRACEABILITY' && currentLoteId && (
-            <TraceabilityPage loteId={currentLoteId} />
-          )}
+                          // Accumulate Setup Time BEFORE switching to Production
+                          let newAccSetup = accumulatedSetupTime;
+                          if (localStatusChangeAt && opState === 'SETUP') {
+                            const elapsed = Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+                            newAccSetup += elapsed;
+                          }
 
-          {((perspective === 'OPERATOR' && !hasPermission(Permission.VIEW_OPERATOR_DASHBOARD)) ||
-            (perspective === 'SUPERVISOR' && !hasPermission(Permission.VIEW_SUPERVISOR_DASHBOARD)) ||
-            (perspective === 'ADMIN' && !hasPermission(Permission.VIEW_ADMIN_DASHBOARD))) && (
-              <div className="h-full flex flex-col items-center justify-center text-text-sub-dark">
-                <span className="material-icons-outlined text-6xl mb-4">lock</span>
-                <h2 className="text-2xl font-bold text-white">Acesso Negado</h2>
-                <p>Você não tem permissão para visualizar esta tela.</p>
-              </div>
-            )}
+                          await supabase.from('maquinas').update({
+                            status_atual: MachineStatus.RUNNING,
+                            status_change_at: now
+                          }).eq('id', currentMachine.id);
+
+                          syncTimers({
+                            statusChangeAt: now,
+                            accSetup: newAccSetup
+                          });
+
+                          await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
+                            operatorId: currentUser!.id,
+                            opId: activeOP
+                          }));
+
+                          setOpState('PRODUCAO');
+                        }
+                      }}
+                      machineId={currentMachine.id}
+                      machineName={currentMachine.nome || 'Máquina'}
+                      sectorName={currentUser?.sector || 'Produção'}
+                      operatorName={currentUser?.name || 'Operador'}
+                      shiftName={operatorTurno}
+                      meta={activeOPData?.quantidade_meta || 0}
+                      operatorId={currentUser!.id}
+                      sectorId={currentMachine.setor_id}
+                      loteId={currentLoteId || 'LOTE-PADRAO'}
+                      onChangeMachine={handleChangeMachine}
+                      accumulatedSetupTime={accumulatedSetupTime}
+                      accumulatedProductionTime={accumulatedProductionTime}
+                      accumulatedStopTime={accumulatedStopTime}
+                      onGenerateLabel={() => setActiveModal('label')}
+                      onRegisterChecklist={async (status, obs) => {
+                        const { data: opData } = await supabase.from('ordens_producao').select('id').eq('codigo', activeOP).single();
+                        await supabase.from('checklist_eventos').insert({
+                          op_id: opData?.id,
+                          operador_id: currentUser!.id,
+                          maquina_id: currentMachine.id,
+                          setor_id: currentMachine.setor_id,
+                          tipo_acionamento: 'tempo',
+                          referencia_acionamento: 'Manual',
+                          status,
+                          observacao: obs
+                        });
+                      }}
+                      onRegisterLogbook={async (desc) => {
+                        const { error } = await supabase.from('diario_bordo_eventos').insert({
+                          op_id: activeOP || null,
+                          operador_id: currentUser!.id,
+                          maquina_id: currentMachine.id,
+                          setor_id: currentMachine.setor_id,
+                          descricao: desc
+                        });
+                        if (error) throw error;
+                      }}
+                    />
+                  ) : <Navigate to="/maquinas" replace />}
+                </ProtectedRoute>
+              } />
+
+              <Route path="/supervisao" element={
+                <ProtectedRoute user={currentUser} permission={Permission.VIEW_SUPERVISOR_DASHBOARD} userPermissions={userPermissions}>
+                  <SupervisionDashboard machines={liveMachines} />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/administracao/*" element={
+                <ProtectedRoute user={currentUser} permission={Permission.VIEW_ADMIN_DASHBOARD} userPermissions={userPermissions}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/relatorios" element={
+                <ProtectedRoute user={currentUser} userPermissions={userPermissions}>
+                  <Reports />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/r/:loteId" element={<TraceabilityPage loteId={currentLoteId || ''} />} />
+
+              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/" element={<Navigate to={currentUser?.role === 'ADMIN' ? "/administracao" : "/maquinas"} replace />} />
+            </Routes>
+          </ErrorBoundary>
         </div>
 
         {/* Global Modals */}
@@ -723,24 +609,13 @@ const App: React.FC = () => {
             onConfirm={(op) => {
               const handleMachineSetup = async (op: ProductionOrder) => {
                 if (selectedMachineId && currentUser) {
-                  // 1. End previous assignment if it exists
-                  await supabase
-                    .from('op_operadores')
-                    .update({ fim: new Date().toISOString() })
-                    .eq('maquina_id', selectedMachineId)
-                    .is('fim', null);
-
-                  // 2. Start new assignment
-                  await supabase
-                    .from('op_operadores')
-                    .insert({
-                      op_id: op.id,
-                      operador_id: currentUser.id,
-                      maquina_id: selectedMachineId,
-                      inicio: new Date().toISOString()
-                    });
-
-                  // 3. Update Machine Status & Timestamp for Timer
+                  await supabase.from('op_operadores').update({ fim: new Date().toISOString() }).eq('maquina_id', selectedMachineId).is('fim', null);
+                  await supabase.from('op_operadores').insert({
+                    op_id: op.id,
+                    operador_id: currentUser.id,
+                    maquina_id: selectedMachineId,
+                    inicio: new Date().toISOString()
+                  });
                   const now = new Date().toISOString();
                   await supabase.from('maquinas').update({
                     status_atual: MachineStatus.SETUP,
@@ -748,25 +623,21 @@ const App: React.FC = () => {
                     op_atual_id: op.id
                   }).eq('id', selectedMachineId);
 
-                  // Reset all accumulators for new OP session
-                  setAccumulatedSetupTime(0);
-                  setAccumulatedProductionTime(0);
-                  setAccumulatedStopTime(0);
+                  // Update Store
+                  syncTimers({
+                    accSetup: 0,
+                    accProd: 0,
+                    accStop: 0,
+                    statusChangeAt: now
+                  });
 
-                  setLocalStatusChangeAt(now);
-                  setLastPhaseStartTime(now);
-                  await realtimeManager.broadcastMachineUpdate(
-                    createMachineUpdate(selectedMachineId, MachineStatus.SETUP, {
-                      operatorId: currentUser.id,
-                      opId: op.id
-                    })
-                  );
+                  await realtimeManager.broadcastMachineUpdate(createMachineUpdate(selectedMachineId, MachineStatus.SETUP, {
+                    operatorId: currentUser.id,
+                    opId: op.id
+                  }));
+
                   setOpState('SETUP');
-                  setSetupSeconds(0);
-                  setProductionSeconds(0);
-                  setActiveOP(op.id);
-                  setActiveOPCodigo(op.codigo);
-                  setActiveOPData(op);
+                  setActiveOP(op); // Sets activeOP, activeOPCodigo, activeOPData, meta
                   setActiveModal(null);
                 }
               };
@@ -817,14 +688,17 @@ const App: React.FC = () => {
                 localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
 
                 // Accumulate production time before stopping
+                let newAccProd = accumulatedProductionTime;
+                let newAccSetup = accumulatedSetupTime;
+
                 if (lastPhaseStartTime && opState === 'PRODUCAO') {
                   const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
-                  setAccumulatedProductionTime(prev => prev + elapsed);
+                  newAccProd += elapsed;
                 }
                 // ✅ FIX: Subscribe setup time as well
                 else if (lastPhaseStartTime && opState === 'SETUP') {
                   const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
-                  setAccumulatedSetupTime(prev => prev + elapsed);
+                  newAccSetup += elapsed;
                 }
 
                 await supabase.from('maquinas').update({
@@ -832,8 +706,12 @@ const App: React.FC = () => {
                   status_change_at: now
                 }).eq('id', currentMachine.id);
 
-                setLocalStatusChangeAt(now);
-                setLastPhaseStartTime(now);
+                syncTimers({
+                  statusChangeAt: now,
+                  accProd: newAccProd,
+                  accSetup: newAccSetup
+                });
+
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.STOPPED, {
                     operatorId: currentUser.id,
@@ -851,12 +729,12 @@ const App: React.FC = () => {
             onClose={closeModals}
             opId={activeOPCodigo || 'N/A'}
             meta={activeOPData?.quantidade_meta || 500}
-            realized={activeOPRealized}
+            realized={totalProduced}
             sectorName={currentUser?.sector || 'Produção'}
             onTransfer={async (produced, pending) => {
               // Transfer to next sector (mark as ready for transfer)
               if (currentMachine && activeOP) {
-                const delta = Math.max(0, produced - activeOPRealized);
+                const delta = Math.max(0, produced - totalProduced);
 
                 await supabase.from('registros_producao').insert({
                   op_id: activeOP,
@@ -864,12 +742,12 @@ const App: React.FC = () => {
                   operador_id: currentUser?.id,
                   quantidade_boa: delta,
                   quantidade_refugo: 0,
-                  data_inicio: lastPhaseStartTime || new Date().toISOString(), // ✅ Added data_inicio
+                  data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
                   data_fim: new Date().toISOString(),
                   turno: 'Transferência'
                 });
 
-                setActiveOPRealized(prev => prev + delta);
+                setProductionData({ totalProduced: totalProduced + delta });
 
                 // Update OP with accumulated quantities
                 await supabase.from('ordens_producao').update({
@@ -918,7 +796,7 @@ const App: React.FC = () => {
                 const currentHour = new Date().getHours();
                 const turno = (currentHour >= 6 && currentHour < 14) ? 'Manhã' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
 
-                const delta = Math.max(0, good - activeOPRealized);
+                const delta = Math.max(0, good - totalProduced);
 
                 console.log('[App] 💾 Salvando registro de produção...');
                 // Save production log (historical record)
@@ -928,14 +806,14 @@ const App: React.FC = () => {
                   operador_id: currentUser.id,
                   quantidade_boa: delta,
                   quantidade_refugo: scrap,
-                  data_inicio: lastPhaseStartTime || new Date().toISOString(), // ✅ Added data_inicio
+                  data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
                   data_fim: new Date().toISOString(),
                   turno: turno
                 });
 
                 if (prodError) throw new Error(`Erro ao salvar registro de produção: ${prodError.message}`);
 
-                setActiveOPRealized(prev => prev + delta);
+                setProductionData({ totalProduced: totalProduced + delta });
 
                 console.log('[App] 📦 Gerando lote de rastreabilidade...');
                 // Generate Lot Record
@@ -990,7 +868,7 @@ const App: React.FC = () => {
 
                 console.log('[App] ⏭️ Verificando próxima OP...');
                 // --- AUTO-START NEXT OP ---
-                // Buscar a próxima OP na sequência (status != FINALIZADA, != CANCELADA, sequence > current OR just next by sequence)
+                // Buscar a próxima OP na sequência
                 const { data: nextOPs } = await supabase
                   .from('ordens_producao')
                   .select('*')
@@ -1024,26 +902,20 @@ const App: React.FC = () => {
                   }).eq('id', currentMachine.id);
 
                   // 3. Resetar estados locais e carregar nova OP
-                  setAccumulatedSetupTime(0);
-                  setAccumulatedProductionTime(0);
-                  setAccumulatedStopTime(0);
-                  setLocalStatusChangeAt(now);
-                  setLastPhaseStartTime(now);
+                  syncTimers({
+                    accSetup: 0,
+                    accProd: 0,
+                    accStop: 0,
+                    statusChangeAt: now
+                  });
                   setOpState('SETUP');
-                  setSetupSeconds(0);
-                  setProductionSeconds(0);
-                  setActiveOPRealized(0); // ✅ FIX: Reset Realizado para nova OP
-                  setActiveOP(nextOP.id);
-                  setActiveOPCodigo(nextOP.codigo);
-                  setActiveOPData(nextOP); // Será atualizado detalhadamente pelo useEffect
+                  setProductionData({ totalProduced: 0 }); // ✅ FIX: Reset Realizado para nova OP
+                  setActiveOP(nextOP); // will fully load details via useEffect if needed, but here we set basic info
                 } else {
                   // ✅ FIX: Limpar tudo se não há próxima OP
                   setActiveOP(null);
-                  setActiveOPCodigo(null);
-                  setActiveOPData(null);
-                  setActiveOPRealized(0);
+                  setProductionData({ totalProduced: 0 });
                   setOpState('IDLE'); // IDLE em vez de FINALIZADA para permitir iniciar nova OP
-                  // Se não tem próxima, fica disponível
                 }
 
                 setActiveModal('label');
@@ -1054,9 +926,10 @@ const App: React.FC = () => {
                 alert(`ERRO AO FINALIZAR OP: ${error.message || 'Erro desconhecido'}. \n\nPor favor, anote os valores e contate o suporte.`);
               }
             }}
+
             onSuspend={async (produced, pending) => {
               if (currentMachine && activeOP) {
-                const delta = Math.max(0, produced - activeOPRealized);
+                const delta = Math.max(0, produced - totalProduced);
 
                 // Save partial production record (the delta)
                 const { error: prodError } = await supabase.from('registros_producao').insert({
@@ -1065,7 +938,7 @@ const App: React.FC = () => {
                   operador_id: currentUser?.id,
                   quantidade_boa: delta,
                   quantidade_refugo: 0,
-                  data_inicio: lastPhaseStartTime || new Date().toISOString(), // ✅ Added data_inicio
+                  data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
                   data_fim: new Date().toISOString(),
                   turno: 'Parcial'
                 });
@@ -1075,7 +948,7 @@ const App: React.FC = () => {
                   alert(`Erro ao salvar produção: ${prodError.message}`);
                 }
 
-                setActiveOPRealized(prev => prev + delta);
+                setProductionData({ totalProduced: totalProduced + delta });
 
                 await supabase
                   .from('op_operadores')
@@ -1122,7 +995,7 @@ const App: React.FC = () => {
               closeModals();
             }}
             opId={activeOPCodigo || activeOP || 'N/A'}
-            realized={activeOPRealized}
+            realized={totalProduced}
             loteId={currentLoteId || ''}
             machine={currentMachine?.nome || 'Máquina'}
             operator={currentUser?.name || 'Operador'}

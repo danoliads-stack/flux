@@ -1,4 +1,4 @@
-import { AppUser, UserPerspective, MachineStatus } from '../../types';
+import { AppUser, MachineStatus } from '../../types';
 import { supabase } from '../../supabase';
 
 // ============================================
@@ -8,7 +8,7 @@ import { supabase } from '../../supabase';
 const STORAGE_KEYS = {
     // SessionStorage - Isolado por aba
     OPERATOR_SESSION: 'flux_operator_session_v1',
-    PERSPECTIVE: 'flux_perspective',
+
     AUTH_INITIALIZED: 'flux_auth_initialized',
     TAB_ID: 'flux_tab_id',
 
@@ -100,21 +100,7 @@ export const SessionStorage = {
         console.log(`[SessionStorage] 🗑️ Operator cleared from tab ${this.getTabId()}`);
     },
 
-    /**
-     * Salva perspectiva atual
-     */
-    setPerspective(perspective: UserPerspective): void {
-        if (perspective !== 'LOGIN') {
-            sessionStorage.setItem(STORAGE_KEYS.PERSPECTIVE, perspective);
-        }
-    },
 
-    /**
-     * Recupera perspectiva salva
-     */
-    getPerspective(): UserPerspective | null {
-        return sessionStorage.getItem(STORAGE_KEYS.PERSPECTIVE) as UserPerspective | null;
-    },
 
     /**
      * Marca que autenticação foi inicializada

@@ -1,6 +1,5 @@
 
 export type UserRole = 'OPERATOR' | 'SUPERVISOR' | 'ADMIN';
-export type UserPerspective = UserRole | 'LOGIN' | 'MACHINE_SELECTION' | 'TRACEABILITY' | 'REPORTS';
 export type OPState = 'IDLE' | 'SETUP' | 'PRODUCAO' | 'PARADA' | 'SUSPENSA' | 'FINALIZADA';
 
 export enum Permission {
@@ -73,6 +72,10 @@ export interface ProductionOrder {
   data_emissao: string;
   maquina_id?: string | null;
   posicao_sequencia?: number | null;
+  produtos?: {
+    nome: string;
+    codigo: string;
+  } | null;
 }
 
 export interface RecentRecord {

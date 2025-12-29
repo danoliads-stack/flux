@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RecentRecord, OPState } from '../types';
-import { supabase } from '../supabase';
+import { supabase } from '../src/lib/supabase-client';
 import ChecklistExecutionModal from './modals/ChecklistExecutionModal';
 import LabelModal from './modals/LabelModal';
+import { useAppStore } from '../src/store/useAppStore';
 
 interface OperatorDashboardProps {
   opState: OPState;
@@ -126,8 +127,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [productInfo, setProductInfo] = useState<{ nome: string; codigo: string } | null>(null);
 
   // Production stats state
-  const [totalProduced, setTotalProduced] = useState(0);
-  const [totalScrap, setTotalScrap] = useState(0);
+  const { totalProduced, totalScrap, setProductionData } = useAppStore();
+  // const [totalProduced, setTotalProduced] = useState(0); // REMOVED
+  // const [totalScrap, setTotalScrap] = useState(0); // REMOVED
   const [opQuantity, setOpQuantity] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState('--:--');
   const [operatorShiftProduction, setOperatorShiftProduction] = useState(0);
@@ -435,8 +437,12 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
       // Use persisted values (they're always the source of truth)
       // Records are kept for historical audit trail
-      setTotalProduced(persistedProduced);
-      setTotalScrap(persistedScrap);
+      // Use persisted values (they're always the source of truth)
+      // Records are kept for historical audit trail
+      setProductionData({
+        totalProduced: persistedProduced,
+        totalScrap: persistedScrap
+      });
 
       console.log('[fetchProductionStats] ✅ Using persisted OP state:', {
         persistedProduced,
@@ -476,10 +482,11 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if (!opId || !machineId) return;
 
     // Optimistic Update
+    // Optimistic Update
     if (type === 'produced') {
-      setTotalProduced(prev => Math.max(0, prev + delta));
+      setProductionData({ totalProduced: totalProduced + delta });
     } else {
-      setTotalScrap(prev => Math.max(0, prev + delta));
+      setProductionData({ totalScrap: totalScrap + delta });
     }
 
     try {

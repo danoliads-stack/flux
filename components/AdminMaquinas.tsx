@@ -325,7 +325,15 @@ const AdminMaquinas: React.FC = () => {
                                     value={editingMaquina.status_atual}
                                     onChange={(e) => setEditingMaquina({ ...editingMaquina, status_atual: e.target.value })}
                                 >
-                                    {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                    {STATUS_OPTIONS.map(s => (
+                                        <option
+                                            key={s.value}
+                                            value={s.value}
+                                            disabled={(s.value === 'RUNNING' || s.value === 'SETUP' || s.value === 'STOPPED') && editingMaquina.status_atual === 'AVAILABLE'}
+                                        >
+                                            {s.label} {(s.value === 'RUNNING' || s.value === 'SETUP' || s.value === 'STOPPED') && editingMaquina.status_atual === 'AVAILABLE' ? '(Use Painel de Operador)' : ''}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                         </div>

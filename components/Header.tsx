@@ -1,21 +1,23 @@
 
 import React from 'react';
-import { UserPerspective, AppUser } from '../types';
+import { useLocation } from 'react-router-dom';
+import { AppUser } from '../types';
 
 interface HeaderProps {
-  perspective: UserPerspective;
   onLogout: () => void;
   user: AppUser;
 }
 
-const Header: React.FC<HeaderProps> = ({ perspective, user }) => {
+const Header: React.FC<HeaderProps> = ({ user }) => {
+  const location = useLocation();
+
   const getTitle = () => {
-    switch (perspective) {
-      case 'OPERATOR': return 'Painel do Operador';
-      case 'SUPERVISOR': return 'Supervisão Operacional';
-      case 'ADMIN': return 'Administração de Sistema';
-      default: return 'Flux Insight';
-    }
+    if (location.pathname.startsWith('/maquinas/')) return 'Painel do Operador';
+    if (location.pathname === '/maquinas') return 'Flux Insight';
+    if (location.pathname.startsWith('/supervisao')) return 'Supervisão Operacional';
+    if (location.pathname.startsWith('/administracao')) return 'Administração de Sistema';
+    if (location.pathname.startsWith('/relatorios')) return 'Relatórios de Produção';
+    return 'Flux Insight';
   };
 
   return (

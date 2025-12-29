@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { UserPerspective, UserRole, Permission } from '../types';
+import { UserRole, Permission } from '../types';
 import { supabase } from '../supabase';
+import { useNavigate, useLocation, Link, NavLink } from 'react-router-dom';
 
 interface SidebarProps {
-  perspective: UserPerspective;
-  setPerspective: (p: UserPerspective) => void;
   onLogout: () => void;
   userRole: UserRole;
   userPermissions: Permission[];
@@ -19,7 +18,9 @@ interface Notification {
   read: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ perspective, setPerspective, onLogout, userPermissions }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -50,22 +51,28 @@ const Sidebar: React.FC<SidebarProps> = ({ perspective, setPerspective, onLogout
 
   const navItems = [
     {
-      id: 'SUPERVISOR' as UserPerspective,
+      id: '/supervisao',
       icon: 'analytics',
       label: 'Supervisor',
       permission: Permission.VIEW_SUPERVISOR_DASHBOARD
     },
     {
-      id: 'REPORTS' as UserPerspective, // Added Reports perspective
-      icon: 'assessment', // 'assessment' or 'summarize'
+      id: '/relatorios',
+      icon: 'assessment',
       label: 'Relatórios',
-      permission: Permission.VIEW_SUPERVISOR_DASHBOARD // Sharing permission with Supervisor for now
+      permission: Permission.VIEW_SUPERVISOR_DASHBOARD
     },
     {
-      id: 'ADMIN' as UserPerspective,
+      id: '/administracao',
       icon: 'manage_accounts',
       label: 'Admin',
       permission: Permission.VIEW_ADMIN_DASHBOARD
+    },
+    {
+      id: '/maquinas',
+      icon: 'settings_remote',
+      label: 'Operador',
+      permission: Permission.VIEW_OPERATOR_DASHBOARD
     }
   ];
 
@@ -83,19 +90,22 @@ const Sidebar: React.FC<SidebarProps> = ({ perspective, setPerspective, onLogout
         </div>
 
         <nav className="flex-1 w-full flex flex-col items-center gap-6">
-          {visibleNavItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setPerspective(item.id)}
-              title={item.label}
-              className={`w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl transition-all ${perspective === item.id
-                ? 'bg-primary text-white shadow-glow'
-                : 'text-text-sub-dark hover:bg-surface-dark-highlight hover:text-primary'
-                }`}
-            >
-              <span className="material-icons-outlined">{item.icon}</span>
-            </button>
-          ))}
+          {visibleNavItems.map((item) => {
+            const isActive = location.pathname.startsWith(item.id);
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                title={item.label}
+                className={`w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl transition-all ${isActive
+                  ? 'bg-primary text-white shadow-glow'
+                  : 'text-text-sub-dark hover:bg-surface-dark-highlight hover:text-primary'
+                  }`}
+              >
+                <span className="material-icons-outlined">{item.icon}</span>
+              </button>
+            );
+          })}
 
           {visibleNavItems.length > 0 && <div className="h-px w-8 bg-border-dark my-2"></div>}
 
