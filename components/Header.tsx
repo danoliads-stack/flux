@@ -5,7 +5,7 @@ import { AppUser } from '../types';
 
 interface HeaderProps {
   onLogout: () => void;
-  user: AppUser;
+  user: AppUser | null;
 }
 
 const Header: React.FC<HeaderProps> = ({ user }) => {
@@ -43,11 +43,11 @@ const Header: React.FC<HeaderProps> = ({ user }) => {
 
         <div className="flex items-center gap-3 border-l border-border-dark pl-6">
           <div className="text-right hidden sm:block">
-            <div className="text-sm font-bold leading-tight uppercase text-white">{user.name}</div>
-            <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">{user.role} • {user.sector}</div>
+            <div className="text-sm font-bold leading-tight uppercase text-white">{user?.name || 'Usuário'}</div>
+            <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">{user?.role || 'GUEST'} • {user?.sector || 'N/A'}</div>
           </div>
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm shadow-glow border border-white/10 overflow-hidden">
-            {user.avatar === 'JD' ? <img src="https://picsum.photos/seed/jd/40/40" alt="JD" /> : user.avatar}
+            {user?.avatar === 'JD' ? <img src="https://picsum.photos/seed/jd/40/40" alt="JD" /> : (user?.avatar || '?')}
           </div>
         </div>
       </div>

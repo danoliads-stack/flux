@@ -600,8 +600,8 @@ const App: React.FC = () => {
 
               <Route path="/r/:loteId" element={<TraceabilityPage loteId={currentLoteId || ''} />} />
 
-              <Route path="*" element={<Navigate to="/" replace />} />
               <Route path="/" element={<Navigate to={!currentUser ? "/login" : (currentUser.role === 'ADMIN' ? "/administracao" : "/maquinas")} replace />} />
+              <Route path="*" element={<Navigate to={!currentUser ? "/login" : "/"} replace />} />
             </Routes>
           </ErrorBoundary>
         </div>
