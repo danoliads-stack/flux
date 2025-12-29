@@ -469,7 +469,10 @@ const App: React.FC = () => {
                       opCodigo={activeOPCodigo}
                       onOpenSetup={() => setActiveModal('setup')}
                       onOpenStop={() => setActiveModal('stop')}
-                      onOpenFinalize={() => setActiveModal('finalize')}
+                      onOpenFinalize={() => {
+                        console.log('Opening Finalize Modal');
+                        setActiveModal('finalize');
+                      }}
                       onStop={async () => {
                         setActiveModal('stop');
                       }}

@@ -1311,7 +1311,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
           {/* 4. Finalize Button - Active when there's an OP */}
           <button
-            onClick={onOpenFinalize}
+            onClick={() => {
+              console.log('Finalize button clicked', { opId, machineId });
+              onOpenFinalize();
+            }}
             disabled={!opId}
             className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opId
               ? 'border border-border-dark opacity-80 cursor-pointer hover:opacity-100 hover:border-blue-500/50'
