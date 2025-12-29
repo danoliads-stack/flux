@@ -147,9 +147,9 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
             <p className="text-[10px] md:text-xs text-primary uppercase font-bold">Produzindo</p>
             <p className="text-xl md:text-2xl font-bold text-primary">{statusCounts.produzindo}</p>
           </div>
-          <div className="bg-[#15181e] border border-warning/20 rounded-xl p-3 md:p-4">
-            <p className="text-[10px] md:text-xs text-warning uppercase font-bold">Paradas</p>
-            <p className="text-xl md:text-2xl font-bold text-warning">{statusCounts.parada}</p>
+          <div className="bg-[#15181e] border border-red-500/20 rounded-xl p-3 md:p-4">
+            <p className="text-[10px] md:text-xs text-red-500 uppercase font-bold">Paradas</p>
+            <p className="text-xl md:text-2xl font-bold text-red-500">{statusCounts.parada}</p>
           </div>
         </div>
 
@@ -170,7 +170,7 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
             <FilterButton label="Todas" active={filter === 'ALL'} onClick={() => setFilter('ALL')} />
             <FilterButton label="Disponível" dotColor="bg-secondary" active={filter === 'AVAILABLE'} onClick={() => setFilter('AVAILABLE')} />
             <FilterButton label="Produzindo" dotColor="bg-primary" active={filter === 'RUNNING'} onClick={() => setFilter('RUNNING')} />
-            <FilterButton label="Manutenção" dotColor="bg-warning" active={filter === 'MAINTENANCE'} onClick={() => setFilter('MAINTENANCE')} />
+            <FilterButton label="Manutenção" dotColor="bg-red-500" active={filter === 'MAINTENANCE'} onClick={() => setFilter('MAINTENANCE')} />
           </div>
         </div>
 
@@ -242,11 +242,11 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) => {
       label: machine.status_atual === 'SETUP' ? 'Em Setup' : 'Produzindo'
     };
     return {
-      bg: 'bg-gradient-to-br from-amber-500/20 to-orange-500/10',
-      border: 'border-amber-500/40',
-      glow: 'shadow-amber-500/20',
-      text: 'text-amber-400',
-      dot: 'bg-amber-400',
+      bg: 'bg-gradient-to-br from-red-500/20 to-rose-500/10',
+      border: 'border-red-500/40',
+      glow: 'shadow-red-500/20',
+      text: 'text-red-400',
+      dot: 'bg-red-400',
       icon: 'engineering',
       label: 'Manutenção'
     };
@@ -307,7 +307,7 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) => {
       {/* Bottom Indicator Bar */}
       <div className={`h-1 ${isAvailable ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' :
         isProducing ? 'bg-gradient-to-r from-blue-500 to-cyan-400' :
-          'bg-gradient-to-r from-amber-500 to-orange-400'
+          'bg-gradient-to-r from-red-500 to-rose-400'
         }`}></div>
     </div>
   );
