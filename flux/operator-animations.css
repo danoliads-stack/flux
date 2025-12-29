@@ -1,0 +1,108 @@
+/* Operator Dashboard Custom Animations */
+
+@keyframes pulse-border {
+
+  0%,
+  100% {
+    border-color: rgb(234, 179, 8);
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.2);
+  }
+
+  50% {
+    border-color: rgb(250, 204, 21);
+    box-shadow: 0 0 30px rgba(250, 204, 21, 0.4);
+  }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 2s ease-in-out infinite;
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+@keyframes drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes drift-reverse {
+  0% {
+    transform: translate(100px, 50px) scale(0.9);
+  }
+
+  33% {
+    transform: translate(-30px, 100px) scale(1.1);
+  }
+
+  66% {
+    transform: translate(50px, -20px) scale(1);
+  }
+
+  100% {
+    transform: translate(100px, 50px) scale(0.9);
+  }
+}
+
+@keyframes blob {
+  0% {
+    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
+  }
+
+  33% {
+    border-radius: 70% 30% 46% 54% / 30% 29% 71% 70%;
+  }
+
+  66% {
+    border-radius: 44% 56% 61% 39% / 69% 51% 49% 31%;
+  }
+
+  100% {
+    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
+  }
+}
+
+.animate-drift {
+  animation: drift 15s ease-in-out infinite;
+}
+
+.animate-drift-reverse {
+  animation: drift-reverse 20s ease-in-out infinite;
+}
+
+.animate-blob {
+  animation: blob 10s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

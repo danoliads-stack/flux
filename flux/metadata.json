@@ -1,0 +1,7 @@
+{
+  "name": "FLUX Insight - Industrial Operator Panel",
+  "description": "A high-performance, dark-themed industrial dashboard for manufacturing operators, supervisors, and administrators. Features real-time production tracking, machine setup, quality checklists, and OEE monitoring.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
