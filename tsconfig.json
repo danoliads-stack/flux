@@ -24,6 +24,10 @@
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    "noEmit": true,
+    "strict": false
+  },
+  "exclude": [
+    "flux"
+  ]
 }

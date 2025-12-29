@@ -140,7 +140,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
           <div className="relative">
             {/* Icon removed to prevent text duplication if font fails */}
             <input
-              className="w-full bg-[#0b0c10] border border-[#2d3342] text-white rounded-xl py-4 pl-4 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-gray-600 transition-all font-medium"
+              className="w-full bg-background-dark border border-border-dark text-white rounded-xl py-4 pl-4 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-text-sub-dark transition-all font-medium"
               placeholder="Buscar por OP, Produto ou Código..."
               type="text"
             />
@@ -152,7 +152,6 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
               <div className="space-y-4 animate-fade-in">
                 <div className="flex items-center justify-between border-b border-secondary/20 pb-2">
                   <span className="flex items-center gap-2 text-xs font-bold text-secondary uppercase tracking-widest">
-                    {/* Icon removed */}
                     Sequência da Máquina ({sequencedOrders.length})
                   </span>
                 </div>
@@ -165,10 +164,10 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
                       className={`group relative flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all duration-200
                         ${selectedId === op.id
                           ? 'border-secondary bg-secondary/10 shadow-lg shadow-secondary/5'
-                          : 'border-[#2d3342] bg-[#1a1d24] hover:border-secondary/50 hover:bg-[#20242c]'
+                          : 'border-border-dark bg-surface-dark hover:border-secondary/50 hover:bg-surface-dark-highlight'
                         }`}
                     >
-                      <div className="absolute -left-3 -top-3 w-8 h-8 rounded-full bg-secondary text-black font-bold flex items-center justify-center shadow-lg ring-4 ring-[#15181e] z-10">
+                      <div className="absolute -left-3 -top-3 w-8 h-8 rounded-full bg-secondary text-black font-bold flex items-center justify-center shadow-lg ring-4 ring-surface-dark z-10">
                         {index + 1}
                       </div>
 
@@ -238,10 +237,10 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
                       className={`group relative flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all duration-200
                         ${selectedId === op.id
                           ? 'border-orange-500 bg-orange-500/10 shadow-lg shadow-orange-500/5'
-                          : 'border-[#2d3342] bg-[#1a1d24] hover:border-orange-500/50 hover:bg-[#20242c]'
+                          : 'border-border-dark bg-surface-dark hover:border-orange-500/50 hover:bg-surface-dark-highlight'
                         }`}
                     >
-                      <div className="absolute -left-3 -top-3 w-8 h-8 rounded-full bg-orange-500 text-black font-bold flex items-center justify-center shadow-lg ring-4 ring-[#15181e] z-10">
+                      <div className="absolute -left-3 -top-3 w-8 h-8 rounded-full bg-orange-500 text-black font-bold flex items-center justify-center shadow-lg ring-4 ring-surface-dark z-10">
                         <span className="material-icons-outlined text-sm">replay</span>
                       </div>
 
@@ -293,19 +292,19 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
 
             {/* Other Orders Section */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-700 pb-2">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+              <div className="flex items-center justify-between border-b border-border-dark pb-2">
+                <span className="text-xs font-bold text-text-sub-dark uppercase tracking-widest">
                   Outras Ordens Disponíveis ({otherOrders.length})
                 </span>
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-12 text-gray-500">
+                <div className="flex items-center justify-center py-12 text-text-sub-dark">
                   <span className="material-icons-outlined animate-spin mr-2">sync</span>
                   Carregando ordens...
                 </div>
               ) : otherOrders.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 bg-black/20 rounded-xl border border-dashed border-gray-800">
+                <div className="text-center py-12 text-text-sub-dark bg-black/20 rounded-xl border border-dashed border-border-dark">
                   Nenhuma outra ordem disponível.
                 </div>
               ) : (
@@ -317,7 +316,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
                       className={`group relative flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all duration-200
                         ${selectedId === op.id
                           ? 'border-primary bg-primary/10 shadow-lg shadow-primary/5'
-                          : 'border-[#2d3342] bg-[#1a1d24] hover:border-primary/50 hover:bg-[#20242c]'
+                          : 'border-border-dark bg-surface-dark hover:border-primary/50 hover:bg-surface-dark-highlight'
                         }`}
                     >
                       <input
@@ -365,7 +364,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
         </div>
 
         {/* Footer */}
-        <div className="mx-8 mb-8 pt-6 border-t border-[#2d3342] bg-[#15181e] flex flex-col gap-4 rounded-b-2xl">
+        <div className="mx-8 mb-8 pt-6 border-t border-border-dark bg-surface-dark flex flex-col gap-4 rounded-b-2xl">
           {/* Warning if OP is in use */}
           {opInUseWarning && (
             <div className="flex items-center gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-400">
@@ -380,7 +379,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
           <div className="flex justify-end gap-3">
             <button
               onClick={onClose}
-              className="px-6 py-3 rounded-xl border border-[#2d3342] text-gray-400 hover:bg-white/5 hover:text-white transition-all font-bold uppercase tracking-wide text-xs"
+              className="px-6 py-3 rounded-xl border border-border-dark text-text-sub-dark hover:bg-white/5 hover:text-white transition-all font-bold uppercase tracking-wide text-xs"
             >
               Cancelar
             </button>

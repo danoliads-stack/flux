@@ -208,30 +208,30 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative w-full max-w-2xl bg-[#15181e] rounded-xl border border-border-dark flex flex-col max-h-[90vh] animate-fade-in shadow-2xl">
+            <div className="relative w-full max-w-2xl bg-surface-dark rounded-xl border border-border-dark flex flex-col max-h-[90vh] animate-fade-in shadow-2xl">
                 {/* Header */}
-                <div className="p-6 border-b border-border-dark bg-[#1a1c23] rounded-t-xl flex justify-between items-center">
+                <div className="p-6 border-b border-border-dark bg-surface-dark-highlight rounded-t-xl flex justify-between items-center">
                     <div>
                         <h3 className="text-white text-xl font-bold uppercase tracking-wide flex items-center gap-2">
                             <span className="material-icons-outlined text-primary">fact_check</span>
                             {loading ? 'Carregando...' : checklistNome}
                         </h3>
-                        <p className="text-xs text-gray-500 mt-1">Preencha todos os itens solicitados.</p>
+                        <p className="text-xs text-text-sub-dark mt-1">Preencha todos os itens solicitados.</p>
                     </div>
-                    <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+                    <button onClick={onClose} className="text-text-sub-dark hover:text-white transition-colors">
                         <span className="material-icons-outlined text-2xl">close</span>
                     </button>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[#0b0c10]">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-background-dark">
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
                             <span className="material-icons-outlined animate-spin text-3xl text-primary">sync</span>
                         </div>
                     ) : (
                         items.map((item, index) => (
-                            <div key={item.id} className="p-4 bg-[#1a1c23]/50 rounded-lg border border-border-dark/50">
+                            <div key={item.id} className="p-4 bg-surface-dark-highlight/50 rounded-lg border border-border-dark/50">
                                 <div className="flex items-start gap-3 mb-3">
                                     <span className="flex items-center justify-center w-6 h-6 rounded bg-primary/20 text-primary text-xs font-bold font-mono">
                                         {index + 1}
@@ -250,21 +250,21 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => setAnswers(prev => ({ ...prev, [item.id]: true }))}
-                                                className={`flex-1 py-2 px-3 rounded-lg border transition-all flex items-center justify-center gap-1 text-sm font-bold ${answers[item.id] === true ? 'bg-secondary/20 border-secondary text-secondary' : 'bg-[#0b0c10] border-border-dark text-gray-400 hover:border-gray-600'}`}
+                                                className={`flex-1 py-2 px-3 rounded-lg border transition-all flex items-center justify-center gap-1 text-sm font-bold ${answers[item.id] === true ? 'bg-secondary/20 border-secondary text-secondary' : 'bg-background-dark border-border-dark text-text-sub-dark hover:border-text-sub-dark'}`}
                                             >
                                                 <span className="material-icons-outlined text-sm">check_circle</span>
                                                 Sim
                                             </button>
                                             <button
                                                 onClick={() => setAnswers(prev => ({ ...prev, [item.id]: false }))}
-                                                className={`flex-1 py-2 px-3 rounded-lg border transition-all flex items-center justify-center gap-1 text-sm font-bold ${answers[item.id] === false ? 'bg-danger/20 border-danger text-danger' : 'bg-[#0b0c10] border-border-dark text-gray-400 hover:border-gray-600'}`}
+                                                className={`flex-1 py-2 px-3 rounded-lg border transition-all flex items-center justify-center gap-1 text-sm font-bold ${answers[item.id] === false ? 'bg-danger/20 border-danger text-danger' : 'bg-background-dark border-border-dark text-text-sub-dark hover:border-text-sub-dark'}`}
                                             >
                                                 <span className="material-icons-outlined text-sm">cancel</span>
                                                 Não
                                             </button>
                                             <button
                                                 onClick={() => setAnswers(prev => ({ ...prev, [item.id]: 'NA' }))}
-                                                className={`flex-1 py-2 px-3 rounded-lg border transition-all flex items-center justify-center gap-1 text-sm font-bold ${answers[item.id] === 'NA' ? 'bg-white/20 border-white text-white' : 'bg-[#0b0c10] border-border-dark text-gray-400 hover:border-gray-600'}`}
+                                                className={`flex-1 py-2 px-3 rounded-lg border transition-all flex items-center justify-center gap-1 text-sm font-bold ${answers[item.id] === 'NA' ? 'bg-white/20 border-white text-white' : 'bg-background-dark border-border-dark text-text-sub-dark hover:border-text-sub-dark'}`}
                                             >
                                                 <span className="material-icons-outlined text-sm">block</span>
                                                 N/A
@@ -275,7 +275,7 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                                     {item.tipo_resposta === 'TEXTO' && (
                                         <input
                                             type="text"
-                                            className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 px-4 text-white focus:ring-1 focus:ring-primary transition-all text-sm"
+                                            className="w-full bg-background-dark border border-border-dark rounded-lg py-2 px-4 text-white focus:ring-1 focus:ring-primary transition-all text-sm"
                                             placeholder="Digite sua resposta..."
                                             value={answers[item.id] || ''}
                                             onChange={(e) => setAnswers(prev => ({ ...prev, [item.id]: e.target.value }))}
@@ -285,7 +285,7 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                                     {item.tipo_resposta === 'NUMERO' && (
                                         <input
                                             type="number"
-                                            className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 px-4 text-white focus:ring-1 focus:ring-primary transition-all font-mono text-sm"
+                                            className="w-full bg-background-dark border border-border-dark rounded-lg py-2 px-4 text-white focus:ring-1 focus:ring-primary transition-all font-mono text-sm"
                                             placeholder="0.00"
                                             value={answers[item.id] || ''}
                                             onChange={(e) => setAnswers(prev => ({ ...prev, [item.id]: e.target.value }))}
@@ -296,7 +296,7 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                                     <div className="flex flex-col gap-3 mt-2 pt-3 border-t border-border-dark/30">
                                         <div className="flex items-center gap-3">
                                             {/* Photo Button */}
-                                            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed transition-all cursor-pointer text-[11px] font-bold ${photos[item.id] ? 'bg-secondary/10 border-secondary text-secondary' : 'bg-[#0b0c10] border-border-dark text-gray-500 hover:text-primary hover:border-primary/50'}`}>
+                                            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed transition-all cursor-pointer text-[11px] font-bold ${photos[item.id] ? 'bg-secondary/10 border-secondary text-secondary' : 'bg-background-dark border-border-dark text-text-sub-dark hover:text-primary hover:border-primary/50'}`}>
                                                 <span className="material-icons-outlined text-base">
                                                     {photos[item.id] ? 'check_circle' : 'add_a_photo'}
                                                 </span>
@@ -316,7 +316,7 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
 
                                             <input
                                                 type="text"
-                                                className="flex-1 bg-transparent border-b border-border-dark/50 py-1 px-2 text-[11px] text-gray-400 focus:text-white focus:border-primary focus:outline-none transition-all"
+                                                className="flex-1 bg-transparent border-b border-border-dark/50 py-1 px-2 text-[11px] text-text-sub-dark focus:text-white focus:border-primary focus:outline-none transition-all"
                                                 placeholder="Observação / Descrição do problema..."
                                                 value={comments[item.id] || ''}
                                                 onChange={(e) => setComments(prev => ({ ...prev, [item.id]: e.target.value }))}
@@ -330,10 +330,10 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-border-dark bg-[#1a1c23] rounded-b-xl flex justify-end gap-3">
+                <div className="p-6 border-t border-border-dark bg-surface-dark-highlight rounded-b-xl flex justify-end gap-3">
                     <button
                         onClick={onClose}
-                        className="px-6 py-3 bg-[#0b0c10] border border-border-dark text-white font-bold rounded-lg hover:bg-gray-800 transition-all text-sm"
+                        className="px-6 py-3 bg-background-dark border border-border-dark text-white font-bold rounded-lg hover:bg-surface-dark-highlight transition-all text-sm"
                         disabled={submitting}
                     >
                         Cancelar

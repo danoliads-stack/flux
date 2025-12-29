@@ -909,10 +909,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     key={op.id}
                     className={`p-2 rounded-md border text-xs flex items-center gap-2 transition-colors ${op.id === opId
                       ? 'bg-primary/20 border-primary text-white shadow-[0_0_10px_rgba(34,211,238,0.2)]'
-                      : 'bg-[#1a1c23] border-[#2d3342] text-gray-300 hover:bg-[#252830] hover:border-gray-500'
+                      : 'bg-surface-dark border-border-dark text-text-sub-dark hover:bg-surface-dark-highlight hover:border-text-sub-dark'
                       }`}
                   >
-                    <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-[#2d3342] text-gray-400'
+                    <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-border-dark text-text-sub-dark'
                       }`}>
                       {idx + 1}
                     </span>
@@ -922,8 +922,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 ))
               ) : (
                 <div className="flex flex-col items-center justify-center py-4 text-center opacity-50">
-                  <span className="material-icons-outlined text-gray-500 text-lg mb-1">playlist_remove</span>
-                  <p className="text-gray-500 text-[10px] italic">Sem OPs na fila</p>
+                  <span className="material-icons-outlined text-text-sub-dark text-lg mb-1">playlist_remove</span>
+                  <p className="text-text-sub-dark text-[10px] italic">Sem OPs na fila</p>
                 </div>
               )}
             </div>
