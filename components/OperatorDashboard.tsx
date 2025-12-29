@@ -471,6 +471,58 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     }
   };
 
+  // Quick Update Function for Production/Scrap
+  const handleQuickUpdate = async (type: 'produced' | 'scrap', delta: number) => {
+    if (!opId || !machineId) return;
+
+    // Optimistic Update
+    if (type === 'produced') {
+      setTotalProduced(prev => Math.max(0, prev + delta));
+    } else {
+      setTotalScrap(prev => Math.max(0, prev + delta));
+    }
+
+    try {
+      // 1. Insert Record into registros_producao (Audit Trail)
+      const { error: logError } = await supabase.from('registros_producao').insert({
+        op_id: opId,
+        maquina_id: machineId,
+        operador_id: operatorId,
+        quantidade_boa: type === 'produced' ? delta : 0,
+        quantidade_refugo: type === 'scrap' ? delta : 0,
+        created_at: new Date().toISOString()
+      });
+
+      if (logError) throw logError;
+
+      // 2. Update ordens_producao (Persistence)
+      const { data: currentOp } = await supabase
+        .from('ordens_producao')
+        .select('quantidade_produzida, quantidade_refugo')
+        .eq('id', opId)
+        .single();
+
+      if (currentOp) {
+        const newProduced = (currentOp.quantidade_produzida || 0) + (type === 'produced' ? delta : 0);
+        const newScrap = (currentOp.quantidade_refugo || 0) + (type === 'scrap' ? delta : 0);
+
+        await supabase
+          .from('ordens_producao')
+          .update({
+            quantidade_produzida: newProduced,
+            quantidade_refugo: newScrap
+          })
+          .eq('id', opId);
+      }
+
+    } catch (error) {
+      console.error('Error in quick update:', error);
+      // Revert optimistic update on error
+      fetchProductionStats();
+      alert('Erro ao atualizar quantidade.');
+    }
+  };
+
   // Fetch diary entries
   const fetchDiaryEntries = async () => {
     const { data, error } = await supabase
@@ -1080,7 +1132,18 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-icons-outlined text-6xl">inventory_2</span>
           </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Realizado (UN)</div>
+          <div className="flex justify-between items-start mb-2">
+            <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Realizado (UN)</div>
+            {opState === 'PRODUCAO' && (
+              <button
+                onClick={() => handleQuickUpdate('produced', 1)}
+                className="bg-secondary/20 hover:bg-secondary text-secondary hover:text-black p-1 rounded transition-colors"
+                title="Adicionar 1 peça"
+              >
+                <span className="material-icons text-lg font-bold">add</span>
+              </button>
+            )}
+          </div>
           <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-300 ${totalProduced > 0 ? 'text-secondary' : 'text-text-sub-dark'}`}>
             {totalProduced}
           </div>
@@ -1094,7 +1157,18 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-danger">
             <span className="material-icons-outlined text-6xl">delete_outline</span>
           </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Refugo (UN)</div>
+          <div className="flex justify-between items-start mb-2">
+            <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Refugo (UN)</div>
+            {opState === 'PRODUCAO' && (
+              <button
+                onClick={() => handleQuickUpdate('scrap', 1)}
+                className="bg-danger/20 hover:bg-danger text-danger hover:text-white p-1 rounded transition-colors"
+                title="Adicionar 1 refugo"
+              >
+                <span className="material-icons text-lg font-bold">add</span>
+              </button>
+            )}
+          </div>
           <div className={`text-4xl md:text-5xl font-display font-bold mb-1 ${totalScrap > 0 ? 'text-danger' : 'text-text-sub-dark'}`}>{totalScrap}</div>
           <div className="text-xs font-bold text-secondary">
             {totalProduced > 0 ? `${((totalScrap / (totalProduced + totalScrap)) * 100).toFixed(1)}% taxa` : '0% taxa'}

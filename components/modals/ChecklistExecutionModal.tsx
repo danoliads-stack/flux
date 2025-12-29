@@ -31,6 +31,7 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
     const [answers, setAnswers] = useState<Record<string, any>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
     const [photos, setPhotos] = useState<Record<string, File>>({});
+    const [success, setSuccess] = useState(false);
 
     useEffect(() => {
         if (isOpen && checklistId) fetchChecklistData();
@@ -178,9 +179,14 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                 if (respError) throw respError;
             }));
 
-            alert('Checklist salvo com sucesso!');
-            if (onSuccess) onSuccess();
-            onClose();
+            // alert('Checklist salvo com sucesso!');
+            // if (onSuccess) onSuccess();
+            // onClose();
+            setSuccess(true);
+            setTimeout(() => {
+                if (onSuccess) onSuccess();
+                onClose();
+            }, 1500);
 
         } catch (error: any) {
             console.error('Checklist Error:', error);
@@ -351,6 +357,19 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                     </button>
                 </div>
             </div>
+
+            {/* Success Overlay */}
+            {success && (
+                <div className="absolute inset-0 z-[60] flex items-center justify-center bg-surface-dark/95 backdrop-blur-sm rounded-xl animate-fade-in">
+                    <div className="flex flex-col items-center justify-center text-center p-8">
+                        <div className="w-24 h-24 rounded-full bg-green-500/20 flex items-center justify-center mb-6 animate-bounce">
+                            <span className="material-icons-outlined text-6xl text-green-500">check_circle</span>
+                        </div>
+                        <h3 className="text-3xl font-display font-bold text-white mb-2">Checklist Realizado!</h3>
+                        <p className="text-text-sub-dark">Registro salvo com sucesso.</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
