@@ -88,6 +88,7 @@ const App: React.FC = () => {
   }, [navigate]);
 
   // Handle role-based redirection when user logs in/out
+  // Handle role-based redirection when user logs in/out
   useEffect(() => {
     if (location.pathname.startsWith('/r/')) return; // Traceability links
 
@@ -105,13 +106,14 @@ const App: React.FC = () => {
         }
       }
     } else if (!authLoading) {
-      // User logged out
-      console.log('[App] 🔓 User logged out, redirecting to login');
-      if (location.pathname !== '/login' && !location.pathname.startsWith('/r/')) {
+      // User logged out or not authenticated
+      if (location.pathname === '/' || (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/r/'))) {
+        // Only redirect if we are at root or a protected route (not login itself)
+        console.log('[App] 🔓 Redirecting to login');
         navigate('/login');
       }
     }
-  }, [currentUser, authLoading, navigate]);
+  }, [currentUser, authLoading, navigate, location.pathname]);
 
   const userPermissions = useMemo(() => {
     if (!currentUser) return [];
@@ -596,7 +598,7 @@ const App: React.FC = () => {
               <Route path="/r/:loteId" element={<TraceabilityPage loteId={currentLoteId || ''} />} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
-              <Route path="/" element={<Navigate to={currentUser?.role === 'ADMIN' ? "/administracao" : "/maquinas"} replace />} />
+              <Route path="/" element={<Navigate to={!currentUser ? "/login" : (currentUser.role === 'ADMIN' ? "/administracao" : "/maquinas")} replace />} />
             </Routes>
           </ErrorBoundary>
         </div>
