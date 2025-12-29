@@ -901,15 +901,28 @@ const App: React.FC = () => {
               }
             }}
             onConfirm={async (good, scrap) => {
-              if (currentMachine && currentUser && activeOP) {
+              console.log('[App] 🏁 Iniciando finalização de OP...', { activeOP, currentMachine: currentMachine?.id, currentUser: currentUser?.id });
+
+              if (!currentMachine || !currentUser || !activeOP) {
+                console.error('[App] ❌ Erro: Estado inválido para finalizar OP', {
+                  hasMachine: !!currentMachine,
+                  hasUser: !!currentUser,
+                  hasOP: !!activeOP
+                });
+                alert('Erro: Não foi possível finalizar a OP. Verifique se você está logado e se a máquina está selecionada corretamente.');
+                return;
+              }
+
+              try {
                 // Determine shift (simplified logic for now)
                 const currentHour = new Date().getHours();
                 const turno = (currentHour >= 6 && currentHour < 14) ? 'Manhã' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
 
                 const delta = Math.max(0, good - activeOPRealized);
 
+                console.log('[App] 💾 Salvando registro de produção...');
                 // Save production log (historical record)
-                await supabase.from('registros_producao').insert({
+                const { error: prodError } = await supabase.from('registros_producao').insert({
                   op_id: activeOP, // activeOP is already the UUID
                   maquina_id: currentMachine.id,
                   operador_id: currentUser.id,
@@ -920,10 +933,13 @@ const App: React.FC = () => {
                   turno: turno
                 });
 
+                if (prodError) throw new Error(`Erro ao salvar registro de produção: ${prodError.message}`);
+
                 setActiveOPRealized(prev => prev + delta);
 
+                console.log('[App] 📦 Gerando lote de rastreabilidade...');
                 // Generate Lot Record
-                const { data: lote } = await supabase.from('lotes_rastreabilidade').insert({
+                const { data: lote, error: loteError } = await supabase.from('lotes_rastreabilidade').insert({
                   op_id: activeOP,
                   maquina_id: currentMachine.id,
                   setor_origem_id: currentMachine.setor_id,
@@ -931,15 +947,19 @@ const App: React.FC = () => {
                   quantidade_refugo: scrap
                 }).select('id').single();
 
+                if (loteError) console.error('[App] ⚠️ Erro ao gerar lote (não bloqueante):', loteError);
                 if (lote) setCurrentLoteId(lote.id);
 
+                console.log('[App] 🔄 Atualizando status da máquina...');
                 // Update Machine Status & Timestamp (Reset to AVAILABLE but KEEP operator)
-                await supabase.from('maquinas').update({
+                const { error: machineError } = await supabase.from('maquinas').update({
                   status_atual: MachineStatus.AVAILABLE,
                   status_change_at: new Date().toISOString(),
                   op_atual_id: null
                   // ✅ operador_atual_id NOT cleared - operator stays logged in
                 }).eq('id', currentMachine.id);
+
+                if (machineError) throw new Error(`Erro ao liberar máquina: ${machineError.message}`);
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
@@ -948,8 +968,9 @@ const App: React.FC = () => {
                   })
                 );
 
+                console.log('[App] 📝 Atualizando Ordem de Produção...');
                 // Update OP Status with accumulated quantities and times
-                await supabase.from('ordens_producao').update({
+                const { error: opError } = await supabase.from('ordens_producao').update({
                   status: 'FINALIZADA',
                   quantidade_produzida: good,
                   quantidade_refugo: scrap,
@@ -958,6 +979,8 @@ const App: React.FC = () => {
                   tempo_parada_segundos: accumulatedStopTime
                 }).eq('id', activeOP);
 
+                if (opError) throw new Error(`Erro ao atualizar OP: ${opError.message}`);
+
                 // ✅ FIX: Limpar localStorage da OP finalizada
                 localStorage.removeItem(`flux_acc_setup_${activeOP}`);
                 localStorage.removeItem(`flux_acc_prod_${activeOP}`);
@@ -965,6 +988,7 @@ const App: React.FC = () => {
                 localStorage.removeItem(`flux_phase_start_${activeOP}`);
                 localStorage.removeItem(`flux_status_change_${activeOP}`);
 
+                console.log('[App] ⏭️ Verificando próxima OP...');
                 // --- AUTO-START NEXT OP ---
                 // Buscar a próxima OP na sequência (status != FINALIZADA, != CANCELADA, sequence > current OR just next by sequence)
                 const { data: nextOPs } = await supabase
@@ -1023,6 +1047,11 @@ const App: React.FC = () => {
                 }
 
                 setActiveModal('label');
+                console.log('[App] ✅ OP Finalizada com sucesso!');
+
+              } catch (error: any) {
+                console.error('[App] ❌ Erro CRÍTICO ao finalizar OP:', error);
+                alert(`ERRO AO FINALIZAR OP: ${error.message || 'Erro desconhecido'}. \n\nPor favor, anote os valores e contate o suporte.`);
               }
             }}
             onSuspend={async (produced, pending) => {
