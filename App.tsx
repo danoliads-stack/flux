@@ -72,6 +72,66 @@ const App: React.FC = () => {
 
   const [liveMachines, setLiveMachines] = useState<MachineData[]>([]);
 
+  // STATE RECOVERY: Fetch machine and OP data from database on mount using persisted selectedMachineId
+  useEffect(() => {
+    const recoverState = async () => {
+      // Only run if we have a persisted machineId but no currentMachine loaded
+      if (selectedMachineId && !currentMachine && currentUser) {
+        console.log('[App] 🔄 Recovering state for machine:', selectedMachineId);
+
+        // 1. Fetch machine from database
+        const { data: machineData, error: machineError } = await supabase
+          .from('maquinas')
+          .select('*, setores(nome)')
+          .eq('id', selectedMachineId)
+          .single();
+
+        if (machineError || !machineData) {
+          console.error('[App] ❌ Failed to recover machine:', machineError);
+          // Clear stale persisted state
+          setSelectedMachine(null);
+          return;
+        }
+
+        console.log('[App] ✅ Recovered machine:', machineData.nome, 'status:', machineData.status_atual);
+        setCurrentMachine(machineData);
+
+        // 2. Sync timers from database
+        if (machineData.status_change_at) {
+          syncTimers({ statusChangeAt: machineData.status_change_at });
+        }
+
+        // 3. Fetch active OP if exists
+        if (machineData.op_atual_id) {
+          const { data: opData } = await supabase
+            .from('ordens_producao')
+            .select('*, produtos(nome, codigo)')
+            .eq('id', machineData.op_atual_id)
+            .single();
+
+          if (opData) {
+            console.log('[App] ✅ Recovered OP:', opData.codigo);
+            setActiveOP(opData as any);
+          }
+        }
+
+        // 4. Map machine status to opState (database is source of truth)
+        let dbOpState: OPState = 'IDLE';
+        switch (machineData.status_atual) {
+          case MachineStatus.SETUP: dbOpState = 'SETUP'; break;
+          case MachineStatus.RUNNING: dbOpState = 'PRODUCAO'; break;
+          case MachineStatus.STOPPED: dbOpState = 'PARADA'; break;
+          case MachineStatus.SUSPENDED: dbOpState = 'SUSPENSA'; break;
+          default: dbOpState = 'IDLE';
+        }
+        setOpState(dbOpState);
+        console.log('[App] ✅ State recovery complete. opState:', dbOpState);
+      }
+    };
+
+    recoverState();
+  }, [selectedMachineId, currentMachine, currentUser]);
+
   // PERSISTENCE: Replaced by Zustand persist middleware
   // We keep this effect only to sync legacy localStorage if completely necessary during migration, 
   // but for now we rely on the store. 

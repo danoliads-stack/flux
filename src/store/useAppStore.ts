@@ -129,9 +129,15 @@ export const useAppStore = create<AppState>()(
             name: 'flux-app-storage', // unique name
             storage: createJSONStorage(() => localStorage), // Persist to localStorage
             partialize: (state) => ({
-                // Only persist non-sensitive / non-transient data if needed
-                // For now, persisting active machine ID is key
-                selectedMachineId: state.selectedMachineId
+                // Persist machine and OP state for recovery on refresh
+                selectedMachineId: state.selectedMachineId,
+                activeOP: state.activeOP,
+                activeOPCodigo: state.activeOPCodigo,
+                opState: state.opState,
+                statusChangeAt: state.statusChangeAt,
+                accumulatedSetupTime: state.accumulatedSetupTime,
+                accumulatedProductionTime: state.accumulatedProductionTime,
+                accumulatedStopTime: state.accumulatedStopTime,
             }),
         }
     )
