@@ -181,43 +181,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // OP Sequence for machine
   const [sequencedOPs, setSequencedOPs] = useState<{ id: string; codigo: string; status: string; produto_nome?: string }[]>([]);
 
-  // Draggable sidebar state - Initial position bottom-right to avoid clock
-  const [sidebarPosition, setSidebarPosition] = useState({ x: window.innerWidth - 280, y: window.innerHeight - 600 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
-  const sidebarRef = useRef<HTMLDivElement>(null);
-
-  // Drag handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (sidebarRef.current) {
-      setIsDragging(true);
-      dragOffset.current = {
-        x: e.clientX - sidebarPosition.x,
-        y: e.clientY - sidebarPosition.y
-      };
-    }
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging) {
-        setSidebarPosition({
-          x: Math.max(0, Math.min(window.innerWidth - 220, e.clientX - dragOffset.current.x)),
-          y: Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragOffset.current.y))
-        });
-      }
-    };
-    const handleMouseUp = () => setIsDragging(false);
-
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, sidebarPosition]);
+  // Sidebar toggle state (replacing draggable)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Clock update
   useEffect(() => {
@@ -337,7 +302,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     const { data } = await supabase
       .from('ordens_producao')
-      .select('id, codigo, status, produtos(nome)')
+      .select('id, codigo, status, nome_produto')
       .eq('maquina_id', machineId)
       .neq('status', 'FINALIZADA')
       .order('posicao_sequencia', { ascending: true })
@@ -348,7 +313,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         id: op.id,
         codigo: op.codigo,
         status: op.status,
-        produto_nome: Array.isArray(op.produtos) ? op.produtos[0]?.nome : (op.produtos as any)?.nome
+        produto_nome: op.nome_produto
       })));
     }
   };
@@ -405,20 +370,19 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const fetchProductionStats = async () => {
     if (!opId) return;
 
-    // Get OP details (now includes persisted state fields)
+    // Get OP details
     const { data: opData, error: opError } = await supabase
       .from('ordens_producao')
-      .select('quantidade_meta, ciclo_estimado, quantidade_produzida, quantidade_refugo, produtos(nome, codigo)')
+      .select('quantidade_meta, ciclo_estimado, quantidade_produzida, quantidade_refugo, nome_produto, codigo')
       .eq('id', opId)
       .single();
-
 
     if (opError) {
       console.error('Error fetching OP data:', opError);
     }
 
     if (opData) {
-      // Use persisted values from OP as primary source
+      // ... (code omitted for brevity in targetContent match but present in replacement)
       const persistedProduced = opData.quantidade_produzida || 0;
       const persistedScrap = opData.quantidade_refugo || 0;
 
@@ -435,45 +399,25 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         recordsScrap = prodRecords.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
       }
 
-      // Use persisted values (they're always the source of truth)
-      // Records are kept for historical audit trail
-      // Use persisted values (they're always the source of truth)
-      // Records are kept for historical audit trail
       setProductionData({
         totalProduced: persistedProduced,
         totalScrap: persistedScrap
       });
 
-      console.log('[fetchProductionStats] ✅ Using persisted OP state:', {
-        persistedProduced,
-        persistedScrap,
-        recordsProduced,
-        recordsScrap
-      });
-
       setOpQuantity(opData.quantidade_meta || 0);
-      setCycleTime(opData.ciclo_estimado || 0);
+      setCycleTime(Number(opData.ciclo_estimado) || 0);
 
-      // Calculate estimated time (HH:MM format) - based on REMAINING quantity
-      // Time Remaining = (Meta - Produced) * CycleTime
       const remainingQty = Math.max(0, (opData.quantidade_meta || 0) - persistedProduced);
-      const totalSecondsRemaining = remainingQty * (opData.ciclo_estimado || 0);
+      const totalSecondsRemaining = remainingQty * (Number(opData.ciclo_estimado) || 0);
 
       const hours = Math.floor(totalSecondsRemaining / 3600);
       const minutes = Math.floor((totalSecondsRemaining % 3600) / 60);
       setEstimatedTime(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
 
-
-      if (opData.produtos) {
-        // Handle both array (Supabase join) and single object cases
-        const produto = Array.isArray(opData.produtos) ? opData.produtos[0] : opData.produtos;
-        if (produto) {
-          setProductInfo({
-            nome: produto.nome,
-            codigo: produto.codigo
-          });
-        }
-      }
+      setProductInfo({
+        nome: opData.nome_produto,
+        codigo: opData.codigo
+      });
     }
   };
 
@@ -933,18 +877,21 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-fade-in">
-      {/* Draggable Sidebar with OP Sequence and Checklists */}
-      <div
-        ref={sidebarRef}
-        className={`fixed z-50 w-56 bg-surface-dark/95 backdrop-blur-sm border border-border-dark rounded-xl shadow-2xl select-none ${isDragging ? 'cursor-grabbing' : ''}`}
-        style={{ left: sidebarPosition.x, top: sidebarPosition.y }}
+      {/* Toggle Sidebar Button */}
+      <button
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className={`fixed top-20 right-4 z-50 p-3 rounded-xl shadow-lg transition-all duration-300 ${isSidebarOpen ? 'bg-primary text-black' : 'bg-surface-dark border border-border-dark text-white hover:border-primary/50'}`}
       >
-        {/* Drag Handle */}
-        <div
-          className="flex items-center gap-2 p-3 border-b border-border-dark bg-surface-dark rounded-t-xl cursor-grab active:cursor-grabbing"
-          onMouseDown={handleMouseDown}
-        >
-          <span className="material-icons-outlined text-text-sub-dark text-sm">drag_indicator</span>
+        <span className="material-icons-outlined">{isSidebarOpen ? 'close' : 'menu_open'}</span>
+      </button>
+
+      {/* Fixed Sidebar with OP Sequence and Checklists */}
+      <div
+        className={`fixed top-0 right-0 h-full z-40 w-64 bg-surface-dark/95 backdrop-blur-sm border-l border-border-dark shadow-2xl transform transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 p-3 border-b border-border-dark bg-surface-dark">
+          <span className="material-icons-outlined text-primary text-sm">space_dashboard</span>
           <span className="text-white text-xs font-bold uppercase tracking-wide flex-1">Painel de Controle</span>
         </div>
 

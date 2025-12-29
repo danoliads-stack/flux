@@ -670,6 +670,7 @@ const App: React.FC = () => {
         {activeModal === 'setup' && hasPermission(Permission.MANAGE_MACHINE_SETUP) && (
           <SetupModal
             machineId={currentMachine?.id}
+            sectorId={currentMachine?.setor_id}
             onClose={closeModals}
             onConfirm={(op) => {
               const handleMachineSetup = async (op: ProductionOrder) => {
@@ -1021,10 +1022,12 @@ const App: React.FC = () => {
                   .eq('maquina_id', currentMachine.id)
                   .is('fim', null);
 
-                // Update OP with accumulated quantities and status
+                // Update OP with accumulated quantities, sector of suspension, and status
                 await supabase.from('ordens_producao').update({
                   status: 'SUSPENSA',
                   quantidade_produzida: produced,
+                  quantidade_pendente: pending,
+                  setor_suspensao_id: currentMachine.setor_id,
                   quantidade_refugo: 0,
                   tempo_producao_segundos: accumulatedProductionTime,
                   tempo_setup_segundos: accumulatedSetupTime,

@@ -7,10 +7,12 @@ interface SetupModalProps {
   onClose: () => void;
   onConfirm: (op: ProductionOrder) => void;
   machineId?: string;
+  sectorId?: string; // For filtering suspended OPs by sector
 }
 
-const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId }) => {
+const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, sectorId }) => {
   const [sequencedOrders, setSequencedOrders] = useState<ProductionOrder[]>([]);
+  const [suspendedOrders, setSuspendedOrders] = useState<ProductionOrder[]>([]);
   const [otherOrders, setOtherOrders] = useState<ProductionOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,12 +47,26 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId }
           .select('*')
           .eq('maquina_id', machineId)
           .neq('status', 'FINALIZADA')
+          .neq('status', 'SUSPENSA')
           .order('posicao_sequencia', { ascending: true });
 
         if (seqData) sequencedOps = seqData;
       }
 
-      // 2. Fetch all other pending OPs (General Pool) - excluding those already running on other machines
+      // 2. Fetch SUSPENDED OPs from current sector
+      let suspendedOps: ProductionOrder[] = [];
+      if (sectorId) {
+        const { data: suspData } = await supabase
+          .from('ordens_producao')
+          .select('*')
+          .eq('status', 'SUSPENSA')
+          .eq('setor_suspensao_id', sectorId)
+          .order('created_at', { ascending: false });
+
+        if (suspData) suspendedOps = suspData;
+      }
+
+      // 3. Fetch all other pending OPs (General Pool) - excluding those already running on other machines
       const { data: runningOps } = await supabase
         .from('maquinas')
         .select('op_atual_id')
@@ -74,11 +90,16 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId }
       if (sequencedOps.length > 0) {
         setSequencedOrders(sequencedOps);
         setSelectedId(sequencedOps[0].id);
+      } else if (suspendedOps.length > 0) {
+        // Prioritize suspended OPs for resumption
+        setSelectedId(suspendedOps[0].id);
       }
+
+      setSuspendedOrders(suspendedOps);
 
       if (filteredOther.length > 0) {
         setOtherOrders(filteredOther as ProductionOrder[]);
-        if (sequencedOps.length === 0) {
+        if (sequencedOps.length === 0 && suspendedOps.length === 0) {
           // Auto-select first available (not in use)
           const firstAvailable = filteredOther.find(op => !op.inUseOnOtherMachine);
           if (firstAvailable) setSelectedId(firstAvailable.id);
@@ -89,31 +110,31 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId }
     };
 
     fetchOrders();
-  }, [machineId]);
+  }, [machineId, sectorId]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity">
       {/* Container Principal */}
-      <div className="bg-[#15181e] border border-[#2d3342] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-scale-in">
+      <div className="bg-surface-dark border border-border-dark rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-scale-in">
 
         {/* Header */}
-        <div className="px-8 py-6 border-b border-[#2d3342] flex items-center justify-between bg-[#0b0c10]">
+        <div className="px-8 py-6 border-b border-border-dark flex items-center justify-between bg-background-dark">
           <div>
             <h2 className="text-2xl font-display font-bold text-white uppercase tracking-wide">
               Setup de Máquina
             </h2>
-            <p className="text-sm text-gray-400 mt-1">Selecione a Ordem de Produção para iniciar</p>
+            <p className="text-sm text-text-sub-dark mt-1">Selecione a Ordem de Produção para iniciar</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-white"
+            className="p-2 hover:bg-white/5 rounded-lg transition-colors text-text-sub-dark hover:text-white"
           >
             <span className="material-icons-outlined">close</span>
           </button>
         </div>
 
         {/* Content Area - Increased Padding */}
-        <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-8 bg-gradient-to-b from-[#15181e] to-[#0b0c10]">
+        <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-8 bg-gradient-to-b from-surface-dark to-background-dark">
 
           {/* Search Bar */}
           <div className="relative">
@@ -192,6 +213,77 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId }
                             </span>
                           </div>
                         </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Suspended OPs Section - for resumption */}
+            {suspendedOrders.length > 0 && (
+              <div className="space-y-4 animate-fade-in">
+                <div className="flex items-center justify-between border-b border-orange-500/20 pb-2">
+                  <span className="flex items-center gap-2 text-xs font-bold text-orange-400 uppercase tracking-widest">
+                    <span className="material-icons-outlined text-sm">pause_circle</span>
+                    OPs Suspensas neste Setor ({suspendedOrders.length})
+                  </span>
+                </div>
+
+                <div className="grid gap-3">
+                  {suspendedOrders.map((op) => (
+                    <label
+                      key={op.id}
+                      onClick={() => setSelectedId(op.id)}
+                      className={`group relative flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all duration-200
+                        ${selectedId === op.id
+                          ? 'border-orange-500 bg-orange-500/10 shadow-lg shadow-orange-500/5'
+                          : 'border-[#2d3342] bg-[#1a1d24] hover:border-orange-500/50 hover:bg-[#20242c]'
+                        }`}
+                    >
+                      <div className="absolute -left-3 -top-3 w-8 h-8 rounded-full bg-orange-500 text-black font-bold flex items-center justify-center shadow-lg ring-4 ring-[#15181e] z-10">
+                        <span className="material-icons-outlined text-sm">replay</span>
+                      </div>
+
+                      <input
+                        type="radio"
+                        checked={selectedId === op.id}
+                        onChange={() => { }}
+                        className="mt-1 h-5 w-5 text-orange-500 border-gray-600 bg-transparent focus:ring-orange-500"
+                      />
+
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xl font-bold text-white tracking-tight">{op.codigo}</span>
+                            <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase border bg-orange-500/10 text-orange-400 border-orange-500/20">
+                              SUSPENSA
+                            </span>
+                          </div>
+                        </div>
+
+                        <h4 className="text-base font-medium text-gray-300 mb-4">{op.nome_produto}</h4>
+
+                        {/* Production Progress Info */}
+                        <div className="grid grid-cols-3 gap-4 p-3 bg-black/20 rounded-lg border border-orange-500/10">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500 uppercase">Já Produzido</span>
+                            <span className="text-sm font-bold text-green-400">{(op as any).quantidade_produzida || 0} un</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500 uppercase">Pendente</span>
+                            <span className="text-sm font-bold text-orange-400">{(op as any).quantidade_pendente || 0} un</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500 uppercase">Meta Total</span>
+                            <span className="text-sm font-bold text-white">{op.quantidade_meta} un</span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-orange-400/70 mt-2 flex items-center gap-1">
+                          <span className="material-icons-outlined text-xs">info</span>
+                          Ao retomar, insira apenas a quantidade adicional produzida
+                        </p>
                       </div>
                     </label>
                   ))}
@@ -306,8 +398,8 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId }
                 }
               }}
               className={`px-8 py-3 rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98] uppercase tracking-wide text-xs ${opInUseWarning
-                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                  : 'bg-primary hover:bg-primary-hover text-black shadow-primary/20'
+                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                : 'bg-primary hover:bg-primary-hover text-black shadow-primary/20'
                 }`}
             >
               {opInUseWarning ? 'Solicitar Autorização' : 'Confirmar Setup'}
