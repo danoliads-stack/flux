@@ -1302,16 +1302,16 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
           </button>
 
-          {/* 4. Finalize Button - Only active in PRODUCAO or PARADA */}
+          {/* 4. Finalize Button - Active when there's an OP */}
           <button
             onClick={onOpenFinalize}
-            disabled={!opId || (opState !== 'PRODUCAO' && opState !== 'PARADA')}
-            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${(opState === 'PRODUCAO' || opState === 'PARADA') && opId
+            disabled={!opId}
+            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opId
               ? 'border border-border-dark opacity-80 cursor-pointer hover:opacity-100 hover:border-blue-500/50'
               : 'border border-border-dark opacity-40 grayscale cursor-not-allowed'
               }`}
           >
-            <span className={`material-symbols-outlined text-3xl ${opState === 'PRODUCAO' ? 'text-gray-500' : opId && opState !== 'IDLE' ? 'text-blue-500' : 'text-gray-500'}`}>check_circle</span>
+            <span className={`material-symbols-outlined text-3xl ${opId ? 'text-blue-500' : 'text-gray-500'}`}>check_circle</span>
             <div>
               <div className="font-display font-bold text-lg uppercase mb-1 text-white">Finalizar OP</div>
               <div className="text-xs text-text-sub-dark leading-snug">Encerrar ou suspender ordem</div>

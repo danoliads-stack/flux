@@ -284,6 +284,15 @@ const App: React.FC = () => {
     liveMachines.find(m => m.id === selectedMachineId) || null
     , [liveMachines, selectedMachineId]);
 
+  // ✅ FIX: Sync localStatusChangeAt from database when machine loads/updates
+  useEffect(() => {
+    if (currentMachine?.status_change_at && !localStatusChangeAt) {
+      console.log('[App] ⏱️ Syncing timer from DB:', currentMachine.status_change_at);
+      setLocalStatusChangeAt(currentMachine.status_change_at);
+      setLastPhaseStartTime(currentMachine.status_change_at);
+    }
+  }, [currentMachine?.status_change_at]);
+
   // Centralized Timer with Persistence
   useEffect(() => {
     let interval: any;
@@ -904,6 +913,13 @@ const App: React.FC = () => {
                   tempo_parada_segundos: accumulatedStopTime
                 }).eq('id', activeOP);
 
+                // ✅ FIX: Limpar localStorage da OP finalizada
+                localStorage.removeItem(`flux_acc_setup_${activeOP}`);
+                localStorage.removeItem(`flux_acc_prod_${activeOP}`);
+                localStorage.removeItem(`flux_acc_stop_${activeOP}`);
+                localStorage.removeItem(`flux_phase_start_${activeOP}`);
+                localStorage.removeItem(`flux_status_change_${activeOP}`);
+
                 // --- AUTO-START NEXT OP ---
                 // Buscar a próxima OP na sequência (status != FINALIZADA, != CANCELADA, sequence > current OR just next by sequence)
                 const { data: nextOPs } = await supabase
@@ -947,11 +963,17 @@ const App: React.FC = () => {
                   setOpState('SETUP');
                   setSetupSeconds(0);
                   setProductionSeconds(0);
+                  setActiveOPRealized(0); // ✅ FIX: Reset Realizado para nova OP
                   setActiveOP(nextOP.id);
                   setActiveOPCodigo(nextOP.codigo);
                   setActiveOPData(nextOP); // Será atualizado detalhadamente pelo useEffect
                 } else {
-                  setOpState('FINALIZADA');
+                  // ✅ FIX: Limpar tudo se não há próxima OP
+                  setActiveOP(null);
+                  setActiveOPCodigo(null);
+                  setActiveOPData(null);
+                  setActiveOPRealized(0);
+                  setOpState('IDLE'); // IDLE em vez de FINALIZADA para permitir iniciar nova OP
                   // Se não tem próxima, fica disponível
                 }
 

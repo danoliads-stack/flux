@@ -151,18 +151,19 @@ const FinalizeModal: React.FC<FinalizeModalProps> = ({
               </span>
             </button>
 
-            {isFinalSector ? (
+            {/* ✅ FIX: Botão ENCERRAR OP sempre disponível */}
+            <button
+              onClick={() => onConfirm(count, scrap)}
+              className="flex items-center justify-center gap-2 h-14 px-8 rounded-xl border-2 border-primary bg-primary/10 text-white font-bold text-lg hover:bg-primary shadow-glow transition-all hover:-translate-y-0.5"
+            >
+              <span className="material-icons-outlined">check_circle</span>
+              ENCERRAR OP
+            </button>
+            {/* Botão Transferir só aparece se não for setor final */}
+            {!isFinalSector && onTransfer && (
               <button
-                onClick={() => onConfirm(count, scrap)}
-                className="flex items-center justify-center gap-2 h-14 px-8 rounded-xl border-2 border-primary bg-primary/10 text-white font-bold text-lg hover:bg-primary shadow-glow transition-all hover:-translate-y-0.5"
-              >
-                <span className="material-icons-outlined">check_circle</span>
-                ENCERRAR OP
-              </button>
-            ) : (
-              <button
-                onClick={() => onTransfer?.(count, pending)}
-                className="flex items-center justify-center gap-2 h-14 px-8 rounded-xl border-2 border-green-500 bg-green-500/10 text-green-400 font-bold text-lg hover:bg-green-500/20 transition-all hover:-translate-y-0.5"
+                onClick={() => onTransfer(count, pending)}
+                className="flex items-center justify-center gap-2 h-14 px-6 rounded-xl border-2 border-green-500/50 text-green-400 hover:bg-green-500/10 transition-all font-bold"
               >
                 <span className="material-icons-outlined">arrow_forward</span>
                 <span className="flex flex-col items-start">
