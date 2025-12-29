@@ -293,6 +293,36 @@ const App: React.FC = () => {
     }
   }, [currentMachine?.status_change_at]);
 
+  // ✅ FIX: Sync activeOP from currentMachine.op_atual_id when machine updates (e.g., page reload)
+  useEffect(() => {
+    const syncOP = async () => {
+      if (currentMachine?.op_atual_id && !activeOP) {
+        console.log('[App] 📋 Syncing active OP from machine:', currentMachine.op_atual_id);
+        const { data: opData } = await supabase
+          .from('ordens_producao')
+          .select('*')
+          .eq('id', currentMachine.op_atual_id)
+          .single();
+
+        if (opData) {
+          setActiveOP(opData.id);
+          setActiveOPCodigo(opData.codigo);
+          setActiveOPData(opData);
+
+          // Also set opState based on machine status
+          switch (currentMachine.status_atual) {
+            case MachineStatus.SETUP: setOpState('SETUP'); break;
+            case MachineStatus.RUNNING: setOpState('PRODUCAO'); break;
+            case MachineStatus.STOPPED: setOpState('PARADA'); break;
+            case MachineStatus.SUSPENDED: setOpState('SUSPENSA'); break;
+            default: setOpState('IDLE');
+          }
+        }
+      }
+    };
+    syncOP();
+  }, [currentMachine?.op_atual_id, activeOP]);
+
   // Centralized Timer with Persistence
   useEffect(() => {
     let interval: any;
@@ -570,18 +600,25 @@ const App: React.FC = () => {
                     setAccumulatedStopTime(prev => prev + elapsed);
                   }
 
+                  // ✅ FIX: Restaurar estado anterior (Setup ou Produção)
+                  const lastState = localStorage.getItem(`flux_pre_stop_state_${currentMachine.id}`);
+                  const nextStatus = lastState === 'SETUP' ? MachineStatus.SETUP : MachineStatus.RUNNING;
+                  const nextOpState = lastState === 'SETUP' ? 'SETUP' : 'PRODUCAO';
+
+                  console.log(`[App] Retomar: restoring state to ${nextOpState} (from ${lastState})`);
+
                   await supabase.from('maquinas').update({
-                    status_atual: MachineStatus.RUNNING,
+                    status_atual: nextStatus,
                     status_change_at: now
                   }).eq('id', currentMachine.id);
 
                   setLocalStatusChangeAt(now);
                   setLastPhaseStartTime(now);
-                  await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
+                  await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, nextStatus, {
                     operatorId: currentUser.id,
                     opId: activeOP
                   }));
-                  setOpState('PRODUCAO');
+                  setOpState(nextOpState);
                 }
               }}
               onStartProduction={async () => {
@@ -776,10 +813,18 @@ const App: React.FC = () => {
                 // Update Machine Status & Timestamp
                 const now = new Date().toISOString();
 
+                // ✅ FIX: Save current state to restore later
+                localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
+
                 // Accumulate production time before stopping
                 if (lastPhaseStartTime && opState === 'PRODUCAO') {
                   const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
                   setAccumulatedProductionTime(prev => prev + elapsed);
+                }
+                // ✅ FIX: Subscribe setup time as well
+                else if (lastPhaseStartTime && opState === 'SETUP') {
+                  const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
+                  setAccumulatedSetupTime(prev => prev + elapsed);
                 }
 
                 await supabase.from('maquinas').update({

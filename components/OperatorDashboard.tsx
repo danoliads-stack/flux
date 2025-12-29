@@ -1134,7 +1134,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
           <div className="flex justify-between items-start mb-2">
             <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Realizado (UN)</div>
-            {opState === 'PRODUCAO' && (
+            {(opState === 'PRODUCAO' || opState === 'PARADA') && (
               <button
                 onClick={() => handleQuickUpdate('produced', 1)}
                 className="bg-secondary/20 hover:bg-secondary text-secondary hover:text-black p-1 rounded transition-colors"
@@ -1159,7 +1159,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
           <div className="flex justify-between items-start mb-2">
             <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Refugo (UN)</div>
-            {opState === 'PRODUCAO' && (
+            {(opState === 'PRODUCAO' || opState === 'PARADA') && (
               <button
                 onClick={() => handleQuickUpdate('scrap', 1)}
                 className="bg-danger/20 hover:bg-danger text-danger hover:text-white p-1 rounded transition-colors"
@@ -1278,10 +1278,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           {/* 3. Stop Button */}
           <button
             onClick={onOpenStop}
-            disabled={opState !== 'PRODUCAO'}
+            disabled={opState !== 'PRODUCAO' && opState !== 'SETUP'}
             className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opState === 'PARADA'
               ? 'border-2 border-red-500 shadow-lg shadow-red-500/20 cursor-default'
-              : opState === 'PRODUCAO'
+              : (opState === 'PRODUCAO' || opState === 'SETUP')
                 ? 'border border-border-dark opacity-100 cursor-pointer hover:opacity-80 hover:border-red-500/50'
                 : 'border border-border-dark opacity-40 grayscale cursor-not-allowed'
               }`}
