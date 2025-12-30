@@ -67,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let isMounted = true;
 
         const initializeAuth = async () => {
+            if (!isMounted) return;
             console.log(`[Auth] 🔄 Initializing auth for tab ${SessionStorage.getTabId()}...`);
             const startTime = Date.now();
 
@@ -137,10 +138,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Listener para mudanças de auth do Supabase (Admin/Supervisor)
         // IMPORTANTE: Só reage se NÃO tiver operador logado nesta aba
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (!isMounted) return;
+
             // Se tem operador logado nesta aba, ignorar mudanças de auth do Supabase
             const currentOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
             if (currentOperator) {
-                console.log('[Auth] Ignoring Supabase auth change - operator is logged in this tab');
                 return;
             }
 
@@ -153,18 +155,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             console.log('[Auth] Supabase state change:', event, session?.user?.email);
 
-            if (event === 'SIGNED_IN' && session?.user) {
+            if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
                 const profile = await fetchProfile(session.user.id);
                 if (profile && isMounted) {
-                    setUser(profile);
+                    // Only update if identity changed or no user to avoid rendering loops
+                    setUser(prev => (prev?.id === profile.id && prev.role === profile.role) ? prev : profile);
                 }
             } else if (event === 'SIGNED_OUT') {
                 // Só faz logout se não tiver operador
                 if (!sessionStorage.getItem(OPERATOR_SESSION_KEY)) {
                     if (isMounted) setUser(null);
                 }
-            } else if (event === 'TOKEN_REFRESHED') {
-                console.log('[Auth] Token refreshed successfully');
             }
         });
 
@@ -173,6 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             subscription.unsubscribe();
         };
     }, [fetchProfile]);
+
 
     // Login Admin/Supervisor - Usa Supabase Auth
     const loginAsAdmin = useCallback(async (email: string, pass: string) => {
