@@ -39,7 +39,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, user, permiss
 
 
 const App: React.FC = () => {
+  useEffect(() => {
+    console.log('[DEBUG-APP] 🏗️ App component MOUNTED');
+    return () => console.log('[DEBUG-APP] 🏚️ App component UNMOUNTED');
+  }, []);
+
   const { user: currentUser, logout: handleLogout, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    console.log(`[DEBUG-APP] 🔄 Auth State Tracer -> loading: ${authLoading}, user: ${currentUser?.name || 'GUEST'}`);
+  }, [authLoading, currentUser]);
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -150,26 +160,23 @@ const App: React.FC = () => {
   // Handle role-based redirection when user logs in/out
   // Handle role-based redirection when user logs in/out
   useEffect(() => {
-    if (location.pathname.startsWith('/r/')) return; // Traceability links
+    if (location.pathname.startsWith('/r/')) return;
 
     if (currentUser) {
-      console.log('[App] 👤 User changed, role:', currentUser.role);
+      console.log(`[DEBUG-APP] 👤 User identified: ${currentUser.name} (${currentUser.role})`);
+      console.log(`[DEBUG-APP] 📍 Current Path: ${location.pathname}`);
 
-      // Default redirections based on login
       if (location.pathname === '/' || location.pathname === '/login') {
-        if (currentUser.role === 'OPERATOR') {
-          navigate('/maquinas');
-        } else if (currentUser.role === 'ADMIN') {
-          navigate('/administracao');
-        } else if (currentUser.role === 'SUPERVISOR') {
-          navigate('/supervisao');
-        }
+        let target = '/maquinas';
+        if (currentUser.role === 'ADMIN') target = '/administracao';
+        else if (currentUser.role === 'SUPERVISOR') target = '/supervisao';
+
+        console.log(`[DEBUG-APP] 🚀 Redirecting to role default: ${target}`);
+        navigate(target);
       }
     } else if (!authLoading) {
-      // User logged out or not authenticated
       if (location.pathname === '/' || (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/r/'))) {
-        // Only redirect if we are at root or a protected route (not login itself)
-        console.log('[App] 🔓 Redirecting to login');
+        console.log('[DEBUG-APP] 🔓 No user, redirecting to login');
         navigate('/login');
       }
     }
@@ -232,6 +239,8 @@ const App: React.FC = () => {
 
     fetchMachines();
 
+    /* 
+    TEMPORARILY DISABLED FOR DEBUGGING PER USER PROCEDURE
     // Subscribe to realtime updates usando o manager centralizado
     const unsubscribe = realtimeManager.subscribeMachineUpdates((update) => {
       console.log('[App] 🔄 Machine update received:', update);
@@ -258,6 +267,9 @@ const App: React.FC = () => {
     return () => {
       unsubscribe();
     };
+    */
+    console.log('[DEBUG-APP] ⚠️ Real-time subscriptions DISABLED for isolation');
+    return () => { };
   }, [currentUser]);
 
   // Fetch detailed Active OP data (including product info and production total) when activeOP changes

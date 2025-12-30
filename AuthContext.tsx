@@ -68,65 +68,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const initializeAuth = async () => {
             if (!isMounted) return;
-            console.log(`[Auth] 🔄 Initializing auth for tab ${SessionStorage.getTabId()}...`);
+            console.log(`[DEBUG-AUTH] 🏁 START Initialization (Tab: ${SessionStorage.getTabId()})`);
             const startTime = Date.now();
 
             try {
-                // 1. PRIMEIRO verificar sessão de OPERADOR (SessionStorage helper)
+                // 1. PRIMEIRO verificar sessão de OPERADOR
                 const operator = SessionStorage.getOperator();
+                console.log('[DEBUG-AUTH] 🔍 Checking operator session:', operator ? 'FOUND' : 'NOT FOUND');
+
                 if (operator) {
-                    console.log('[Auth] ✅ Found operator session in this tab:', operator.name);
+                    console.log('[DEBUG-AUTH] ✅ Setting operator user:', operator.name);
                     if (isMounted) {
                         setUser(operator);
                         setLoading(false);
                         SessionStorage.setAuthInitialized();
                     }
-                    return; // Operador tem prioridade nesta aba
+                    return;
                 }
 
-                // 2. Se não tem operador, verificar Supabase Auth (Admin/Supervisor)
+                // 2. Supabase Auth
+                console.log('[DEBUG-AUTH] 🔍 Fetching Supabase session...');
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
                 if (sessionError) {
-                    console.error('[Auth] ❌ getSession error:', sessionError);
+                    console.error('[DEBUG-AUTH] ❌ getSession error:', sessionError);
                 }
 
                 if (session?.user) {
-                    console.log('[Auth] ✅ Found Supabase session for:', session.user.email);
-
+                    console.log('[DEBUG-AUTH] ✅ Supabase session found for:', session.user.email);
                     const profile = await fetchProfile(session.user.id);
+                    console.log('[DEBUG-AUTH] 🔍 Profile fetch result:', profile ? 'SUCCESS' : 'FAILED');
 
                     if (profile) {
                         if (isMounted) {
                             setUser(profile);
-                            console.log('[Auth] ✅ Profile loaded:', profile.role);
+                            console.log('[DEBUG-AUTH] ✅ Profile set:', profile.role);
                         }
                     } else {
-                        // Sessão corrompida - tentar refresh
-                        console.warn('[Auth] ⚠️ Session exists but profile fetch failed. Attempting refresh...');
+                        console.warn('[DEBUG-AUTH] ⚠️ Profile missing, attempting refresh...');
                         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
 
                         if (refreshError || !refreshData.session) {
-                            console.error('[Auth] ❌ Refresh failed. Forcing signOut.');
+                            console.error('[DEBUG-AUTH] ❌ Refresh failed, signing out.');
                             await supabase.auth.signOut();
                             clearSupabaseAuthData();
                         } else {
                             const retryProfile = await fetchProfile(refreshData.session.user.id);
                             if (isMounted && retryProfile) {
                                 setUser(retryProfile);
-                                console.log('[Auth] ✅ Profile recovered after refresh:', retryProfile.role);
+                                console.log('[DEBUG-AUTH] ✅ Profile recovered.');
                             }
                         }
                     }
                 } else {
-                    console.log('[Auth] ℹ️ No active session found');
+                    console.log('[DEBUG-AUTH] ℹ️ No Supabase session found');
                 }
             } catch (err) {
-                console.error('[Auth] ❌ Critical error during initialization:', err);
+                console.error('[DEBUG-AUTH] ❌ CRITICAL initialization error:', err);
             } finally {
                 if (isMounted) {
-                    const elapsed = Date.now() - startTime;
-                    console.log(`[Auth] ✅ Initialization complete in ${elapsed}ms`);
+                    console.log(`[DEBUG-AUTH] 🏁 END Initialization in ${Date.now() - startTime}ms`);
                     setLoading(false);
                     SessionStorage.setAuthInitialized();
                 }
@@ -135,34 +136,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         initializeAuth();
 
-        // Listener para mudanças de auth do Supabase (Admin/Supervisor)
-        // IMPORTANTE: Só reage se NÃO tiver operador logado nesta aba
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!isMounted) return;
+            console.log(`[DEBUG-AUTH] 🔔 Event Received: ${event} (User: ${session?.user?.email || 'NONE'})`);
 
-            // Se tem operador logado nesta aba, ignorar mudanças de auth do Supabase
             const currentOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
             if (currentOperator) {
+                console.log('[DEBUG-AUTH] ⏭️ Ignoring event - Operator logged in this tab');
                 return;
             }
 
-            // Check if we're in the middle of creating a user administratively
-            // @ts-ignore - accessing global flag from AdminUsuarios
             if (typeof window !== 'undefined' && (window as any).isCreatingUserAdmin) {
-                console.log('[Auth] Ignoring auth change - admin user creation in progress');
+                console.log('[DEBUG-AUTH] ⏭️ Ignoring event - Admin user creation flag ACTIVE');
                 return;
             }
-
-            console.log('[Auth] Supabase state change:', event, session?.user?.email);
 
             if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+                console.log('[DEBUG-AUTH] 🔄 Processing SIGNED_IN/USER_UPDATED');
                 const profile = await fetchProfile(session.user.id);
                 if (profile && isMounted) {
-                    // Only update if identity changed or no user to avoid rendering loops
-                    setUser(prev => (prev?.id === profile.id && prev.role === profile.role) ? prev : profile);
+                    setUser(prev => {
+                        const isSame = (prev?.id === profile.id && prev.role === profile.role);
+                        console.log('[DEBUG-AUTH] 👤 Identity Check:', isSame ? 'SAME (Skipping update)' : 'DIFFERENT (Updating state)');
+                        return isSame ? prev : profile;
+                    });
                 }
             } else if (event === 'SIGNED_OUT') {
-                // Só faz logout se não tiver operador
+                console.log('[DEBUG-AUTH] 🔄 Processing SIGNED_OUT');
                 if (!sessionStorage.getItem(OPERATOR_SESSION_KEY)) {
                     if (isMounted) setUser(null);
                 }
