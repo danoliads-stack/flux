@@ -88,6 +88,8 @@ export const useAppStore = create<AppState>()(
                         activeOP: op.id,
                         activeOPCodigo: op.codigo,
                         activeOPData: op,
+                        totalProduced: 0, // ✅ Reset counters for new OP
+                        totalScrap: 0,    // ✅ Reset counters for new OP
                         meta: op.quantidade_meta || 0
                     });
                 }

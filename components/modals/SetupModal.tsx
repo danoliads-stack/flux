@@ -386,7 +386,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onClose, onConfirm, machineId, 
             <button
               disabled={!selectedId || !!opInUseWarning}
               onClick={async () => {
-                const selected = [...sequencedOrders, ...otherOrders].find((op) => op.id === selectedId);
+                const selected = [...sequencedOrders, ...suspendedOrders, ...otherOrders].find((op) => op.id === selectedId);
                 if (selected) {
                   // Check exclusivity before confirming
                   const isInUse = await checkOpExclusivity(selected.id);

@@ -103,7 +103,7 @@ const App: React.FC = () => {
           return;
         }
 
-        console.log('[App] ✅ Recovered machine:', machineData.nome, 'status:', machineData.status_atual);
+        console.log('[App] ✅ Recovered machine:', machineData.nome, 'status:', machineData.status_atual, 'op_atual_id:', machineData.op_atual_id);
         setCurrentMachine(machineData);
 
         // 2. Sync timers from database
@@ -113,16 +113,21 @@ const App: React.FC = () => {
 
         // 3. Fetch active OP if exists
         if (machineData.op_atual_id) {
-          const { data: opData } = await supabase
+          console.log('[App] 🔍 Fetching OP from database:', machineData.op_atual_id);
+          const { data: opData, error: opError } = await supabase
             .from('ordens_producao')
             .select('*, produtos(nome, codigo)')
             .eq('id', machineData.op_atual_id)
             .single();
 
-          if (opData) {
+          if (opError) {
+            console.error('[App] ❌ Failed to fetch OP:', opError);
+          } else if (opData) {
             console.log('[App] ✅ Recovered OP:', opData.codigo);
             setActiveOP(opData as any);
           }
+        } else {
+          console.log('[App] ⚠️ Machine has no op_atual_id - OP will be null');
         }
 
         // 4. Map machine status to opState (database is source of truth)
@@ -135,14 +140,17 @@ const App: React.FC = () => {
           default: dbOpState = 'IDLE';
         }
         setOpState(dbOpState);
-        console.log('[App] ✅ State recovery complete. opState:', dbOpState);
+        console.log('[App] ✅ State recovery complete. opState:', dbOpState, 'activeOP:', activeOP);
       }
     };
 
     recoverState();
   }, [selectedMachineId, currentMachine, currentUser]);
 
-  // PERSISTENCE: Replaced by Zustand persist middleware
+  // DEBUG: Log activeOP changes
+  useEffect(() => {
+    console.log('[App] 🔔 activeOP changed:', activeOP, 'activeOPCodigo:', activeOPCodigo);
+  }, [activeOP, activeOPCodigo]);
   // We keep this effect only to sync legacy localStorage if completely necessary during migration, 
   // but for now we rely on the store. 
   // TODO: Fully clean up this block after verification.
@@ -239,9 +247,7 @@ const App: React.FC = () => {
 
     fetchMachines();
 
-    /* 
-    TEMPORARILY DISABLED FOR DEBUGGING PER USER PROCEDURE
-    // Subscribe to realtime updates usando o manager centralizado
+    // ✅ Subscribe to realtime updates para sincronização instantânea
     const unsubscribe = realtimeManager.subscribeMachineUpdates((update) => {
       console.log('[App] 🔄 Machine update received:', update);
 
@@ -267,10 +273,7 @@ const App: React.FC = () => {
     return () => {
       unsubscribe();
     };
-    */
-    console.log('[DEBUG-APP] ⚠️ Real-time subscriptions DISABLED for isolation');
-    return () => { };
-  }, [currentUser]);
+  }, [currentUser, selectedMachineId]);
 
   // Fetch detailed Active OP data (including product info and production total) when activeOP changes
   useEffect(() => {
@@ -316,17 +319,25 @@ const App: React.FC = () => {
 
 
   // ✅ FIX: Sync activeOP from currentMachine.op_atual_id when machine updates (e.g., page reload)
+  // Also re-sync if we have the ID but not the full data (can happen after page refresh)
   useEffect(() => {
     const syncOP = async () => {
-      if (currentMachine?.op_atual_id && !activeOP) {
+      // Sync if: machine has OP ID AND (activeOP is missing OR activeOPData is missing)
+      if (currentMachine?.op_atual_id && (!activeOP || !activeOPData)) {
         console.log('[App] 📋 Syncing active OP from machine:', currentMachine.op_atual_id);
-        const { data: opData } = await supabase
+        const { data: opData, error } = await supabase
           .from('ordens_producao')
           .select('*, produtos(nome, codigo)')
           .eq('id', currentMachine.op_atual_id)
           .single();
 
+        if (error) {
+          console.error('[App] ❌ Error fetching OP:', error.message);
+          return;
+        }
+
         if (opData) {
+          console.log('[App] ✅ OP data loaded:', opData.codigo);
           // Update Store
           setActiveOP(opData as any);
 
@@ -344,7 +355,7 @@ const App: React.FC = () => {
       }
     };
     syncOP();
-  }, [currentMachine?.op_atual_id, activeOP]);
+  }, [currentMachine?.op_atual_id, activeOP, activeOPData]);
 
   // Legacy Timer Logic Removed - Handled by Store and OperatorDashboard
 
@@ -545,6 +556,7 @@ const App: React.FC = () => {
                         console.log('Opening Finalize Modal');
                         setActiveModal('finalize');
                       }}
+                      onGenerateLabel={() => setActiveModal('label')}
                       onStop={async () => {
                         setActiveModal('stop');
                       }}
@@ -623,7 +635,6 @@ const App: React.FC = () => {
                       accumulatedSetupTime={accumulatedSetupTime}
                       accumulatedProductionTime={accumulatedProductionTime}
                       accumulatedStopTime={accumulatedStopTime}
-                      onGenerateLabel={() => setActiveModal('label')}
                       onRegisterChecklist={async (status, obs) => {
                         const { data: opData } = await supabase.from('ordens_producao').select('id').eq('codigo', activeOP).single();
                         await supabase.from('checklist_eventos').insert({
@@ -715,7 +726,8 @@ const App: React.FC = () => {
                   }));
 
                   setOpState('SETUP');
-                  setActiveOP(op); // Sets activeOP, activeOPCodigo, activeOPData, meta
+                  setActiveOP(op); // Sets activeOP, activeOPCodigo, activeOPData, meta AND resets counters to 0
+                  setProductionData({ totalProduced: 0, totalScrap: 0 }); // Double ensure reset
                   setActiveModal(null);
                 }
               };
@@ -990,10 +1002,9 @@ const App: React.FC = () => {
                   setProductionData({ totalProduced: 0 }); // ✅ FIX: Reset Realizado para nova OP
                   setActiveOP(nextOP); // will fully load details via useEffect if needed, but here we set basic info
                 } else {
-                  // ✅ FIX: Limpar tudo se não há próxima OP
-                  setActiveOP(null);
-                  setProductionData({ totalProduced: 0 });
-                  setOpState('IDLE'); // IDLE em vez de FINALIZADA para permitir iniciar nova OP
+                  // Defer clearing activeOP until label modal is closed
+                  // setActiveOP(null); 
+                  // setOpState('IDLE');
                 }
 
                 setActiveModal('label');
@@ -1061,7 +1072,8 @@ const App: React.FC = () => {
                   })
                 );
 
-                setOpState('SUSPENSA');
+                setActiveOP(null); // ✅ Clear local OP state
+                setOpState('IDLE'); // ✅ Return dashboard to IDLE (Free machine)
                 closeModals();
               }
             }}
@@ -1080,8 +1092,9 @@ const App: React.FC = () => {
             machine={currentMachine?.nome || 'Máquina'}
             operator={currentUser?.name || 'Operador'}
             unit="PÇS"
-            productName={activeOPData?.produtos?.nome || 'Produto Indefinido'}
-            productDescription={activeOPData?.produtos?.codigo || ''}
+            productName={activeOPData?.nome_produto || 'Produto Indefinido'}
+            productDescription={activeOPData?.codigo || ''}
+            shift={operatorTurno || 'N/A'}
           />
         )}
       </main>

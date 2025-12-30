@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { RecentRecord, OPState } from '../types';
 import { supabase } from '../src/lib/supabase-client';
 import ChecklistExecutionModal from './modals/ChecklistExecutionModal';
-import LabelModal from './modals/LabelModal';
 import { useAppStore } from '../src/store/useAppStore';
 
 interface OperatorDashboardProps {
@@ -140,7 +139,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const MONITORING_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes fixed
 
   // States
-  const [showLabelModal, setShowLabelModal] = useState(false);
   const [lastMonitorTime, setLastMonitorTime] = useState<Date>(new Date());
 
   // OEE States
@@ -661,7 +659,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if (error) {
       console.error('Error auto-generating lote:', error);
     } else {
-      setShowLabelModal(true); // Show modal with new label
+      onGenerateLabel?.(); // Show modal with new label
     }
   };
 
@@ -1086,18 +1084,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-icons-outlined text-6xl">inventory_2</span>
           </div>
-          <div className="flex justify-between items-start mb-2">
-            <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Realizado (UN)</div>
-            {(opState === 'PRODUCAO' || opState === 'PARADA') && (
-              <button
-                onClick={() => handleQuickUpdate('produced', 1)}
-                className="bg-secondary/20 hover:bg-secondary text-secondary hover:text-black p-1 rounded transition-colors"
-                title="Adicionar 1 peça"
-              >
-                <span className="material-icons text-lg font-bold">add</span>
-              </button>
-            )}
-          </div>
+          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Realizado (UN)</div>
           <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-300 ${totalProduced > 0 ? 'text-secondary' : 'text-text-sub-dark'}`}>
             {totalProduced}
           </div>
@@ -1111,18 +1098,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-danger">
             <span className="material-icons-outlined text-6xl">delete_outline</span>
           </div>
-          <div className="flex justify-between items-start mb-2">
-            <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Refugo (UN)</div>
-            {(opState === 'PRODUCAO' || opState === 'PARADA') && (
-              <button
-                onClick={() => handleQuickUpdate('scrap', 1)}
-                className="bg-danger/20 hover:bg-danger text-danger hover:text-white p-1 rounded transition-colors"
-                title="Adicionar 1 refugo"
-              >
-                <span className="material-icons text-lg font-bold">add</span>
-              </button>
-            )}
-          </div>
+          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Refugo (UN)</div>
           <div className={`text-4xl md:text-5xl font-display font-bold mb-1 ${totalScrap > 0 ? 'text-danger' : 'text-text-sub-dark'}`}>{totalScrap}</div>
           <div className="text-xs font-bold text-secondary">
             {totalProduced > 0 ? `${((totalScrap / (totalProduced + totalScrap)) * 100).toFixed(1)}% taxa` : '0% taxa'}
@@ -1264,7 +1240,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             }}
             disabled={!opId}
             className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opId
-              ? 'border border-border-dark opacity-80 cursor-pointer hover:opacity-100 hover:border-blue-500/50'
+              ? 'border-2 border-blue-500/50 opacity-100 cursor-pointer hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20'
               : 'border border-border-dark opacity-40 grayscale cursor-not-allowed'
               }`}
           >
@@ -1300,7 +1276,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           {/* Generate Label Button - Always visible when OP is active */}
           {opId && (
             <button
-              onClick={() => setShowLabelModal(true)}
+              onClick={() => onGenerateLabel?.()}
               className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg text-primary hover:bg-primary/20 transition-all"
             >
               <span className="material-icons-outlined text-lg">qr_code_2</span>
@@ -1327,22 +1303,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         }}
       />
 
-      {/* Auto-Label Generation Modal */}
-      {
-        showLabelModal && (
-          <LabelModal
-            onClose={() => setShowLabelModal(false)}
-            opId={opCodigo || opId || 'N/A'}
-            realized={realized}
-            loteId={loteId}
-            machine={machineName}
-            operator={operatorName}
-            unit="PÇS"
-            productName={productInfo?.nome || 'Carregando...'}
-            productDescription={productInfo?.codigo || ''}
-          />
-        )
-      }
+
 
       {/* Recent Records Table */}
       <div className="bg-surface-dark border border-border-dark rounded-lg overflow-hidden flex flex-col mb-6">
@@ -1445,7 +1406,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               if (pendingAlert.type === 'checklist' && pendingAlert.checklistId) {
                 openChecklist(pendingAlert.checklistId);
               } else if (pendingAlert.type === 'etiqueta') {
-                setShowLabelModal(true);
+                onGenerateLabel?.();
               }
               setPendingAlert(null);
             }}
