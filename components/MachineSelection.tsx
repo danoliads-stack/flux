@@ -82,7 +82,8 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
     total: machines.length,
     disponivel: machines.filter(m => m.status_atual === 'AVAILABLE').length,
     produzindo: machines.filter(m => m.status_atual === 'RUNNING' || m.status_atual === 'SETUP').length,
-    parada: machines.filter(m => m.status_atual === 'MAINTENANCE' || m.status_atual === 'STOPPED').length,
+    parada: machines.filter(m => m.status_atual === 'STOPPED').length,
+    manutencao: machines.filter(m => m.status_atual === 'MAINTENANCE').length,
   };
 
   return (
@@ -151,6 +152,10 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
             <p className="text-[10px] md:text-xs text-red-500 uppercase font-bold">Paradas</p>
             <p className="text-xl md:text-2xl font-bold text-red-500">{statusCounts.parada}</p>
           </div>
+          <div className="bg-[#15181e] border border-orange-500/20 rounded-xl p-3 md:p-4">
+            <p className="text-[10px] md:text-xs text-orange-500 uppercase font-bold">Manutenção</p>
+            <p className="text-xl md:text-2xl font-bold text-orange-500">{statusCounts.manutencao}</p>
+          </div>
         </div>
 
         {/* Toolbar - Responsivo */}
@@ -170,7 +175,8 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
             <FilterButton label="Todas" active={filter === 'ALL'} onClick={() => setFilter('ALL')} />
             <FilterButton label="Disponível" dotColor="bg-secondary" active={filter === 'AVAILABLE'} onClick={() => setFilter('AVAILABLE')} />
             <FilterButton label="Produzindo" dotColor="bg-primary" active={filter === 'RUNNING'} onClick={() => setFilter('RUNNING')} />
-            <FilterButton label="Manutenção" dotColor="bg-red-500" active={filter === 'MAINTENANCE'} onClick={() => setFilter('MAINTENANCE')} />
+            <FilterButton label="Parada" dotColor="bg-red-500" active={filter === 'STOPPED'} onClick={() => setFilter('STOPPED')} />
+            <FilterButton label="Manutenção" dotColor="bg-orange-500" active={filter === 'MAINTENANCE'} onClick={() => setFilter('MAINTENANCE')} />
           </div>
         </div>
 
@@ -220,7 +226,8 @@ interface MachineCardProps {
 const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) => {
   const isAvailable = machine.status_atual === 'AVAILABLE';
   const isProducing = machine.status_atual === 'RUNNING' || machine.status_atual === 'SETUP';
-  const isMaintenance = machine.status_atual === 'MAINTENANCE' || machine.status_atual === 'STOPPED';
+  const isStopped = machine.status_atual === 'STOPPED';
+  const isMaintenance = machine.status_atual === 'MAINTENANCE';
 
   const getStatusConfig = () => {
     if (isAvailable) return {
@@ -241,12 +248,21 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) => {
       icon: 'settings',
       label: machine.status_atual === 'SETUP' ? 'Em Setup' : 'Produzindo'
     };
-    return {
+    if (isStopped) return {
       bg: 'bg-gradient-to-br from-red-500/20 to-rose-500/10',
       border: 'border-red-500/40',
       glow: 'shadow-red-500/20',
       text: 'text-red-400',
       dot: 'bg-red-400',
+      icon: 'report_problem',
+      label: 'Parada'
+    };
+    return {
+      bg: 'bg-gradient-to-br from-orange-500/20 to-amber-500/10',
+      border: 'border-orange-500/40',
+      glow: 'shadow-orange-500/20',
+      text: 'text-orange-400',
+      dot: 'bg-orange-400',
       icon: 'engineering',
       label: 'Manutenção'
     };

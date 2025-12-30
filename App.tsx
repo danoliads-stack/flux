@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import OperatorDashboard from './components/OperatorDashboard';
 import SupervisionDashboard from './components/SupervisionDashboard';
+import QualityDashboard from './components/QualityDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import Reports from './components/Reports';
 import LoginScreen from './components/LoginScreen';
@@ -678,6 +679,12 @@ const App: React.FC = () => {
               <Route path="/relatorios" element={
                 <ProtectedRoute user={currentUser} userPermissions={userPermissions}>
                   <Reports />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/qualidade" element={
+                <ProtectedRoute user={currentUser} permission={Permission.VIEW_QUALITY_DASHBOARD} userPermissions={userPermissions}>
+                  <QualityDashboard />
                 </ProtectedRoute>
               } />
 

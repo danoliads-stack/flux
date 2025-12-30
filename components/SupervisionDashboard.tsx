@@ -233,7 +233,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const stats = useMemo(() => {
     return {
       running: machines.filter(m => m.status_atual === MachineStatus.RUNNING || m.status_atual === MachineStatus.IN_USE).length,
-      stopped: machines.filter(m => m.status_atual === MachineStatus.STOPPED || m.status_atual === MachineStatus.MAINTENANCE).length,
+      stopped: machines.filter(m => m.status_atual === MachineStatus.STOPPED).length,
+      maintenance: machines.filter(m => m.status_atual === MachineStatus.MAINTENANCE).length,
       totalOee: (machines.reduce((acc, m) => acc + (m.oee || 0), 0) / (machines.length || 1)).toFixed(1)
     };
   }, [machines]);
@@ -260,10 +261,11 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         {[
           { label: 'Máquinas Rodando', val: stats.running, icon: 'settings_motion_mode', color: 'text-secondary', progress: (stats.running / machines.length) * 100 },
           { label: 'Máquinas Paradas', val: stats.stopped, icon: 'warning', color: 'text-danger', progress: (stats.stopped / machines.length) * 100 },
+          { label: 'Em Manutenção', val: stats.maintenance, icon: 'engineering', color: 'text-orange-500', progress: (stats.maintenance / machines.length) * 100 },
           { label: 'OPs em Andamento', val: machines.filter(m => m.op_atual_id).length, icon: 'play_circle', color: 'text-primary' },
           { label: 'Total Produzido', val: totalProduzido, icon: 'inventory_2', color: 'text-blue-400' },
           { label: 'OPs Finalizadas', val: opsFinalizadas, icon: 'check_circle', color: 'text-secondary' },
-          { label: 'Alertas Ativos', val: stats.stopped > 0 ? stats.stopped : 0, icon: 'notifications_active', color: 'text-orange-500', alerts: stats.stopped > 0 }
+          { label: 'Alertas Ativos', val: stats.stopped + stats.maintenance, icon: 'notifications_active', color: 'text-danger', alerts: (stats.stopped + stats.maintenance) > 0 }
         ].map((kpi, i) => (
           <div key={i} className="flex flex-col gap-1 rounded-xl p-5 border border-border-dark bg-surface-dark shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -293,6 +295,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
               <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-secondary/10 text-secondary border border-secondary/20 uppercase tracking-widest">Rodando</span>
               <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-warning/10 text-warning border border-warning/20 uppercase tracking-widest">Setup</span>
               <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-danger/10 text-danger border border-danger/20 uppercase tracking-widest">Parado</span>
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-widest">Manutenção</span>
             </div>
           </div>
 
@@ -303,8 +306,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   switch (status) {
                     case 'RUNNING': case 'IN_USE': return 0;
                     case 'SETUP': return 1;
-                    case 'STOPPED': case 'MAINTENANCE': return 2;
-                    case 'SUSPENDED': return 3;
+                    case 'STOPPED': return 2;
+                    case 'MAINTENANCE': return 3;
+                    case 'SUSPENDED': return 4;
                     default: return 4;
                   }
                 };
@@ -313,7 +317,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
               .map((m) => {
                 // Map DB status to UI logic
                 const isActive = m.status_atual === MachineStatus.RUNNING || m.status_atual === MachineStatus.IN_USE;
-                const isStopped = m.status_atual === MachineStatus.STOPPED || m.status_atual === MachineStatus.MAINTENANCE;
+                const isStopped = m.status_atual === MachineStatus.STOPPED;
+                const isMaintenance = m.status_atual === MachineStatus.MAINTENANCE;
                 const isSetup = m.status_atual === MachineStatus.SETUP;
                 const isSuspended = m.status_atual === MachineStatus.SUSPENDED;
 
@@ -326,8 +331,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 return (
                   <div key={m.id} className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full ${isActive ? 'border-l-secondary shadow-secondary/5' :
                     isStopped ? 'border-l-danger shadow-danger/5' :
-                      isSetup ? 'border-l-warning shadow-warning/5' :
-                        isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
+                      isMaintenance ? 'border-l-orange-500 shadow-orange-500/5' :
+                        isSetup ? 'border-l-warning shadow-warning/5' :
+                          isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
                     }`}>
                     <div className="flex justify-between items-start mb-4">
                       <div className="min-w-0 flex-1">
@@ -335,14 +341,16 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                         <div className="flex flex-col gap-1 items-start">
                           <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isActive ? 'text-secondary' :
                             isStopped ? 'text-danger' :
-                              isSetup ? 'text-warning' :
-                                isSuspended ? 'text-orange-500' : 'text-text-sub-dark'
+                              isMaintenance ? 'text-orange-500' :
+                                isSetup ? 'text-warning' :
+                                  isSuspended ? 'text-orange-500' : 'text-text-sub-dark'
                             }`}>
                             <span className="material-icons-outlined text-base">{
                               isActive ? 'play_arrow' :
                                 isStopped ? 'error' :
-                                  isSetup ? 'settings' :
-                                    isSuspended ? 'pause_circle' : 'check_circle'
+                                  isMaintenance ? 'engineering' :
+                                    isSetup ? 'settings' :
+                                      isSuspended ? 'pause_circle' : 'check_circle'
                             }</span> {translateStatus(m.status_atual)}
                           </span>
                           <StatusTimer statusChangeAt={m.status_change_at} status={m.status_atual} />

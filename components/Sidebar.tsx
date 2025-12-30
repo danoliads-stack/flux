@@ -69,6 +69,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions }) => {
       permission: Permission.VIEW_ADMIN_DASHBOARD
     },
     {
+      id: '/qualidade',
+      icon: 'verified_user',
+      label: 'Qualidade',
+      permission: Permission.VIEW_QUALITY_DASHBOARD
+    },
+    {
       id: '/maquinas',
       icon: 'settings_remote',
       label: 'Operador',

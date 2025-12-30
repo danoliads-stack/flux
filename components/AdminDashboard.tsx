@@ -14,8 +14,9 @@ import AdminPerfisPermissoes from './AdminPerfisPermissoes';
 import { AdminOPsGerais, AdminERPConnector, AdminAPIKeys, AdminCLPSensores, AdminLogsAuditoria } from './AdminPlaceholders';
 import AdminUsuarios from './AdminUsuarios';
 import ExecutiveDashboard from './ExecutiveDashboard';
+import QualityDashboard from './QualityDashboard';
 
-type AdminPage = 'overview' | 'operadores' | 'setores' | 'turnos' | 'maquinas' | 'ordens' | 'ops_gerais' | 'sequencia' | 'tipos_parada' | 'tipos_refugo' | 'checklists' | 'erp' | 'api_keys' | 'clp_sensores' | 'usuarios' | 'perfis' | 'logs';
+type AdminPage = 'overview' | 'operadores' | 'setores' | 'turnos' | 'maquinas' | 'ordens' | 'ops_gerais' | 'sequencia' | 'tipos_parada' | 'tipos_refugo' | 'checklists' | 'monitoramento_qualidade' | 'erp' | 'api_keys' | 'clp_sensores' | 'usuarios' | 'perfis' | 'logs';
 
 const AdminDashboard: React.FC = () => {
   const { user: currentUser, logout } = useAuth();
@@ -150,6 +151,7 @@ const AdminDashboard: React.FC = () => {
                 <NavItem icon="warning_amber" label="Tipos de Parada" active={activePage === 'tipos_parada'} onClick={() => setActivePage('tipos_parada')} />
                 <NavItem icon="cancel" label="Tipos de Refugo" active={activePage === 'tipos_refugo'} onClick={() => setActivePage('tipos_refugo')} />
                 <NavItem icon="fact_check" label="Checklists" active={activePage === 'checklists'} onClick={() => setActivePage('checklists')} />
+                <NavItem icon="verified_user" label="Monitoramento de Qualidade" active={activePage === 'monitoramento_qualidade'} onClick={() => setActivePage('monitoramento_qualidade')} />
               </nav>
             </section>
 
@@ -243,6 +245,8 @@ const AdminDashboard: React.FC = () => {
           <AdminTiposRefugo />
         ) : activePage === 'checklists' ? (
           <AdminChecklists />
+        ) : activePage === 'monitoramento_qualidade' ? (
+          <QualityDashboard />
         ) : activePage === 'erp' ? (
           <AdminERPConnector />
         ) : activePage === 'api_keys' ? (

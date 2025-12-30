@@ -15,7 +15,8 @@ export const ROLE_CONFIGS: RoleConfig[] = [
     permissions: [
       Permission.VIEW_OPERATOR_DASHBOARD,
       Permission.VIEW_SUPERVISOR_DASHBOARD,
-      Permission.VIEW_REPORTS
+      Permission.VIEW_REPORTS,
+      Permission.VIEW_QUALITY_DASHBOARD
     ]
   },
   {
