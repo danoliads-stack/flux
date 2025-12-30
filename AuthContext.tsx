@@ -70,6 +70,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log(`[Auth] 🔄 Initializing auth for tab ${SessionStorage.getTabId()}...`);
             const startTime = Date.now();
 
+            // Auto-recovery: Check for initialization loops
+            const loopDetectionKey = 'flux_auth_loop_detection';
+            const now = Date.now();
+            const loopData = localStorage.getItem(loopDetectionKey);
+
+            if (loopData) {
+                try {
+                    const { count, firstAttempt } = JSON.parse(loopData);
+                    const timeSinceFirst = now - firstAttempt;
+
+                    // If more than 3 initializations in 10 seconds, clear everything and force login
+                    if (count >= 3 && timeSinceFirst < 10000) {
+                        console.error('[Auth] ⚠️ Auth loop detected! Forcing logout and redirect to login...');
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        await supabase.auth.signOut();
+                        window.location.href = '/';
+                        return;
+                    }
+
+                    // Reset counter if more than 10 seconds passed
+                    if (timeSinceFirst > 10000) {
+                        localStorage.setItem(loopDetectionKey, JSON.stringify({ count: 1, firstAttempt: now }));
+                    } else {
+                        localStorage.setItem(loopDetectionKey, JSON.stringify({ count: count + 1, firstAttempt }));
+                    }
+                } catch (e) {
+                    localStorage.setItem(loopDetectionKey, JSON.stringify({ count: 1, firstAttempt: now }));
+                }
+            } else {
+                localStorage.setItem(loopDetectionKey, JSON.stringify({ count: 1, firstAttempt: now }));
+            }
+
             try {
                 // 1. PRIMEIRO verificar sessão de OPERADOR (SessionStorage helper)
                 const operator = SessionStorage.getOperator();
