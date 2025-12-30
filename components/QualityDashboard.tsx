@@ -315,7 +315,7 @@ const QualityDashboard: React.FC = () => {
                             <option value="all">Todos Status</option>
                             <option value="ok">Conforme (OK)</option>
                             <option value="problema">Não Conforme</option>
-                            <option value="nao_realizado">Não Realizado</option>
+                            <option value="NAO_REALIZADO">Não Realizado</option>
                         </select>
                     </div>
                 </div>
@@ -517,8 +517,8 @@ const QualityDashboard: React.FC = () => {
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${resp.resposta === 'SIM' || resp.resposta === 'ok' ? 'bg-secondary/10 border-secondary text-secondary' :
-                                                                resp.resposta === 'NAO' || resp.resposta === 'problema' ? 'bg-danger/10 border-danger text-danger' :
-                                                                    'bg-white/10 border-white/20 text-gray-400'
+                                                            resp.resposta === 'NAO' || resp.resposta === 'problema' ? 'bg-danger/10 border-danger text-danger' :
+                                                                'bg-white/10 border-white/20 text-gray-400'
                                                             }`}>
                                                             {resp.resposta}
                                                         </span>

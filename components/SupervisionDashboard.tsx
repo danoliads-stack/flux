@@ -326,7 +326,11 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 const machineLiveProd = machineProductionMap.get(m.id);
                 const productionCount = machineLiveProd !== undefined ? machineLiveProd : (m.realized ?? 0);
                 const oeeValue = m.oee ?? 0;
-                const currentOp = m.ordens_producao?.codigo || (m.op_atual_id ? 'Carregando...' : '--');
+
+                // ✅ FIX: Show OP code or status - if op_atual_id exists but codigo is missing, show ID prefix
+                const currentOp = m.ordens_producao?.codigo ||
+                  (m.op_atual_id ? `OP-${m.op_atual_id.substring(0, 8)}...` : '--');
+
 
                 return (
                   <div key={m.id} className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full ${isActive ? 'border-l-secondary shadow-secondary/5' :

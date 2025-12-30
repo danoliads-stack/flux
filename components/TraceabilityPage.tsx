@@ -201,14 +201,21 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({ loteId }) => {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {data.checklists.map((c, i) => (
-                                <div key={i} className="bg-surface-dark border border-border-dark p-4 rounded-xl flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${c.status === 'ok' ? 'bg-secondary/10 text-secondary' : 'bg-danger/10 text-danger'}`}>
-                                        <span className="material-icons">{c.status === 'ok' ? 'verified_user' : 'warning_amber'}</span>
+                                <div key={i} className="bg-surface-dark border border-border-dark p-4 rounded-xl flex flex-col gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${c.status === 'ok' ? 'bg-secondary/10 text-secondary' : 'bg-danger/10 text-danger'}`}>
+                                            <span className="material-icons">{c.status === 'ok' ? 'verified_user' : 'warning_amber'}</span>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold uppercase tracking-tight">{c.tipo_acionamento}: {c.referencia_acionamento}</p>
+                                            <p className="text-xs text-text-sub-dark">{c.observacao || 'Sem observações'}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-bold uppercase tracking-tight">{c.tipo_acionamento}: {c.referencia_acionamento}</p>
-                                        <p className="text-xs text-text-sub-dark">{c.observacao || 'Sem observações'}</p>
-                                    </div>
+                                    {c.foto_url && (
+                                        <div className="w-full h-32 rounded-lg border border-border-dark overflow-hidden">
+                                            <img src={c.foto_url} alt="Evidência" className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform" onClick={() => window.open(c.foto_url, '_blank')} />
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                             {data.checklists.length === 0 && <p className="text-text-sub-dark italic p-4">Nenhum checklist registrado.</p>}

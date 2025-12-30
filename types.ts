@@ -88,7 +88,7 @@ export interface RecentRecord {
 }
 
 export type ChecklistAcionamento = 'tempo' | 'quantidade';
-export type ChecklistStatus = 'ok' | 'problema';
+export type ChecklistStatus = 'ok' | 'problema' | 'NAO_REALIZADO' | 'nao_realizado';
 
 export interface ChecklistEvento {
   id: string;
@@ -100,6 +100,7 @@ export interface ChecklistEvento {
   referencia_acionamento: string;
   status: ChecklistStatus;
   observacao?: string;
+  foto_url?: string;
   created_at: string;
 }
 
