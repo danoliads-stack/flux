@@ -43,13 +43,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Fetch profile do admin/supervisor
     const fetchProfile = useCallback(async (userId: string): Promise<AppUser | null> => {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('role, full_name')
-            .eq('id', userId)
-            .single();
+        console.log(`[DEBUG-AUTH] 💓 fetchProfile START for ${userId}`);
+        const startTime = Date.now();
+        try {
+            console.log(`[DEBUG-AUTH] 💓 fetchProfile: Awaiting Supabase query...`);
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('role, full_name')
+                .eq('id', userId)
+                .single();
 
-        if (data && !error) {
+            if (error || !data) {
+                console.error('[DEBUG-AUTH] ❌ fetchProfile error:', error);
+                return null;
+            }
+
+            console.log(`[DEBUG-AUTH] 💓 fetchProfile SUCCESS in ${Date.now() - startTime}ms`);
             return {
                 id: userId,
                 name: data.full_name,
@@ -57,9 +66,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 avatar: data.full_name.charAt(0),
                 sector: 'Administração'
             };
+        } catch (err) {
+            console.error('[DEBUG-AUTH] ❌ fetchProfile EXCEPTION:', err);
+            return null;
         }
-        console.error('[Auth] Error fetching profile:', error);
-        return null;
     }, []);
 
     // Inicialização - Verificar sessão existente DESTA ABA
@@ -139,6 +149,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!isMounted) return;
             console.log(`[DEBUG-AUTH] 🔔 Event Received: ${event} (User: ${session?.user?.email || 'NONE'})`);
+
+            // Se ainda estamos no "initializeAuth", não precisamos processar SIGNED_IN aqui
+            // pois o initializeAuth já vai tratar o resultado do getSession.
+            if (SessionStorage.isAuthInitialized() === false) {
+                console.log('[DEBUG-AUTH] ⏭️ Skipping event - Initialization still in progress');
+                return;
+            }
 
             const currentOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
             if (currentOperator) {
