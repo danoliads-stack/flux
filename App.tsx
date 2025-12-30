@@ -855,7 +855,8 @@ const App: React.FC = () => {
             opId={activeOPCodigo || 'N/A'}
             meta={activeOPData?.quantidade_meta || 500}
             realized={totalProduced}
-            sectorName={currentUser?.sector || 'Produção'}
+            // Fix: Pass machine sector name if available to handle specific sector logic (like Colagem)
+            sectorName={currentMachine?.setores?.nome || currentUser?.sector || 'Produção'}
             onTransfer={async (produced, pending) => {
               // Transfer to next sector (mark as ready for transfer)
               if (currentMachine && activeOP) {

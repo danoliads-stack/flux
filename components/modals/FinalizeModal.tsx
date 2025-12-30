@@ -176,18 +176,21 @@ const FinalizeModal: React.FC<FinalizeModalProps> = ({
             {onTransfer && !isFinalSector && (
               <button
                 onClick={() => onTransfer(totalProduced, finalPending)}
-                className="flex items-center justify-center gap-2 h-14 px-6 rounded-xl border-2 border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition-all font-bold group flex-1"
+                className="flex items-center justify-center gap-2 h-14 px-4 rounded-xl border-2 border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition-all font-bold group flex-1"
               >
                 <span className="material-icons-outlined group-hover:scale-110 transition-transform">arrow_forward</span>
-                <span>TRANSFERIR PARA {sectorName === 'Colagem' ? 'EXPEDIÇÃO' : 'PRÓXIMO SETOR'}</span>
+                <span className="text-xs leading-tight text-center">TRANSFERIR PARA<br />{sectorName === 'Colagem' ? 'EXPEDIÇÃO' : 'PRÓXIMO SETOR'}</span>
               </button>
             )}
 
             <button
-              onClick={() => onConfirm(totalProduced, scrap)}
+              onClick={() => {
+                console.log('Botão Encerrar Produção clicado', { totalProduced, scrap });
+                onConfirm(totalProduced, scrap);
+              }}
               className="flex items-center justify-center gap-2 h-14 px-8 rounded-xl bg-primary text-black font-extrabold text-lg hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 flex-[1.5]"
             >
-              <span className="material-icons">check_circle</span>
+              <span className="material-icons-outlined">check_circle</span>
               ENCERRAR PRODUÇÃO
             </button>
           </div>

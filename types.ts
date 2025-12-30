@@ -59,6 +59,7 @@ export interface MachineData {
   status_change_at?: string;
   ordens_producao?: { codigo: string } | null;
   operadores?: { nome: string } | null;
+  setores?: { nome: string } | null;
 }
 
 export interface ProductionOrder {
