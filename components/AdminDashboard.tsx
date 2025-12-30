@@ -11,7 +11,8 @@ import AdminTiposRefugo from './AdminTiposRefugo';
 import AdminSequenciaMaquina from './AdminSequenciaMaquina';
 import AdminChecklists from './AdminChecklists';
 import AdminPerfisPermissoes from './AdminPerfisPermissoes';
-import { AdminOPsGerais, AdminERPConnector, AdminAPIKeys, AdminCLPSensores, AdminUsuarios, AdminLogsAuditoria } from './AdminPlaceholders';
+import { AdminOPsGerais, AdminERPConnector, AdminAPIKeys, AdminCLPSensores, AdminLogsAuditoria } from './AdminPlaceholders';
+import AdminUsuarios from './AdminUsuarios';
 import ExecutiveDashboard from './ExecutiveDashboard';
 
 type AdminPage = 'overview' | 'operadores' | 'setores' | 'turnos' | 'maquinas' | 'ordens' | 'ops_gerais' | 'sequencia' | 'tipos_parada' | 'tipos_refugo' | 'checklists' | 'erp' | 'api_keys' | 'clp_sensores' | 'usuarios' | 'perfis' | 'logs';

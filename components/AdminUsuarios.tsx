@@ -1,0 +1,347 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
+
+interface Profile {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+    role: string;
+    created_at: string;
+}
+
+const AdminUsuarios: React.FC = () => {
+    const [usuarios, setUsuarios] = useState<Profile[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [roleFilter, setRoleFilter] = useState('');
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<Profile | null>(null);
+    const [newUser, setNewUser] = useState({
+        full_name: '',
+        email: '',
+        password: '',
+        role: 'SUPERVISOR'
+    });
+
+    const fetchData = async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (data) setUsuarios(data);
+        if (error) console.error('Error fetching users:', error);
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const handleAddUser = async () => {
+        if (!newUser.email || !newUser.password || !newUser.full_name) {
+            alert('Por favor, preencha todos os campos obrigatórios.');
+            return;
+        }
+
+        // 1. Create Auth User
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: newUser.email,
+            password: newUser.password,
+            options: {
+                data: {
+                    full_name: newUser.full_name,
+                    role: newUser.role
+                }
+            }
+        });
+
+        if (authError) {
+            alert('Erro ao criar usuário: ' + authError.message);
+            return;
+        }
+
+        if (authData.user) {
+            // Check if profile was created by trigger or needs manual update
+            // Based on our check, there are no public triggers, so we might need to update the profile
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: newUser.full_name,
+                    role: newUser.role,
+                    email: newUser.email
+                })
+                .eq('id', authData.user.id);
+
+            if (profileError) {
+                console.error('Error updating profile:', profileError);
+            }
+        }
+
+        setIsAddModalOpen(false);
+        setNewUser({ full_name: '', email: '', password: '', role: 'SUPERVISOR' });
+        fetchData();
+    };
+
+    const handleEditUser = async () => {
+        if (!editingUser || !editingUser.full_name) return;
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({
+                full_name: editingUser.full_name,
+                role: editingUser.role
+            })
+            .eq('id', editingUser.id);
+
+        if (error) {
+            alert('Erro ao atualizar usuário: ' + error.message);
+            return;
+        }
+
+        setIsEditModalOpen(true);
+        setEditingUser(null);
+        setIsEditModalOpen(false);
+        fetchData();
+    };
+
+    const handleDeleteUser = async (id: string, name: string) => {
+        if (confirm(`Deseja realmente excluir o acesso de "${name}"? Isso removerá o perfil, mas o usuário de autenticação deve ser removido manualmente no console do Supabase por segurança.`)) {
+            const { error } = await supabase
+                .from('profiles')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                alert('Erro ao excluir perfil: ' + error.message);
+                return;
+            }
+            fetchData();
+        }
+    };
+
+    const filteredUsers = usuarios.filter(u => {
+        const matchesSearch = (u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            u.email?.toLowerCase().includes(searchTerm.toLowerCase()));
+        const matchesRole = !roleFilter || u.role === roleFilter;
+        return matchesSearch && matchesRole;
+    });
+
+    return (
+        <div className="p-8 flex flex-col flex-1 overflow-hidden">
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h2 className="text-3xl font-bold text-white tracking-tight font-display uppercase">Usuários do Sistema</h2>
+                    <p className="text-sm text-gray-500 mt-1">Gerencie administradores e supervisores com acesso ao painel administrativo.</p>
+                </div>
+                <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-lg shadow-glow transition-all"
+                >
+                    <span className="material-icons-outlined text-lg">person_add</span>
+                    Novo Usuário
+                </button>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="bg-[#15181e] p-4 rounded-xl border border-border-dark flex gap-4 mb-6">
+                <div className="relative flex-1">
+                    <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
+                    <input
+                        className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-primary"
+                        placeholder="Filtrar por nome ou e-mail..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="w-64">
+                    <select
+                        className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-3 text-sm text-white focus:ring-1 focus:ring-primary"
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                    >
+                        <option value="">Todos os Perfis</option>
+                        <option value="ADMIN">Administrador</option>
+                        <option value="SUPERVISOR">Supervisor</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Table Container */}
+            <div className="bg-[#15181e]/50 border border-border-dark rounded-xl flex-1 flex flex-col overflow-hidden">
+                <div className="overflow-x-auto flex-1">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-[#1a1c23]/30 text-[10px] uppercase font-bold text-gray-500 border-b border-border-dark tracking-[0.1em]">
+                                <th className="px-8 py-5">Usuário</th>
+                                <th className="px-6 py-5">Perfil</th>
+                                <th className="px-6 py-5">Criado em</th>
+                                <th className="px-8 py-5 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-dark text-sm">
+                            {loading ? (
+                                <tr><td colSpan={4} className="px-8 py-10 text-center text-gray-500 italic">Carregando usuários...</td></tr>
+                            ) : filteredUsers.length === 0 ? (
+                                <tr><td colSpan={4} className="px-8 py-10 text-center text-gray-500">Nenhum usuário encontrado.</td></tr>
+                            ) : filteredUsers.map((user) => (
+                                <tr key={user.id} className="hover:bg-white/[0.02] transition-colors group">
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/20 text-primary text-xs font-bold border border-primary/30">
+                                                {user.full_name?.charAt(0) || 'U'}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-white text-base">{user.full_name || 'Sem Nome'}</p>
+                                                <p className="text-xs text-gray-500">{user.email || 'E-mail não informado'}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-6">
+                                        <span className={`px-3 py-1 text-[10px] font-bold uppercase rounded-full border ${user.role === 'ADMIN'
+                                                ? 'bg-primary/10 border-primary/30 text-primary'
+                                                : 'bg-secondary/10 border-secondary/30 text-secondary'
+                                            }`}>
+                                            {user.role}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-6 text-gray-400">
+                                        {new Date(user.created_at).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-8 py-6 text-right">
+                                        <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={() => { setEditingUser(user); setIsEditModalOpen(true); }}
+                                                className="text-gray-500 hover:text-primary p-1 rounded hover:bg-primary/10"
+                                            >
+                                                <span className="material-icons-outlined text-lg">edit</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteUser(user.id, user.full_name || 'Usuário')}
+                                                className="text-gray-500 hover:text-danger p-1 rounded hover:bg-danger/10"
+                                            >
+                                                <span className="material-icons-outlined text-lg">delete</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Add User Modal */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsAddModalOpen(false)}></div>
+                    <div className="relative w-full max-w-md bg-[#0b0c10] rounded-xl border border-border-dark p-8 animate-fade-in shadow-2xl">
+                        <h3 className="text-white text-xl font-bold mb-6">Novo Usuário Admin/Supervisor</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Nome Completo</label>
+                                <input
+                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                    value={newUser.full_name}
+                                    onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">E-mail</label>
+                                <input
+                                    type="email"
+                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                    value={newUser.email}
+                                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Senha Provisória</label>
+                                <input
+                                    type="password"
+                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                    value={newUser.password}
+                                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Perfil de Acesso</label>
+                                <select
+                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                    value={newUser.role}
+                                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                                >
+                                    <option value="SUPERVISOR">Supervisor</option>
+                                    <option value="ADMIN">Administrador</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={() => setIsAddModalOpen(false)}
+                                className="flex-1 px-5 py-2.5 bg-[#1a1c23] border border-border-dark text-white text-sm font-bold rounded-lg transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleAddUser}
+                                className="flex-1 px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-lg shadow-glow transition-all"
+                            >
+                                Criar Acesso
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit User Modal */}
+            {isEditModalOpen && editingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}></div>
+                    <div className="relative w-full max-w-md bg-[#0b0c10] rounded-xl border border-border-dark p-8 animate-fade-in shadow-2xl">
+                        <h3 className="text-white text-xl font-bold mb-6">Editar Usuário</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Nome Completo</label>
+                                <input
+                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                    value={editingUser.full_name || ''}
+                                    onChange={(e) => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Perfil de Acesso</label>
+                                <select
+                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                    value={editingUser.role}
+                                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
+                                >
+                                    <option value="SUPERVISOR">Supervisor</option>
+                                    <option value="ADMIN">Administrador</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={() => setIsEditModalOpen(false)}
+                                className="flex-1 px-5 py-2.5 bg-[#1a1c23] border border-border-dark text-white text-sm font-bold rounded-lg transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleEditUser}
+                                className="flex-1 px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-lg shadow-glow transition-all"
+                            >
+                                Salvar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AdminUsuarios;
