@@ -53,7 +53,11 @@ const AdminUsuarios: React.FC = () => {
         try {
             // Criar um cliente temporário que não persiste a sessão para não deslogar o admin atual
             const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-                auth: { persistSession: false }
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false,
+                    detectSessionInUrl: false
+                }
             });
 
             // 1. Create Auth User
@@ -96,6 +100,9 @@ const AdminUsuarios: React.FC = () => {
                         })
                         .eq('id', authData.user.id);
                 }
+
+                // 3. CRITICAL: Sign out the temporary client to prevent session conflicts
+                await tempSupabase.auth.signOut();
 
                 alert('Usuário criado com sucesso! O novo usuário deve confirmar o e-mail se a confirmação estiver ativa no Supabase.');
             }
