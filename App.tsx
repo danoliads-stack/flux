@@ -865,7 +865,8 @@ const App: React.FC = () => {
                 await supabase.from('registros_producao').insert({
                   op_id: activeOP,
                   maquina_id: currentMachine.id,
-                  operador_id: currentUser?.id,
+                  // Fix: Handle non-operator users (Admins) to prevent FK violation
+                  operador_id: currentUser?.role === 'OPERATOR' ? currentUser.id : (currentMachine.operador_atual_id || null),
                   quantidade_boa: delta,
                   quantidade_refugo: 0,
                   data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
@@ -929,7 +930,8 @@ const App: React.FC = () => {
                 const { error: prodError } = await supabase.from('registros_producao').insert({
                   op_id: activeOP, // activeOP is already the UUID
                   maquina_id: currentMachine.id,
-                  operador_id: currentUser.id,
+                  // Fix: If user is ADMIN/SUPERVISOR, their ID is not in 'operadores' table. Use machine's operator or null.
+                  operador_id: currentUser.role === 'OPERATOR' ? currentUser.id : (currentMachine.operador_atual_id || null),
                   quantidade_boa: delta,
                   quantidade_refugo: scrap,
                   data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
@@ -1060,7 +1062,8 @@ const App: React.FC = () => {
                 const { error: prodError } = await supabase.from('registros_producao').insert({
                   op_id: activeOP,
                   maquina_id: currentMachine.id,
-                  operador_id: currentUser?.id,
+                  // Fix: Handle non-operator users (Admins) to prevent FK violation
+                  operador_id: currentUser?.role === 'OPERATOR' ? currentUser.id : (currentMachine.operador_atual_id || null),
                   quantidade_boa: delta,
                   quantidade_refugo: 0,
                   data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
