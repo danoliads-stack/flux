@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 interface Profile {
     id: string;
@@ -46,43 +50,62 @@ const AdminUsuarios: React.FC = () => {
             return;
         }
 
-        // 1. Create Auth User
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-            email: newUser.email,
-            password: newUser.password,
-            options: {
-                data: {
-                    full_name: newUser.full_name,
-                    role: newUser.role
+        try {
+            // Criar um cliente temporário que não persiste a sessão para não deslogar o admin atual
+            const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+                auth: { persistSession: false }
+            });
+
+            // 1. Create Auth User
+            const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+                email: newUser.email,
+                password: newUser.password,
+                options: {
+                    data: {
+                        full_name: newUser.full_name,
+                        role: newUser.role
+                    }
                 }
+            });
+
+            if (authError) {
+                alert('Erro ao criar usuário: ' + authError.message);
+                return;
             }
-        });
 
-        if (authError) {
-            alert('Erro ao criar usuário: ' + authError.message);
-            return;
-        }
+            if (authData.user) {
+                // 2. Create Profile row (since there's no trigger)
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .insert({
+                        id: authData.user.id,
+                        full_name: newUser.full_name,
+                        role: newUser.role,
+                        email: newUser.email
+                    });
 
-        if (authData.user) {
-            // Check if profile was created by trigger or needs manual update
-            // Based on our check, there are no public triggers, so we might need to update the profile
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .update({
-                    full_name: newUser.full_name,
-                    role: newUser.role,
-                    email: newUser.email
-                })
-                .eq('id', authData.user.id);
+                if (profileError) {
+                    console.error('Error creating profile:', profileError);
+                    // Try update if insert failed (maybe trigger exists but we didn't see it)
+                    await supabase
+                        .from('profiles')
+                        .update({
+                            full_name: newUser.full_name,
+                            role: newUser.role,
+                            email: newUser.email
+                        })
+                        .eq('id', authData.user.id);
+                }
 
-            if (profileError) {
-                console.error('Error updating profile:', profileError);
+                alert('Usuário criado com sucesso! O novo usuário deve confirmar o e-mail se a confirmação estiver ativa no Supabase.');
             }
-        }
 
-        setIsAddModalOpen(false);
-        setNewUser({ full_name: '', email: '', password: '', role: 'SUPERVISOR' });
-        fetchData();
+            setIsAddModalOpen(false);
+            setNewUser({ full_name: '', email: '', password: '', role: 'SUPERVISOR' });
+            fetchData();
+        } catch (err: any) {
+            alert('Erro inesperado: ' + err.message);
+        }
     };
 
     const handleEditUser = async () => {
@@ -101,7 +124,6 @@ const AdminUsuarios: React.FC = () => {
             return;
         }
 
-        setIsEditModalOpen(true);
         setEditingUser(null);
         setIsEditModalOpen(false);
         fetchData();
@@ -201,8 +223,8 @@ const AdminUsuarios: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-6">
                                         <span className={`px-3 py-1 text-[10px] font-bold uppercase rounded-full border ${user.role === 'ADMIN'
-                                                ? 'bg-primary/10 border-primary/30 text-primary'
-                                                : 'bg-secondary/10 border-secondary/30 text-secondary'
+                                            ? 'bg-primary/10 border-primary/30 text-primary'
+                                            : 'bg-secondary/10 border-secondary/30 text-secondary'
                                             }`}>
                                             {user.role}
                                         </span>
