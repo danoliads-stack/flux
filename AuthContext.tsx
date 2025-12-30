@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabase';
 import { AppUser, UserRole } from './types';
 import { SessionStorage } from './src/utils/storageManager';
@@ -72,118 +72,110 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, []);
 
-    // Inicialização - Verificar sessão existente DESTA ABA
+
+    // 🔥 REGRA DE OURO: Supabase é a ÚNICA fonte de verdade
+    // 🥈 PASSO 2: Inicialização acontece APENAS UMA VEZ usando useRef
+    const initialized = useRef(false);
+
     useEffect(() => {
+        // Trava de inicialização - APENAS UMA VEZ
+        if (initialized.current) {
+            console.log('[AUTH] ⏭️ Already initialized, skipping');
+            return;
+        }
+        initialized.current = true;
+
         let isMounted = true;
 
         const initializeAuth = async () => {
             if (!isMounted) return;
-            console.log(`[DEBUG-AUTH] 🏁 START Initialization (Tab: ${SessionStorage.getTabId()})`);
+            console.log('[AUTH] 🏁 Initializing auth (ONCE)');
             const startTime = Date.now();
 
             try {
                 // 1. PRIMEIRO verificar sessão de OPERADOR
                 const operator = SessionStorage.getOperator();
-                console.log('[DEBUG-AUTH] 🔍 Checking operator session:', operator ? 'FOUND' : 'NOT FOUND');
 
                 if (operator) {
-                    console.log('[DEBUG-AUTH] ✅ Setting operator user:', operator.name);
+                    console.log('[AUTH] ✅ Operator session found:', operator.name);
                     if (isMounted) {
                         setUser(operator);
                         setLoading(false);
-                        SessionStorage.setAuthInitialized();
                     }
                     return;
                 }
 
-                // 2. Supabase Auth
-                console.log('[DEBUG-AUTH] 🔍 Fetching Supabase session...');
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-                if (sessionError) {
-                    console.error('[DEBUG-AUTH] ❌ getSession error:', sessionError);
-                }
+                // 2. 🟢 PASSO 4: Fluxo correto - getSession() é a fonte de verdade
+                console.log('[AUTH] 🔍 Fetching Supabase session...');
+                const { data: { session } } = await supabase.auth.getSession();
 
                 if (session?.user) {
-                    console.log('[DEBUG-AUTH] ✅ Supabase session found for:', session.user.email);
+                    console.log('[AUTH] ✅ Session found for:', session.user.email);
                     const profile = await fetchProfile(session.user.id);
-                    console.log('[DEBUG-AUTH] 🔍 Profile fetch result:', profile ? 'SUCCESS' : 'FAILED');
 
-                    if (profile) {
-                        if (isMounted) {
-                            setUser(profile);
-                            console.log('[DEBUG-AUTH] ✅ Profile set:', profile.role);
-                        }
-                    } else {
-                        console.warn('[DEBUG-AUTH] ⚠️ Profile missing, attempting refresh...');
-                        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-
-                        if (refreshError || !refreshData.session) {
-                            console.error('[DEBUG-AUTH] ❌ Refresh failed, signing out.');
-                            await supabase.auth.signOut();
-                            clearSupabaseAuthData();
-                        } else {
-                            const retryProfile = await fetchProfile(refreshData.session.user.id);
-                            if (isMounted && retryProfile) {
-                                setUser(retryProfile);
-                                console.log('[DEBUG-AUTH] ✅ Profile recovered.');
-                            }
-                        }
+                    if (profile && isMounted) {
+                        setUser(profile);
+                        console.log('[AUTH] ✅ User set:', profile.role);
+                    } else if (isMounted) {
+                        // Perfil não encontrado - sessão inválida
+                        console.error('[AUTH] ❌ Profile not found, clearing session');
+                        await supabase.auth.signOut();
+                        setUser(null);
                     }
                 } else {
-                    console.log('[DEBUG-AUTH] ℹ️ No Supabase session found');
+                    console.log('[AUTH] ℹ️ No session found');
+                    if (isMounted) setUser(null);
                 }
             } catch (err) {
-                console.error('[DEBUG-AUTH] ❌ CRITICAL initialization error:', err);
+                console.error('[AUTH] ❌ Initialization error:', err);
+                if (isMounted) setUser(null);
             } finally {
                 if (isMounted) {
-                    console.log(`[DEBUG-AUTH] 🏁 END Initialization in ${Date.now() - startTime}ms`);
+                    const elapsed = Date.now() - startTime;
+                    console.log(`[AUTH] ✅ Initialization complete in ${elapsed}ms`);
                     setLoading(false);
-                    SessionStorage.setAuthInitialized();
                 }
             }
         };
 
         initializeAuth();
 
+        // 🥇 PASSO 1: APENAS SIGNED_IN e SIGNED_OUT - IGNORAR USER_UPDATED
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!isMounted) return;
-            console.log(`[DEBUG-AUTH] 🔔 Event Received: ${event} (User: ${session?.user?.email || 'NONE'})`);
 
-            // Se ainda estamos no "initializeAuth", não precisamos processar SIGNED_IN aqui
-            // pois o initializeAuth já vai tratar o resultado do getSession.
-            if (SessionStorage.isAuthInitialized() === false) {
-                console.log('[DEBUG-AUTH] ⏭️ Skipping event - Initialization still in progress');
-                return;
-            }
-
+            // Ignorar se operador está logado nesta aba
             const currentOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
             if (currentOperator) {
-                console.log('[DEBUG-AUTH] ⏭️ Ignoring event - Operator logged in this tab');
+                console.log('[AUTH] ⏭️ Operator logged in, ignoring Supabase event');
                 return;
             }
 
+            // Ignorar durante criação administrativa de usuário
             if (typeof window !== 'undefined' && (window as any).isCreatingUserAdmin) {
-                console.log('[DEBUG-AUTH] ⏭️ Ignoring event - Admin user creation flag ACTIVE');
+                console.log('[AUTH] ⏭️ Admin user creation in progress, ignoring event');
                 return;
             }
 
-            if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
-                console.log('[DEBUG-AUTH] 🔄 Processing SIGNED_IN/USER_UPDATED');
+            console.log(`[AUTH] 🔔 Auth event: ${event}`);
+
+            // 🥇 PASSO 1: APENAS SIGNED_IN e SIGNED_OUT
+            if (event === 'SIGNED_IN' && session?.user) {
+                console.log('[AUTH] ✅ SIGNED_IN event');
                 const profile = await fetchProfile(session.user.id);
                 if (profile && isMounted) {
-                    setUser(prev => {
-                        const isSame = (prev?.id === profile.id && prev.role === profile.role);
-                        console.log('[DEBUG-AUTH] 👤 Identity Check:', isSame ? 'SAME (Skipping update)' : 'DIFFERENT (Updating state)');
-                        return isSame ? prev : profile;
-                    });
+                    setUser(profile);
+                    console.log('[AUTH] ✅ User updated:', profile.name);
                 }
             } else if (event === 'SIGNED_OUT') {
-                console.log('[DEBUG-AUTH] 🔄 Processing SIGNED_OUT');
-                if (!sessionStorage.getItem(OPERATOR_SESSION_KEY)) {
-                    if (isMounted) setUser(null);
+                console.log('[AUTH] 🔓 SIGNED_OUT event');
+                if (isMounted) {
+                    setUser(null);
+                    console.log('[AUTH] ✅ User cleared');
                 }
             }
+            // 🥇 PASSO 1: IGNORAR todos os outros eventos (USER_UPDATED, TOKEN_REFRESHED, etc)
+            // Isso previne loops infinitos causados por refresh/reconnect/tab switch
         });
 
         return () => {
