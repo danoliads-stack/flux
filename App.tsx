@@ -133,13 +133,25 @@ const App: React.FC = () => {
 
         // 4. Map machine status to opState (database is source of truth)
         let dbOpState: OPState = 'IDLE';
-        switch (machineData.status_atual) {
-          case MachineStatus.SETUP: dbOpState = 'SETUP'; break;
-          case MachineStatus.RUNNING: dbOpState = 'PRODUCAO'; break;
-          case MachineStatus.STOPPED: dbOpState = 'PARADA'; break;
-          case MachineStatus.SUSPENDED: dbOpState = 'SUSPENSA'; break;
-          default: dbOpState = 'IDLE';
+
+        // ✅ Detect Inconsistency: Running without OP
+        if ((machineData.status_atual === MachineStatus.RUNNING || machineData.status_atual === MachineStatus.SETUP) && !machineData.op_atual_id) {
+          console.warn('[App] ⚠️ State recovery detected production/setup without OP. Forcing IDLE.');
+          dbOpState = 'IDLE';
+          await supabase.from('maquinas').update({
+            status_atual: MachineStatus.AVAILABLE,
+            op_atual_id: null
+          }).eq('id', machineData.id);
+        } else {
+          switch (machineData.status_atual) {
+            case MachineStatus.SETUP: dbOpState = 'SETUP'; break;
+            case MachineStatus.RUNNING: dbOpState = 'PRODUCAO'; break;
+            case MachineStatus.STOPPED: dbOpState = 'PARADA'; break;
+            case MachineStatus.SUSPENDED: dbOpState = 'SUSPENSA'; break;
+            default: dbOpState = 'IDLE';
+          }
         }
+
         setOpState(dbOpState);
         console.log('[App] ✅ State recovery complete. opState:', dbOpState, 'activeOP:', activeOP);
       }
@@ -377,18 +389,27 @@ const App: React.FC = () => {
       }
 
       const updates: any = { status_atual: dbStatus };
+
+      // ✅ ENFORCE OP: If in production or setup, MUST have an OP in DB
       if (opState === 'IDLE' || opState === 'FINALIZADA') {
         updates.op_atual_id = null;
         updates.operador_atual_id = null;
-      } else if (opState === 'SETUP' && activeOPData?.id) {
-        updates.op_atual_id = activeOPData.id;
+      } else if ((opState === 'SETUP' || opState === 'PRODUCAO' || opState === 'PARADA') && activeOP) {
+        updates.op_atual_id = activeOP;
         updates.operador_atual_id = currentUser?.id;
+      } else if (opState === 'PRODUCAO' || opState === 'SETUP') {
+        // ⚠️ INCONSISTENCY: Producing without OP. Force IDLE in DB to prevent invalid shift logs.
+        console.warn('[App] ⚠️ syncStatus detected production/setup without OP. Forcing IDLE in DB.');
+        updates.status_atual = MachineStatus.AVAILABLE;
+        updates.op_atual_id = null;
+        updates.operador_atual_id = null;
+        // Local state will be handled by the UI/recovery logic
       }
 
       await supabase.from('maquinas').update(updates).eq('id', selectedMachineId);
     };
     syncStatus();
-  }, [opState, selectedMachineId]);
+  }, [opState, selectedMachineId, activeOP]);
 
   // Format seconds to HH:MM:SS
   const formatTime = (totalSeconds: number) => {
@@ -447,7 +468,8 @@ const App: React.FC = () => {
         setOpState('IDLE');
         await updateSelectedMachine({
           status_atual: MachineStatus.AVAILABLE,
-          status_change_at: new Date().toISOString()
+          status_change_at: new Date().toISOString(),
+          op_atual_id: null
         });
         setActiveOP(null);
       } else {
@@ -578,7 +600,8 @@ const App: React.FC = () => {
 
                           await supabase.from('maquinas').update({
                             status_atual: nextStatus,
-                            status_change_at: now
+                            status_change_at: now,
+                            op_atual_id: activeOP // Ensure OP is pinned
                           }).eq('id', currentMachine.id);
 
                           syncTimers({
@@ -596,6 +619,10 @@ const App: React.FC = () => {
                       }}
                       onStartProduction={async () => {
                         if (currentMachine) {
+                          if (!activeOP) {
+                            alert('⚠️ Não é possível iniciar a produção sem uma Ordem de Produção (OP) selecionada. Por favor, realize o SETUP.');
+                            return;
+                          }
                           const now = new Date().toISOString();
 
                           // Accumulate Setup Time BEFORE switching to Production
@@ -607,7 +634,8 @@ const App: React.FC = () => {
 
                           await supabase.from('maquinas').update({
                             status_atual: MachineStatus.RUNNING,
-                            status_change_at: now
+                            status_change_at: now,
+                            op_atual_id: activeOP // Ensure OP is pinned
                           }).eq('id', currentMachine.id);
 
                           syncTimers({

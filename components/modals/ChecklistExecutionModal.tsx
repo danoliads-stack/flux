@@ -31,6 +31,8 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
     const [answers, setAnswers] = useState<Record<string, any>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
     const [photos, setPhotos] = useState<Record<string, File>>({});
+    const [globalComment, setGlobalComment] = useState('');
+    const [globalPhoto, setGlobalPhoto] = useState<File | null>(null);
     const [success, setSuccess] = useState(false);
 
     useEffect(() => {
@@ -119,7 +121,8 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                     setor_id: isUUID(setorId) ? setorId : null,
                     tipo_acionamento: 'tempo',
                     referencia_acionamento: 'MANUAL',
-                    status: 'ok',
+                    status: Object.values(answers).some(v => v === false || v === 'NAO') ? 'problema' : 'ok',
+                    observacao: globalComment || null,
                     created_at: new Date().toISOString()
                 })
                 .select()
@@ -127,6 +130,18 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
 
             if (eventError) throw eventError;
             eventId = eventData.id;
+
+            // PASSO 1.5 — Upload de foto GLOBAL (do problema)
+            if (globalPhoto) {
+                const ext = globalPhoto.name.split('.').pop() || 'jpg';
+                const path = `${eventId}/global_evidence.${ext}`;
+                await supabase.storage.from('checklist-photos').upload(path, globalPhoto, { upsert: true });
+                const { data: urlData } = supabase.storage.from('checklist-photos').getPublicUrl(path);
+
+                await supabase.from('checklist_eventos').update({
+                    foto_url: urlData.publicUrl
+                }).eq('id', eventId);
+            }
 
             // PASSO 2 — Processar cada item
             await Promise.all(items.map(async (item) => {
@@ -326,6 +341,52 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
                                 </div>
                             </div>
                         ))
+                    )}
+
+                    {/* Global Evidence Section */}
+                    {!loading && (
+                        <div className="mt-8 p-6 bg-primary/5 border border-primary/20 rounded-xl space-y-4">
+                            <h4 className="text-white font-bold flex items-center gap-2">
+                                <span className="material-icons-outlined text-primary">report_problem</span>
+                                Evidência Geral do Problema (Opcional)
+                            </h4>
+
+                            <textarea
+                                className="w-full bg-background-dark border border-border-dark rounded-lg py-3 px-4 text-white focus:ring-1 focus:ring-primary transition-all text-sm resize-none"
+                                rows={3}
+                                placeholder="Descreva observações gerais ou detalhes sobre falhas encontradas..."
+                                value={globalComment}
+                                onChange={(e) => setGlobalComment(e.target.value)}
+                            />
+
+                            <div className="flex items-center gap-4">
+                                <label className={`flex flex-1 items-center justify-center gap-3 px-4 py-3 rounded-lg border-2 border-dashed transition-all cursor-pointer text-sm font-bold ${globalPhoto ? 'bg-secondary/10 border-secondary text-secondary' : 'bg-background-dark border-border-dark text-text-sub-dark hover:text-primary hover:border-primary/50'}`}>
+                                    <span className="material-icons-outlined">
+                                        {globalPhoto ? 'check_circle' : 'add_a_photo'}
+                                    </span>
+                                    {globalPhoto ? `Foto Selecionada: ${globalPhoto.name}` : 'Capturar Foto do Problema'}
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        capture="environment"
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                setGlobalPhoto(e.target.files[0]);
+                                            }
+                                        }}
+                                    />
+                                </label>
+                                {globalPhoto && (
+                                    <button
+                                        onClick={() => setGlobalPhoto(null)}
+                                        className="p-3 text-danger hover:bg-danger/10 rounded-lg transition-colors"
+                                    >
+                                        <span className="material-icons-outlined">delete</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                     )}
                 </div>
 

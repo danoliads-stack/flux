@@ -875,6 +875,29 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-fade-in">
+      {/* ⚠️ INCONSISTENCY ALERT */}
+      {(opState === 'PRODUCAO' || opState === 'SETUP' || opState === 'PARADA') && !opId && (
+        <div className="bg-red-900/20 border-2 border-red-500 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6 animate-pulse-border">
+          <div className="bg-red-500/20 p-4 rounded-full">
+            <span className="material-icons-outlined text-red-500 text-5xl">warning</span>
+          </div>
+          <div className="flex-1 text-center md:text-left">
+            <h2 className="text-2xl font-display font-bold text-white mb-2">Inconsistência de Estado Detectada</h2>
+            <p className="text-red-200 opacity-80">
+              A máquina está em modo de operação ({opState}), mas não há uma Ordem de Produção (OP) ativa vinculada.
+              <br />
+              <strong>Por favor, realize o SETUP da máquina com uma OP válida antes de prosseguir.</strong>
+            </p>
+          </div>
+          <button
+            onClick={onOpenSetup}
+            className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all"
+          >
+            Realizar SETUP / Víncular OP
+          </button>
+        </div>
+      )}
+
       {/* Toggle Sidebar Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -1168,10 +1191,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <button
             onClick={() => {
               console.log('Production button clicked, opState:', opState);
+              if (!opId && (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA')) {
+                alert('⚠️ Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
+                return;
+              }
               if (opState === 'SETUP') onStartProduction();
               if (opState === 'PARADA' || opState === 'SUSPENSA') onRetomar();
             }}
-            disabled={opState !== 'SETUP' && opState !== 'PARADA' && opState !== 'SUSPENSA'}
+            disabled={(opState !== 'SETUP' && opState !== 'PARADA' && opState !== 'SUSPENSA') || !opId}
             className={`rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between relative overflow-hidden ${opState === 'PRODUCAO'
               ? 'bg-green-900/10 border-2 border-green-500 shadow-lg shadow-green-500/20 cursor-default'
               : (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA')
