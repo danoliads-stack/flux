@@ -144,6 +144,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 return;
             }
 
+            // Check if we're in the middle of creating a user administratively
+            // @ts-ignore - accessing global flag from AdminUsuarios
+            if (typeof window !== 'undefined' && (window as any).isCreatingUserAdmin) {
+                console.log('[Auth] Ignoring auth change - admin user creation in progress');
+                return;
+            }
+
             console.log('[Auth] Supabase state change:', event, session?.user?.email);
 
             if (event === 'SIGNED_IN' && session?.user) {

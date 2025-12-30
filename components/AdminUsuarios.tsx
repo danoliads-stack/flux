@@ -5,6 +5,12 @@ import { supabase } from '../supabase';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Global flag to prevent auth state changes during admin user creation
+let isCreatingUserAdmin = false;
+if (typeof window !== 'undefined') {
+    (window as any).isCreatingUserAdmin = false;
+}
+
 interface Profile {
     id: string;
     full_name: string | null;
@@ -51,6 +57,11 @@ const AdminUsuarios: React.FC = () => {
         }
 
         try {
+            // Set flag to prevent onAuthStateChange from reacting
+            if (typeof window !== 'undefined') {
+                (window as any).isCreatingUserAdmin = true;
+            }
+
             // Criar um cliente temporário que não persiste a sessão para não deslogar o admin atual
             const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
                 auth: {
@@ -68,12 +79,14 @@ const AdminUsuarios: React.FC = () => {
                     data: {
                         full_name: newUser.full_name,
                         role: newUser.role
-                    }
+                    },
+                    emailRedirectTo: undefined // Prevent any redirects
                 }
             });
 
             if (authError) {
                 alert('Erro ao criar usuário: ' + authError.message);
+                isCreatingUserAdmin = false;
                 return;
             }
 
@@ -104,13 +117,27 @@ const AdminUsuarios: React.FC = () => {
                 // 3. CRITICAL: Sign out the temporary client to prevent session conflicts
                 await tempSupabase.auth.signOut();
 
+                // Clear flag after a delay to ensure temp client cleanup is complete
+                setTimeout(() => {
+                    if (typeof window !== 'undefined') {
+                        (window as any).isCreatingUserAdmin = false;
+                    }
+                }, 500);
+
                 alert('Usuário criado com sucesso! O novo usuário deve confirmar o e-mail se a confirmação estiver ativa no Supabase.');
+            } else {
+                if (typeof window !== 'undefined') {
+                    (window as any).isCreatingUserAdmin = false;
+                }
             }
 
             setIsAddModalOpen(false);
             setNewUser({ full_name: '', email: '', password: '', role: 'SUPERVISOR' });
             fetchData();
         } catch (err: any) {
+            if (typeof window !== 'undefined') {
+                (window as any).isCreatingUserAdmin = false;
+            }
             alert('Erro inesperado: ' + err.message);
         }
     };
