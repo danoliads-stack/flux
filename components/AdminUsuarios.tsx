@@ -62,12 +62,17 @@ const AdminUsuarios: React.FC = () => {
                 (window as any).isCreatingUserAdmin = true;
             }
 
-            // Criar um cliente temporário que não persiste a sessão para não deslogar o admin atual
+            // Criar um cliente temporário COM TOTAL ISOLAMENTO de storage e sessão
             const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
                 auth: {
                     persistSession: false,
                     autoRefreshToken: false,
-                    detectSessionInUrl: false
+                    detectSessionInUrl: false,
+                    storage: {
+                        getItem: () => null,
+                        setItem: () => { },
+                        removeItem: () => { }
+                    }
                 }
             });
 
