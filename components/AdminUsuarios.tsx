@@ -131,22 +131,41 @@ const AdminUsuarios: React.FC = () => {
                 console.log('[AdminUsuarios] Auth user created:', authData.user.id, authData.user.email);
 
                 // 2. Create Profile row (since there's no trigger)
-                const profileData = {
+                // Start with base profile data (without avatar_url to ensure compatibility)
+                const baseProfileData: any = {
                     id: authData.user.id,
                     full_name: newUser.full_name,
                     role: newUser.role,
                     email: newUser.email,
-                    avatar_url: newUser.avatar_url || null,
                     created_at: new Date().toISOString()
                 };
 
-                console.log('[AdminUsuarios] Creating profile with data:', profileData);
+                // Only add avatar_url if it's provided and column exists
+                const profileDataWithAvatar = {
+                    ...baseProfileData,
+                    avatar_url: newUser.avatar_url || null
+                };
 
-                const { error: profileError, data: insertedProfile } = await supabase
+                console.log('[AdminUsuarios] Creating profile with data:', profileDataWithAvatar);
+
+                // Try with avatar_url first
+                let { error: profileError, data: insertedProfile } = await supabase
                     .from('profiles')
-                    .insert(profileData)
+                    .insert(profileDataWithAvatar)
                     .select()
                     .single();
+
+                // If avatar_url column doesn't exist, retry without it
+                if (profileError?.message?.includes('avatar_url')) {
+                    console.log('[AdminUsuarios] avatar_url column not found, retrying without it...');
+                    const retryResult = await supabase
+                        .from('profiles')
+                        .insert(baseProfileData)
+                        .select()
+                        .single();
+                    profileError = retryResult.error;
+                    insertedProfile = retryResult.data;
+                }
 
                 if (profileError) {
                     console.error('[AdminUsuarios] Error creating profile:', profileError);
@@ -154,7 +173,7 @@ const AdminUsuarios: React.FC = () => {
                     // Try upsert if insert failed (maybe trigger exists or profile already created)
                     const { error: upsertError } = await supabase
                         .from('profiles')
-                        .upsert(profileData, { onConflict: 'id' });
+                        .upsert(baseProfileData, { onConflict: 'id' });
 
                     if (upsertError) {
                         console.error('[AdminUsuarios] Upsert also failed:', upsertError);
