@@ -1096,9 +1096,18 @@ const App: React.FC = () => {
                   setProductionData({ totalProduced: 0 }); // ✅ FIX: Reset Realizado para nova OP
                   setActiveOP(nextOP); // will fully load details via useEffect if needed, but here we set basic info
                 } else {
-                  // Defer clearing activeOP until label modal is closed
-                  // setActiveOP(null); 
-                  // setOpState('IDLE');
+                  // ✅ FIX: Sem próxima OP, garantir que a máquina volte para IDLE imediatamente
+                  console.log('[App] ℹ️ Sem próxima OP na fila. Retornando para IDLE.');
+                  setOpState('IDLE');
+                  setActiveOP(null);
+                  setProductionData({ totalProduced: 0, totalScrap: 0 });
+                  // Resetar acumuladores de tempo
+                  syncTimers({
+                    accSetup: 0,
+                    accProd: 0,
+                    accStop: 0,
+                    statusChangeAt: new Date().toISOString()
+                  });
                 }
 
                 setActiveModal('label');
