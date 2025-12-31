@@ -172,6 +172,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // Diary editing state
   const [editingDiaryId, setEditingDiaryId] = useState<string | null>(null);
   const [editingDiaryText, setEditingDiaryText] = useState('');
+  const [showDiaryInputModal, setShowDiaryInputModal] = useState(false); // NEW: Large input modal
 
   // Alert states for timer notifications
   const [pendingAlert, setPendingAlert] = useState<{ type: 'checklist' | 'etiqueta'; message: string; checklistId?: string } | null>(null);
@@ -986,31 +987,16 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               <span className="text-white text-[10px] font-bold uppercase">Diário de Bordo</span>
             </div>
             <button
-              onClick={() => setShowDiaryInput(!showDiaryInput)}
+              onClick={() => setShowDiaryInputModal(true)}
               className="text-[10px] text-primary hover:text-white flex items-center gap-1"
             >
-              <span className="material-icons-outlined text-[10px]">{showDiaryInput ? 'close' : 'add'}</span>
-              {showDiaryInput ? 'Cancelar' : 'Adicionar'}
+              <span className="material-icons-outlined text-[10px]">add</span>
+              Adicionar
             </button>
           </div>
 
-          {/* Mini Input for Diary */}
-          {showDiaryInput && (
-            <div className="mb-2 p-1.5 bg-background-dark rounded border border-border-dark">
-              <textarea
-                value={newDiaryText}
-                onChange={(e) => setNewDiaryText(e.target.value)}
-                placeholder="Msg..."
-                className="w-full bg-transparent text-white text-[10px] resize-none focus:outline-none mb-1 h-12"
-              />
-              <button
-                onClick={handleAddDiaryEntry}
-                className="w-full bg-primary text-white text-[10px] font-bold rounded py-1 hover:bg-primary/80"
-              >
-                Salvar
-              </button>
-            </div>
-          )}
+          {/* Mini Input for Diary - REMOVED, now uses modal */}
+          {/* Button to open large input modal moved inside the header */}
 
           <div className="space-y-1 max-h-[120px] overflow-y-auto custom-scrollbar">
             {diaryEntries.length > 0 ? (
@@ -1097,9 +1083,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             <span className="material-icons-outlined text-6xl">flag</span>
           </div>
           <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Meta da OP (UN)</div>
-          <div className="text-4xl md:text-5xl font-display font-bold text-text-main-dark mb-1">{opQuantity || meta}</div>
+          <div className="text-4xl md:text-5xl font-display font-bold text-text-main-dark mb-1">{opId ? (opQuantity || meta || 0) : 0}</div>
           <div className="text-xs text-text-sub-dark">
-            Tempo estimado: <strong className="text-primary">{estimatedTime}</strong>
+            Tempo estimado: <strong className="text-primary">{opId ? estimatedTime : '--:--'}</strong>
           </div>
         </div>
 
@@ -1423,6 +1409,72 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
         )
       }
+
+      {/* NEW: Large Diary Input Modal */}
+      {showDiaryInputModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowDiaryInputModal(false)}></div>
+          <div className="relative w-full max-w-xl bg-surface-dark rounded-xl shadow-2xl border border-border-dark overflow-hidden animate-fade-in">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border-dark bg-[#1a1c23]">
+              <div className="flex items-center gap-3">
+                <span className="material-icons-outlined text-purple-400 text-2xl">edit_note</span>
+                <div>
+                  <h2 className="text-white text-lg font-bold">Nova Anotação</h2>
+                  <p className="text-text-sub-dark text-xs">Diário de Bordo - {machineName}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDiaryInputModal(false)} className="text-text-sub-dark hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <span className="material-icons-outlined text-2xl">close</span>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-3">
+                Descreva sua anotação
+              </label>
+              <textarea
+                value={newDiaryText}
+                onChange={(e) => setNewDiaryText(e.target.value)}
+                placeholder="Digite aqui suas observações, eventos importantes, problemas encontrados, sugestões de melhoria..."
+                className="w-full h-48 bg-background-dark border border-border-dark rounded-xl p-4 text-white text-base resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder-text-sub-dark"
+                autoFocus
+              />
+              <p className="text-xs text-text-sub-dark mt-2">
+                {newDiaryText.length} caracteres
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-background-dark border-t border-border-dark flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setNewDiaryText('');
+                  setShowDiaryInputModal(false);
+                }}
+                className="px-6 py-3 bg-surface-dark border border-border-dark text-white font-bold rounded-lg transition-colors hover:bg-surface-dark-highlight"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  handleAddDiaryEntry();
+                  setShowDiaryInputModal(false);
+                }}
+                disabled={!newDiaryText.trim()}
+                className={`px-8 py-3 font-bold rounded-lg transition-all flex items-center gap-2 ${newDiaryText.trim()
+                  ? 'bg-primary hover:bg-primary/80 text-white shadow-glow'
+                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  }`}
+              >
+                <span className="material-icons-outlined">save</span>
+                Salvar Anotação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Checklist Alert - Top Banner (Less Invasive) */}
       {
