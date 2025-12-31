@@ -22,6 +22,7 @@ import { realtimeManager, createMachineUpdate } from './src/utils/realtimeManage
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { useAppStore } from './src/store/useAppStore';
+import { getMachineSlug } from './src/utils/slug';
 
 // --- PROTECTED ROUTE COMPONENT ---
 interface ProtectedRouteProps {
@@ -164,6 +165,59 @@ const App: React.FC = () => {
   useEffect(() => {
     console.log('[App] 🔔 activeOP changed:', activeOP, 'activeOPCodigo:', activeOPCodigo);
   }, [activeOP, activeOPCodigo]);
+
+  // SLUG-BASED URL: Detect machine slug from URL and load machine
+  useEffect(() => {
+    const path = location.pathname;
+    if (!path.startsWith('/maquinas/')) return;
+
+    const slug = path.replace('/maquinas/', '').split('/')[0];
+    if (!slug || slug === '' || slug === 'maquinas') return;
+
+    // Skip if we already have this machine loaded
+    if (currentMachine) {
+      const currentSlug = getMachineSlug(currentMachine);
+      if (currentSlug === slug) return;
+    }
+
+    const findMachineBySlug = async () => {
+      console.log('[App] 🔍 Looking for machine by slug:', slug);
+
+      // First try exact codigo match (most efficient)
+      let { data: machine, error } = await supabase
+        .from('maquinas')
+        .select('*, setores(nome)')
+        .ilike('codigo', slug.replace(/-/g, '%'))
+        .limit(1)
+        .maybeSingle();
+
+      // If not found, try matching by generated slug from codigo or nome
+      if (!machine && liveMachines.length > 0) {
+        machine = liveMachines.find(m => getMachineSlug(m) === slug) || null;
+      }
+
+      // Fallback: try as UUID for backwards compatibility
+      if (!machine) {
+        const uuidResult = await supabase
+          .from('maquinas')
+          .select('*, setores(nome)')
+          .eq('id', slug)
+          .maybeSingle();
+        machine = uuidResult.data;
+      }
+
+      if (machine) {
+        console.log('[App] ✅ Found machine by slug:', machine.nome);
+        setSelectedMachine(machine.id);
+        setCurrentMachine(machine);
+      } else {
+        console.warn('[App] ⚠️ Machine not found for slug:', slug);
+        navigate('/maquinas');
+      }
+    };
+
+    findMachineBySlug();
+  }, [location.pathname, liveMachines]);
   // We keep this effect only to sync legacy localStorage if completely necessary during migration, 
   // but for now we rely on the store. 
   // TODO: Fully clean up this block after verification.
@@ -477,7 +531,9 @@ const App: React.FC = () => {
       }
     }
 
-    navigate(`/maquinas/${machine.id}`);
+    // Navigate using machine code/slug for friendly URLs
+    const slug = getMachineSlug(machine);
+    navigate(`/maquinas/${slug}`);
   };
 
   // Recover selected machine only on initial load, and only if user is the same
