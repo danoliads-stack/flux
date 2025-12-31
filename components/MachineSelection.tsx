@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { MachineData, MachineStatus, AppUser } from '../types';
 
@@ -10,6 +11,7 @@ interface MachineSelectionProps {
 }
 
 const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: propMachines, onSelect, onLogout }) => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'ALL' | string>('ALL');
   const [machines, setMachines] = useState<any[]>([]);
@@ -112,7 +114,10 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
               </div>
             </div>
             <button
-              onClick={onLogout}
+              onClick={() => {
+                onLogout();
+                navigate('/login');
+              }}
               className="px-3 md:px-4 py-1.5 md:py-2 bg-[#15181e] border border-[#2d3342] text-white text-[10px] md:text-xs font-bold rounded-lg hover:bg-danger/20 hover:border-danger/30 hover:text-danger transition-all uppercase"
             >
               <span className="hidden sm:inline">Sair</span>

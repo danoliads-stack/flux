@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useAuth } from '../AuthContext';
 import AdminSetores from './AdminSetores';
@@ -19,12 +20,18 @@ import QualityDashboard from './QualityDashboard';
 type AdminPage = 'overview' | 'operadores' | 'setores' | 'turnos' | 'maquinas' | 'ordens' | 'ops_gerais' | 'sequencia' | 'tipos_parada' | 'tipos_refugo' | 'checklists' | 'monitoramento_qualidade' | 'erp' | 'api_keys' | 'clp_sensores' | 'usuarios' | 'perfis' | 'logs';
 
 const AdminDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { user: currentUser, logout } = useAuth();
   const [activePage, setActivePage] = useState<AdminPage>('overview');
   const [operators, setOperators] = useState<any[]>([]);
   const [sectors, setSectors] = useState<any[]>([]);
   const [turnos, setTurnos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -56,7 +63,7 @@ const AdminDashboard: React.FC = () => {
       pin: newOp.pin,
       setor_id: newOp.setor_id,
       turno_id: newOp.turno_id || null,
-      avatar: newOp.nome.substring(0, 2).toUpperCase(),
+      avatar: newOp.avatar || newOp.nome.substring(0, 2).toUpperCase(),
       ativo: true
     });
 
@@ -85,6 +92,7 @@ const AdminDashboard: React.FC = () => {
       pin: editingOp.pin,
       setor_id: editingOp.setor_id || null,
       turno_id: editingOp.turno_id || null,
+      avatar: editingOp.avatar || editingOp.nome.substring(0, 2).toUpperCase(),
       ativo: editingOp.ativo
     }).eq('id', editingOp.id);
     setIsEditModalOpen(false);
@@ -188,7 +196,7 @@ const AdminDashboard: React.FC = () => {
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{currentUser?.role} • Produção</p>
             </div>
           </div>
-          <button onClick={logout} className="text-gray-500 hover:text-white transition-colors">
+          <button onClick={handleLogout} className="text-gray-500 hover:text-white transition-colors">
             <span className="material-icons-outlined">logout</span>
           </button>
         </div>
@@ -332,9 +340,18 @@ const AdminDashboard: React.FC = () => {
                       <tr key={op.id} className="hover:bg-white/[0.02] transition-colors group">
                         <td className="px-8 py-6">
                           <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold bg-primary`}>
-                              {op.avatar}
-                            </div>
+                            {op.avatar?.startsWith('http') ? (
+                              <img
+                                src={op.avatar}
+                                alt={op.nome}
+                                className="w-10 h-10 rounded-full object-cover border border-primary/30"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold bg-primary">
+                                {op.avatar || op.nome?.substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
                             <div>
                               <p className="font-bold text-white text-base">{op.nome}</p>
                               <p className="text-xs text-gray-500">{op.matricula}</p>
@@ -447,6 +464,17 @@ const AdminDashboard: React.FC = () => {
                         {turnos.map(t => <option key={t.id} value={t.id}>{t.nome} ({t.hora_inicio?.substring(0, 5)} - {t.hora_fim?.substring(0, 5)})</option>)}
                       </select>
                     </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil (opcional)</label>
+                      <input
+                        type="url"
+                        className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary"
+                        value={newOp.avatar}
+                        onChange={(e) => setNewOp({ ...newOp, avatar: e.target.value })}
+                        placeholder="https://exemplo.com/foto.jpg"
+                      />
+                      <p className="text-[10px] text-gray-600 mt-1">Deixe vazio para usar as iniciais do nome</p>
+                    </div>
                   </div>
                   <div className="mt-8 flex gap-3">
                     <button
@@ -521,6 +549,26 @@ const AdminDashboard: React.FC = () => {
                         <option value="">Selecione um turno</option>
                         {turnos.map(t => <option key={t.id} value={t.id}>{t.nome} ({t.hora_inicio?.substring(0, 5)} - {t.hora_fim?.substring(0, 5)})</option>)}
                       </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil</label>
+                      <div className="flex gap-3 items-center">
+                        {editingOp.avatar?.startsWith('http') && (
+                          <img
+                            src={editingOp.avatar}
+                            alt="Preview"
+                            className="w-12 h-12 rounded-full object-cover border border-border-dark"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        )}
+                        <input
+                          type="url"
+                          className="flex-1 bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary"
+                          value={editingOp.avatar?.startsWith('http') ? editingOp.avatar : ''}
+                          onChange={(e) => setEditingOp({ ...editingOp, avatar: e.target.value })}
+                          placeholder="https://exemplo.com/foto.jpg"
+                        />
+                      </div>
                     </div>
                     <div className="flex items-center gap-3 pt-2">
                       <button

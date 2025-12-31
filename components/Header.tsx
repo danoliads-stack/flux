@@ -47,7 +47,16 @@ const Header: React.FC<HeaderProps> = ({ user }) => {
             <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">{user?.role || 'GUEST'} • {user?.sector || 'N/A'}</div>
           </div>
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm shadow-glow border border-white/10 overflow-hidden">
-            {user?.avatar === 'JD' ? <img src="https://picsum.photos/seed/jd/40/40" alt="JD" /> : (user?.avatar || '?')}
+            {user?.avatar?.startsWith('http') ? (
+              <img
+                src={user.avatar}
+                alt={user.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (user?.avatar || user?.name?.charAt(0) || '?')}
           </div>
         </div>
       </div>

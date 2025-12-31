@@ -16,6 +16,7 @@ interface Profile {
     full_name: string | null;
     email: string | null;
     role: string;
+    avatar_url: string | null;
     created_at: string;
 }
 
@@ -31,23 +32,54 @@ const AdminUsuarios: React.FC = () => {
         full_name: '',
         email: '',
         password: '',
-        role: 'SUPERVISOR'
+        role: 'SUPERVISOR',
+        avatar_url: ''
     });
 
     const fetchData = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .order('created_at', { ascending: false });
+        try {
+            console.log('[AdminUsuarios] Fetching profiles...');
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
 
-        if (data) setUsuarios(data);
-        if (error) console.error('Error fetching users:', error);
+            if (error) {
+                console.error('[AdminUsuarios] Error fetching profiles:', error);
+                alert('Erro ao carregar usuários: ' + error.message + '. Verifique se as políticas RLS permitem leitura.');
+            } else {
+                console.log('[AdminUsuarios] Profiles loaded:', data?.length || 0);
+                setUsuarios(data || []);
+            }
+        } catch (err: any) {
+            console.error('[AdminUsuarios] Exception:', err);
+            alert('Erro inesperado ao carregar usuários: ' + err.message);
+        }
         setLoading(false);
+    };
+
+    // Function to sync missing profiles for authenticated users
+    const syncMissingProfiles = async () => {
+        try {
+            console.log('[AdminUsuarios] Checking for missing profiles...');
+            // This will only work if user has admin privileges
+            // The check is done on the frontend by comparing profiles count
+            const { data: profiles } = await supabase.from('profiles').select('id');
+            const profileIds = new Set(profiles?.map(p => p.id) || []);
+
+            console.log('[AdminUsuarios] Found', profileIds.size, 'profiles in database');
+
+            // Note: We can't access auth.users from client-side
+            // If there's a mismatch, the admin should manually create profiles or use Supabase Dashboard
+        } catch (err) {
+            console.error('[AdminUsuarios] Sync check failed:', err);
+        }
     };
 
     useEffect(() => {
         fetchData();
+        syncMissingProfiles(); // Check for sync issues on mount
     }, []);
 
     const handleAddUser = async () => {
@@ -96,27 +128,44 @@ const AdminUsuarios: React.FC = () => {
             }
 
             if (authData.user) {
+                console.log('[AdminUsuarios] Auth user created:', authData.user.id, authData.user.email);
+
                 // 2. Create Profile row (since there's no trigger)
-                const { error: profileError } = await supabase
+                const profileData = {
+                    id: authData.user.id,
+                    full_name: newUser.full_name,
+                    role: newUser.role,
+                    email: newUser.email,
+                    avatar_url: newUser.avatar_url || null,
+                    created_at: new Date().toISOString()
+                };
+
+                console.log('[AdminUsuarios] Creating profile with data:', profileData);
+
+                const { error: profileError, data: insertedProfile } = await supabase
                     .from('profiles')
-                    .insert({
-                        id: authData.user.id,
-                        full_name: newUser.full_name,
-                        role: newUser.role,
-                        email: newUser.email
-                    });
+                    .insert(profileData)
+                    .select()
+                    .single();
 
                 if (profileError) {
-                    console.error('Error creating profile:', profileError);
-                    // Try update if insert failed (maybe trigger exists but we didn't see it)
-                    await supabase
+                    console.error('[AdminUsuarios] Error creating profile:', profileError);
+
+                    // Try upsert if insert failed (maybe trigger exists or profile already created)
+                    const { error: upsertError } = await supabase
                         .from('profiles')
-                        .update({
-                            full_name: newUser.full_name,
-                            role: newUser.role,
-                            email: newUser.email
-                        })
-                        .eq('id', authData.user.id);
+                        .upsert(profileData, { onConflict: 'id' });
+
+                    if (upsertError) {
+                        console.error('[AdminUsuarios] Upsert also failed:', upsertError);
+                        alert(`Usuário de autenticação criado (${authData.user.email}), mas houve erro ao criar o perfil: ${profileError.message}. O usuário pode precisar ser configurado manualmente.`);
+                    } else {
+                        console.log('[AdminUsuarios] Profile created via upsert');
+                        alert('Usuário criado com sucesso!');
+                    }
+                } else {
+                    console.log('[AdminUsuarios] Profile created successfully:', insertedProfile);
+                    alert('Usuário criado com sucesso! O novo usuário deve confirmar o e-mail se a confirmação estiver ativa no Supabase.');
                 }
 
                 // 3. CRITICAL: Sign out the temporary client to prevent session conflicts
@@ -128,18 +177,21 @@ const AdminUsuarios: React.FC = () => {
                         (window as any).isCreatingUserAdmin = false;
                     }
                 }, 500);
-
-                alert('Usuário criado com sucesso! O novo usuário deve confirmar o e-mail se a confirmação estiver ativa no Supabase.');
             } else {
+                console.warn('[AdminUsuarios] Auth user creation returned no user object');
                 if (typeof window !== 'undefined') {
                     (window as any).isCreatingUserAdmin = false;
                 }
+                alert('Usuário não foi criado. Verifique se o e-mail é válido e tente novamente.');
             }
 
             setIsAddModalOpen(false);
-            setNewUser({ full_name: '', email: '', password: '', role: 'SUPERVISOR' });
-            fetchData();
+            setNewUser({ full_name: '', email: '', password: '', role: 'SUPERVISOR', avatar_url: '' });
+
+            // Wait a bit and then refresh the list
+            setTimeout(() => fetchData(), 500);
         } catch (err: any) {
+            console.error('[AdminUsuarios] Unexpected error:', err);
             if (typeof window !== 'undefined') {
                 (window as any).isCreatingUserAdmin = false;
             }
@@ -154,7 +206,8 @@ const AdminUsuarios: React.FC = () => {
             .from('profiles')
             .update({
                 full_name: editingUser.full_name,
-                role: editingUser.role
+                role: editingUser.role,
+                avatar_url: editingUser.avatar_url || null
             })
             .eq('id', editingUser.id);
 
@@ -194,16 +247,30 @@ const AdminUsuarios: React.FC = () => {
         <div className="p-8 flex flex-col flex-1 overflow-hidden">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h2 className="text-3xl font-bold text-white tracking-tight font-display uppercase">Usuários do Sistema</h2>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-3xl font-bold text-white tracking-tight font-display uppercase">Usuários do Sistema</h2>
+                        <span className="px-3 py-1 bg-primary/20 border border-primary/30 text-primary text-xs font-bold rounded-full">
+                            {usuarios.length} usuário{usuarios.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
                     <p className="text-sm text-gray-500 mt-1">Gerencie administradores e supervisores com acesso ao painel administrativo.</p>
                 </div>
-                <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-lg shadow-glow transition-all"
-                >
-                    <span className="material-icons-outlined text-lg">person_add</span>
-                    Novo Usuário
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => fetchData()}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-[#1a1c23] hover:bg-[#252831] border border-border-dark text-white text-sm font-bold rounded-lg transition-all"
+                        title="Recarregar lista"
+                    >
+                        <span className={`material-icons-outlined text-lg ${loading ? 'animate-spin' : ''}`}>refresh</span>
+                    </button>
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-lg shadow-glow transition-all"
+                    >
+                        <span className="material-icons-outlined text-lg">person_add</span>
+                        Novo Usuário
+                    </button>
+                </div>
             </div>
 
             {/* Filter Bar */}
@@ -251,9 +318,18 @@ const AdminUsuarios: React.FC = () => {
                                 <tr key={user.id} className="hover:bg-white/[0.02] transition-colors group">
                                     <td className="px-8 py-6">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/20 text-primary text-xs font-bold border border-primary/30">
-                                                {user.full_name?.charAt(0) || 'U'}
-                                            </div>
+                                            {user.avatar_url ? (
+                                                <img
+                                                    src={user.avatar_url}
+                                                    alt={user.full_name || 'Avatar'}
+                                                    className="w-10 h-10 rounded-full object-cover border border-primary/30"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/20 text-primary text-xs font-bold border border-primary/30">
+                                                    {user.full_name?.charAt(0) || 'U'}
+                                                </div>
+                                            )}
                                             <div>
                                                 <p className="font-bold text-white text-base">{user.full_name || 'Sem Nome'}</p>
                                                 <p className="text-xs text-gray-500">{user.email || 'E-mail não informado'}</p>
@@ -338,6 +414,17 @@ const AdminUsuarios: React.FC = () => {
                                     <option value="ADMIN">Administrador</option>
                                 </select>
                             </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil (opcional)</label>
+                                <input
+                                    type="url"
+                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                    value={newUser.avatar_url}
+                                    onChange={(e) => setNewUser({ ...newUser, avatar_url: e.target.value })}
+                                    placeholder="https://exemplo.com/sua-foto.jpg"
+                                />
+                                <p className="text-[10px] text-gray-600 mt-1">Use uma URL de imagem pública (Gravatar, LinkedIn, etc.)</p>
+                            </div>
                         </div>
                         <div className="mt-8 flex gap-3">
                             <button
@@ -382,6 +469,26 @@ const AdminUsuarios: React.FC = () => {
                                     <option value="SUPERVISOR">Supervisor</option>
                                     <option value="ADMIN">Administrador</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil</label>
+                                <div className="flex gap-3 items-center">
+                                    {editingUser.avatar_url && (
+                                        <img
+                                            src={editingUser.avatar_url}
+                                            alt="Preview"
+                                            className="w-12 h-12 rounded-full object-cover border border-border-dark"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                    )}
+                                    <input
+                                        type="url"
+                                        className="flex-1 bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                        value={editingUser.avatar_url || ''}
+                                        onChange={(e) => setEditingUser({ ...editingUser, avatar_url: e.target.value })}
+                                        placeholder="https://exemplo.com/sua-foto.jpg"
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="mt-8 flex gap-3">

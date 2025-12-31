@@ -136,7 +136,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions }) => {
             <span className="material-icons-outlined">settings</span>
           </button>
           <button
-            onClick={onLogout}
+            onClick={() => {
+              onLogout();
+              navigate('/login');
+            }}
             className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl text-danger hover:bg-danger/10 transition-colors"
           >
             <span className="material-icons-outlined">logout</span>
