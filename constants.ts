@@ -23,8 +23,9 @@ export const ROLE_CONFIGS: RoleConfig[] = [
     role: 'ADMIN',
     label: 'Administrador',
     description: 'Acesso total ao sistema, gestão de usuários e permissões.',
-    permissions: Object.values(Permission) as Permission[]
+    permissions: Object.values(Permission).filter(p => p !== Permission.MANAGE_MACHINE_SETUP) as Permission[]
   }
+
 ];
 
 export const MOCK_APP_USERS: AppUser[] = [

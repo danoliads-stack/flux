@@ -13,6 +13,7 @@ import SetupModal from './components/modals/SetupModal';
 import StopModal from './components/modals/StopModal';
 import FinalizeModal from './components/modals/FinalizeModal';
 import LabelModal from './components/modals/LabelModal';
+import LabelHistoryPage from './components/LabelHistoryPage';
 import TraceabilityPage from './components/TraceabilityPage';
 import Preloader from './components/Preloader';
 import { ROLE_CONFIGS } from './constants';
@@ -579,6 +580,13 @@ const App: React.FC = () => {
     window.location.href = '/';
   };
 
+  // Wrapper para logout com navegação
+  const handleLogoutWithNav = async () => {
+    await handleLogout();
+    // Navegação explícita para login após logout
+    navigate('/login', { replace: true });
+  };
+
 
 
   if (authLoading) {
@@ -589,7 +597,7 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-background-dark text-white overflow-hidden font-sans selection:bg-primary/30 selection:text-white">
       {location.pathname !== '/login' && !location.pathname.startsWith('/r/') && (
         <Sidebar
-          onLogout={handleLogout}
+          onLogout={handleLogoutWithNav}
           userRole={currentUser?.role || 'OPERATOR'}
           userPermissions={userPermissions}
         />
@@ -598,7 +606,7 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {location.pathname !== '/login' && !location.pathname.startsWith('/r/') && (
           <Header
-            onLogout={handleLogout}
+            onLogout={handleLogoutWithNav}
             user={currentUser}
           />
         )}
@@ -614,7 +622,7 @@ const App: React.FC = () => {
                     user={currentUser!}
                     machines={liveMachines}
                     onSelect={handleMachineSelect}
-                    onLogout={handleLogout}
+                    onLogout={handleLogoutWithNav}
                   />
                 </ProtectedRoute>
               } />
@@ -717,6 +725,7 @@ const App: React.FC = () => {
                       sectorId={currentMachine.setor_id}
                       loteId={currentLoteId || 'LOTE-PADRAO'}
                       onChangeMachine={handleChangeMachine}
+                      userPermissions={userPermissions}
                       accumulatedSetupTime={accumulatedSetupTime}
                       accumulatedProductionTime={accumulatedProductionTime}
                       accumulatedStopTime={accumulatedStopTime}
@@ -773,6 +782,9 @@ const App: React.FC = () => {
               } />
 
               <Route path="/r/:loteId" element={<TraceabilityPage loteId={currentLoteId || ''} />} />
+
+              {/* Label History Page - Accessed via QR Code */}
+              <Route path="/etiqueta/:id" element={<LabelHistoryPage />} />
 
               <Route path="/" element={<Navigate to={!currentUser ? "/login" : (currentUser.role === 'ADMIN' ? "/administracao" : "/maquinas")} replace />} />
               <Route path="*" element={<Navigate to={!currentUser ? "/login" : "/"} replace />} />

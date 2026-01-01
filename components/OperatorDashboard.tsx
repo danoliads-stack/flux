@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RecentRecord, OPState } from '../types';
+import { RecentRecord, OPState, Permission, TipoEtiqueta } from '../types';
 import { supabase } from '../src/lib/supabase-client';
 import ChecklistExecutionModal from './modals/ChecklistExecutionModal';
+import LabelTypeSelectionModal from './modals/LabelTypeSelectionModal';
+import ChecklistLabelModal from './modals/ChecklistLabelModal';
+import PalletLabelModal from './modals/PalletLabelModal';
 import { useAppStore } from '../src/store/useAppStore';
 
 interface OperatorDashboardProps {
@@ -30,6 +33,7 @@ interface OperatorDashboardProps {
   sectorId?: string;
   loteId?: string;
   onChangeMachine?: () => void;
+  userPermissions?: string[]; // NEW: User permissions array
   // Accumulated times (in seconds)
   accumulatedSetupTime?: number;
   accumulatedProductionTime?: number;
@@ -62,6 +66,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   machineName = 'Máquina', sectorName = 'Produção', operatorName = 'Operador', shiftName = 'Turno', meta: propMeta,
   operatorId = '', sectorId = '', loteId = 'LOTE-001',
   onChangeMachine,
+  userPermissions = [],
   accumulatedSetupTime = 0, accumulatedProductionTime = 0, accumulatedStopTime = 0
 }) => {
   const meta = propMeta || 500;
@@ -138,6 +143,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [labelIntervalMinutes, setLabelIntervalMinutes] = useState(90); // 90 minutes adjustable
   const MONITORING_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes fixed
 
+  // Helper: Check if user has permission
+  const hasPermission = (permission: Permission) => userPermissions.includes(permission);
+
   // States
   const [lastMonitorTime, setLastMonitorTime] = useState<Date>(new Date());
 
@@ -182,6 +190,11 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   // Sidebar toggle state (replacing draggable)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // NEW: Manual Label Emission States
+  const [showLabelTypeModal, setShowLabelTypeModal] = useState(false);
+  const [showChecklistLabelModal, setShowChecklistLabelModal] = useState(false);
+  const [showPalletLabelModal, setShowPalletLabelModal] = useState(false);
 
   // Clock update
   useEffect(() => {
@@ -721,38 +734,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         }
       }
 
-      // 2. CHECK LABEL GENERATION TIMER
-      // Use the first available checklist's label interval or default 60
-      const labelInterval = checklists[0]?.intervalo_etiqueta_minutos || 60;
-
-      const { data: lastLote, error: loteError } = await supabase
-        .from('lotes_rastreabilidade')
-        .select('created_at')
-        .eq('op_id', opId) // Filter by OP
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (loteError) {
-        console.error('DEBUG: Error querying last lote:', loteError);
-      }
-
-      const lastLoteTime = lastLote ? new Date(lastLote.created_at).getTime() : new Date(statusChangeAt || Date.now()).getTime();
-      const now = Date.now();
-      const elapsedLabelMinutes = (now - lastLoteTime) / 60000;
-
-      console.log(`DEBUG: Label Gen Check:`, {
-        hasLastLote: !!lastLote,
-        lastLoteTime: lastLote?.created_at,
-        statusChangeAt,
-        elapsedMinutes: elapsedLabelMinutes.toFixed(2),
-        interval: labelInterval
-      });
-
-      if (elapsedLabelMinutes > labelInterval) {
-        console.warn(`Label Generation OVERDUE (${elapsedLabelMinutes.toFixed(1)} min). Auto-generating lote...`);
-        await handleAutoGenerateLote();
-      }
+      // NOTE: Auto-label generation has been REMOVED.
+      // Labels are now emitted manually via the "Emitir Etiqueta" button.
+      // The old handleAutoGenerateLote logic has been disabled.
     };
 
     // Run check immediately and then every 30 seconds
@@ -890,12 +874,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               <strong>Por favor, realize o SETUP da máquina com uma OP válida antes de prosseguir.</strong>
             </p>
           </div>
-          <button
-            onClick={onOpenSetup}
-            className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all"
-          >
-            Realizar SETUP / Víncular OP
-          </button>
+          {hasPermission(Permission.MANAGE_MACHINE_SETUP) && (
+            <button
+              onClick={onOpenSetup}
+              className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all"
+            >
+              Realizar SETUP / Víncular OP
+            </button>
+          )}
         </div>
       )}
 
@@ -1149,29 +1135,31 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* 1. Setup Button */}
-          <button
-            disabled={opState === 'PRODUCAO' || opState === 'SETUP'}
-            onClick={onOpenSetup}
-            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between relative overflow-hidden ${opState === 'SETUP'
-              ? 'border-2 border-yellow-500 shadow-lg shadow-yellow-500/20 animate-pulse-border'
-              : 'border border-border-dark opacity-40 grayscale'
-              } ${(opState === 'PRODUCAO' || opState === 'SETUP') ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            <div className="flex items-start justify-between">
-              <span className={`material-icons-outlined text-3xl ${opState === 'SETUP' ? 'text-yellow-500' : 'text-text-sub-dark'}`}>build</span>
-              {opState === 'SETUP' && (
-                <div className="text-right">
-                  <div className="text-xs text-yellow-500 font-bold">SETUP</div>
-                  <div className="text-2xl font-mono font-bold text-yellow-500">{displayTimer}</div>
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="font-display font-bold text-lg uppercase mb-1 text-white">Setup de Máquina</div>
-              <div className="text-xs text-text-sub-dark leading-snug">Preparar e ajustar máquina</div>
-            </div>
-          </button>
+          {/* 1. Setup Button - Only show if user has permission */}
+          {hasPermission(Permission.MANAGE_MACHINE_SETUP) && (
+            <button
+              disabled={opState === 'PRODUCAO' || opState === 'SETUP'}
+              onClick={onOpenSetup}
+              className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between relative overflow-hidden ${opState === 'SETUP'
+                ? 'border-2 border-yellow-500 shadow-lg shadow-yellow-500/20 animate-pulse-border'
+                : 'border border-border-dark opacity-40 grayscale'
+                } ${(opState === 'PRODUCAO' || opState === 'SETUP') ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <div className="flex items-start justify-between">
+                <span className={`material-icons-outlined text-3xl ${opState === 'SETUP' ? 'text-yellow-500' : 'text-text-sub-dark'}`}>build</span>
+                {opState === 'SETUP' && (
+                  <div className="text-right">
+                    <div className="text-xs text-yellow-500 font-bold">SETUP</div>
+                    <div className="text-2xl font-mono font-bold text-yellow-500">{displayTimer}</div>
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="font-display font-bold text-lg uppercase mb-1 text-white">Setup de Máquina</div>
+                <div className="text-xs text-text-sub-dark leading-snug">Preparar e ajustar máquina</div>
+              </div>
+            </button>
+          )}
 
           {/* 2. Production Button */}
           <button
@@ -1286,14 +1274,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
           </div>
 
-          {/* Generate Label Button - Always visible when OP is active */}
+          {/* Generate Label Button - Opens Type Selection Modal */}
           {opId && (
             <button
-              onClick={() => onGenerateLabel?.()}
+              onClick={() => setShowLabelTypeModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg text-primary hover:bg-primary/20 transition-all"
             >
               <span className="material-icons-outlined text-lg">qr_code_2</span>
-              <span className="font-bold text-sm uppercase">Gerar Etiqueta</span>
+              <span className="font-bold text-sm uppercase">Emitir Etiqueta</span>
             </button>
           )}
         </div>
@@ -1315,6 +1303,53 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           fetchLogs();
         }}
       />
+
+      {/* Label Type Selection Modal */}
+      {showLabelTypeModal && (
+        <LabelTypeSelectionModal
+          onClose={() => setShowLabelTypeModal(false)}
+          onSelectType={(type: TipoEtiqueta) => {
+            setShowLabelTypeModal(false);
+            if (type === 'CHECKLIST') {
+              setShowChecklistLabelModal(true);
+            } else {
+              setShowPalletLabelModal(true);
+            }
+          }}
+          opCodigo={opCodigo || undefined}
+        />
+      )}
+
+      {/* Checklist Label Modal */}
+      {showChecklistLabelModal && opId && (
+        <ChecklistLabelModal
+          onClose={() => setShowChecklistLabelModal(false)}
+          opId={opId}
+          opCodigo={opCodigo || ''}
+          machineId={machineId}
+          machineName={machineName}
+          operatorId={operatorId}
+          operatorName={operatorName}
+          sectorId={sectorId}
+          sectorName={sectorName}
+        />
+      )}
+
+      {/* Pallet Label Modal */}
+      {showPalletLabelModal && opId && (
+        <PalletLabelModal
+          onClose={() => setShowPalletLabelModal(false)}
+          opId={opId}
+          opCodigo={opCodigo || ''}
+          productName={productInfo?.nome || 'Produto'}
+          machineId={machineId}
+          machineName={machineName}
+          operatorId={operatorId}
+          operatorName={operatorName}
+          sectorId={sectorId}
+          sectorName={sectorName}
+        />
+      )}
 
 
 

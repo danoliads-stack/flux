@@ -162,3 +162,46 @@ export interface ChecklistResposta {
   valor: string | boolean | number;
   foto_url?: string;
 }
+
+// ==========================================
+// LABEL EMISSION SYSTEM TYPES
+// ==========================================
+
+export type TipoEtiqueta = 'CHECKLIST' | 'PALLET';
+
+export interface ChecklistLabelData {
+  quantidade_analisada: number;
+}
+
+export interface PalletLabelData {
+  lote: string;
+  quantidade_por_caixa: number;
+  quantidade_caixas: number;
+  quantidade_total: number;
+}
+
+export interface ChecklistSnapshot {
+  checklist_id: string;
+  checklist_nome: string;
+  status: ChecklistStatus;
+  ultimo_evento_at: string;
+}
+
+export interface Etiqueta {
+  id: string;
+  op_id: string;
+  maquina_id: string;
+  operador_id: string;
+  setor_id: string;
+  tipo_etiqueta: TipoEtiqueta;
+  numero_etiqueta: number;
+  dados_manualmente_preenchidos: ChecklistLabelData | PalletLabelData;
+  qr_code_data: string;
+  checklist_snapshot?: ChecklistSnapshot[];
+  created_at: string;
+  // Joined data for display
+  ordens_producao?: { codigo: string; nome_produto: string } | null;
+  maquinas?: { nome: string; codigo: string } | null;
+  operadores?: { nome: string; matricula: string } | null;
+  setores?: { nome: string } | null;
+}
