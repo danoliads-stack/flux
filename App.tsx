@@ -789,17 +789,25 @@ const App: React.FC = () => {
                           // WORKAROUND: I'll fetch 'tipos_parada' similar to how I do in StopModal, or use a known one.
                           // Since I can't guarantee, I will try to find one named 'Manutenção'.
 
-                          const { data: types } = await supabase.from('tipos_parada').select('id').ilike('nome', '%manutencao%').limit(1);
-                          const maintenanceTypeId = types && types[0] ? types[0].id : null;
+                          let { data: types } = await supabase.from('tipos_parada').select('id, nome').ilike('nome', '%manutencao%').limit(1);
+                          let maintenanceTypeId = types && types[0] ? types[0].id : null;
 
-                          // If no type found, we might be in trouble if FK is strict. 
-                          // But let's assume there is one or FK isn't strict (it usually is).
-                          // If maintenanceTypeId is null, we try to use a default or just fail gracefully?
-                          // Actually, if I can't find it, I'll log it as 'Outros' or similar if reachable.
-                          // Let's assume there IS a maintenance type or I can't proceed well. 
+                          // Fallback: Try 'Outros'
+                          if (!maintenanceTypeId) {
+                            console.warn('Tipo "Manutenção" não encontrado. Tentando fallback para "Outros".');
+                            const { data: otherTypes } = await supabase.from('tipos_parada').select('id, nome').ilike('nome', '%outros%').limit(1);
+                            maintenanceTypeId = otherTypes && otherTypes[0] ? otherTypes[0].id : null;
+                          }
+
+                          // Fallback: Use ANY active type
+                          if (!maintenanceTypeId) {
+                            console.warn('Tipo "Outros" não encontrado. Usando qualquer tipo disponível.');
+                            const { data: anyTypes } = await supabase.from('tipos_parada').select('id, nome').eq('ativo', true).limit(1);
+                            maintenanceTypeId = anyTypes && anyTypes[0] ? anyTypes[0].id : null;
+                          }
 
                           if (!maintenanceTypeId) {
-                            alert('Erro: Tipo de parada "Manutenção" não encontrado no sistema. Contate o administrador.');
+                            alert('Erro Crítico: Nenhum tipo de parada encontrado no banco de dados. Impossível registrar manutenção.');
                             return;
                           }
 

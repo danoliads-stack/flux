@@ -175,8 +175,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   // NOVOS ESTADOS
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>(null);
   const [machineScrapMap, setMachineScrapMap] = useState<Map<string, MachineScrapData>>(new Map());
-  const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date());
+  const [lastUpdateTime, setlastUpdateTime] = useState<Date>(new Date());
   const [operatorOeeMap, setOperatorOeeMap] = useState<Map<string, { totalOee: number; count: number }>>(new Map());
+  const [maintenanceMachines, setMaintenanceMachines] = useState<Set<string>>(new Set());
 
   // FASE 2: Novos estados
   const [sortType, setSortType] = useState<SortType>('status');
@@ -232,6 +233,19 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const fetchShiftData = useCallback(async () => {
     if (!turnoStartTime) return;
     const turnoStartISO = turnoStartTime.toISOString();
+
+    // Fetch active maintenance stops
+    const { data: maintenanceStops } = await supabase
+      .from('paradas')
+      .select('maquina_id, notas')
+      .is('fim', null)
+      .ilike('notas', '%[CHAMADO MANUTENÇÃO]%');
+
+    const maintenanceSet = new Set<string>();
+    if (maintenanceStops) {
+      maintenanceStops.forEach(stop => maintenanceSet.add(stop.maquina_id));
+    }
+    setMaintenanceMachines(maintenanceSet);
 
     const { count: finishedCount } = await supabase
       .from('ordens_producao')
@@ -360,8 +374,22 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     const now = Date.now();
 
     machines.forEach(m => {
-      // Máquinas paradas
-      if (m.status_atual === MachineStatus.STOPPED && m.status_change_at) {
+      // Chamados de manutenção (PRIORIDADE MÁXIMA)
+      if (maintenanceMachines.has(m.id)) {
+        const stoppedMs = m.status_change_at ? now - new Date(m.status_change_at).getTime() : 0;
+        const stoppedMins = Math.floor(stoppedMs / 60000);
+        items.push({
+          id: `maint-${m.id}`,
+          type: 'stopped',
+          machineName: m.nome,
+          machineId: m.id,
+          detail: `🔧 MANUTENÇÃO SOLICITADA há ${formatStopTime(stoppedMins)}`,
+          severity: 0, // Maior prioridade
+          stoppedMinutes: stoppedMins
+        });
+      }
+      // Máquinas paradas (sem manutenção)
+      else if (m.status_atual === MachineStatus.STOPPED && m.status_change_at) {
         const stoppedMs = now - new Date(m.status_change_at).getTime();
         const stoppedMins = Math.floor(stoppedMs / 60000);
         items.push({
@@ -678,6 +706,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 const isMaintenance = m.status_atual === MachineStatus.MAINTENANCE;
                 const isSetup = m.status_atual === MachineStatus.SETUP;
                 const isSuspended = m.status_atual === MachineStatus.SUSPENDED;
+                const hasMaintenanceCall = maintenanceMachines.has(m.id);
 
                 // Safe value access
                 const machineLiveProd = machineProductionMap.get(m.id);
@@ -703,15 +732,23 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   <div
                     key={m.id}
                     onDoubleClick={() => openOperatorPanel(m)}
-                    className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full relative ${isActive ? 'border-l-secondary shadow-secondary/5' :
-                      isStopped ? 'border-l-danger shadow-danger/5' :
-                        isMaintenance ? 'border-l-orange-500 shadow-orange-500/5' :
-                          isSetup ? 'border-l-warning shadow-warning/5' :
-                            isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
+                    className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full relative 
+                      ${hasMaintenanceCall ? 'border-l-orange-500 shadow-orange-500/20 animate-pulse-border ring-2 ring-orange-500/50' :
+                        isActive ? 'border-l-secondary shadow-secondary/5' :
+                          isStopped ? 'border-l-danger shadow-danger/5' :
+                            isMaintenance ? 'border-l-orange-500 shadow-orange-500/5' :
+                              isSetup ? 'border-l-warning shadow-warning/5' :
+                                isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
                       }`}
                   >
-                    {/* NOVO: Ícone de alerta */}
-                    {showAlert && (
+                    {/* NOVO: Ícone de manutenção ou alerta */}
+                    {hasMaintenanceCall ? (
+                      <div className="absolute top-2 right-2">
+                        <span className="material-icons-outlined text-orange-500 text-2xl animate-bounce" title="Chamado de Manutenção Ativo">
+                          build_circle
+                        </span>
+                      </div>
+                    ) : showAlert && (
                       <div className="absolute top-2 right-2">
                         <span className="material-icons-outlined text-warning text-lg animate-pulse" title="Atenção necessária">
                           warning
@@ -924,15 +961,15 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                         }
                       }}
                       className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all hover:scale-[1.02] ${item.type === 'stopped' ? 'bg-danger/10 border border-danger/20 hover:bg-danger/20' :
-                          item.type === 'low_oee' ? 'bg-warning/10 border border-warning/20 hover:bg-warning/20' :
-                            'bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20'
+                        item.type === 'low_oee' ? 'bg-warning/10 border border-warning/20 hover:bg-warning/20' :
+                          'bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20'
                         }`}
                     >
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${item.type === 'stopped' ? 'bg-danger/20' :
-                          item.type === 'low_oee' ? 'bg-warning/20' : 'bg-orange-500/20'
+                        item.type === 'low_oee' ? 'bg-warning/20' : 'bg-orange-500/20'
                         }`}>
                         <span className={`material-icons-outlined text-2xl ${item.type === 'stopped' ? 'text-danger' :
-                            item.type === 'low_oee' ? 'text-warning' : 'text-orange-500'
+                          item.type === 'low_oee' ? 'text-warning' : 'text-orange-500'
                           }`}>
                           {item.type === 'stopped' ? 'pause_circle' :
                             item.type === 'low_oee' ? 'trending_down' : 'person_off'}
@@ -941,7 +978,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${item.type === 'stopped' ? 'bg-danger/20 text-danger' :
-                              item.type === 'low_oee' ? 'bg-warning/20 text-warning' : 'bg-orange-500/20 text-orange-500'
+                            item.type === 'low_oee' ? 'bg-warning/20 text-warning' : 'bg-orange-500/20 text-orange-500'
                             }`}>
                             {item.type === 'stopped' ? 'Parada' :
                               item.type === 'low_oee' ? 'OEE Baixo' : 'Sem Operador'}
