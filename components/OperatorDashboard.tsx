@@ -5,6 +5,7 @@ import ChecklistExecutionModal from './modals/ChecklistExecutionModal';
 import LabelTypeSelectionModal from './modals/LabelTypeSelectionModal';
 import ChecklistLabelModal from './modals/ChecklistLabelModal';
 import PalletLabelModal from './modals/PalletLabelModal';
+import MaintenanceCallModal from './modals/MaintenanceCallModal';
 import { useAppStore } from '../src/store/useAppStore';
 
 interface OperatorDashboardProps {
@@ -22,6 +23,7 @@ interface OperatorDashboardProps {
   onRegisterChecklist: (status: 'ok' | 'problema', obs?: string) => void;
   onRegisterLogbook: (description: string) => void;
   onGenerateLabel?: () => void; // New: Generate label at any time
+  onRequestMaintenance?: (description: string) => void; // New: Maintenance call
   machineId: string;
   opCodigo?: string | null;
   machineName?: string;
@@ -39,6 +41,7 @@ interface OperatorDashboardProps {
   accumulatedProductionTime?: number;
   accumulatedStopTime?: number;
 }
+
 
 interface Checklist {
   id: string;
@@ -62,7 +65,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   opState, statusChangeAt, realized, oee, opId, opCodigo,
   onOpenSetup, onOpenStop, onOpenFinalize, machineId,
   onRegisterChecklist, onRegisterLogbook, onStartProduction, onRetomar,
-  onGenerateLabel,
+  onGenerateLabel, onRequestMaintenance,
   machineName = 'Máquina', sectorName = 'Produção', operatorName = 'Operador', shiftName = 'Turno', meta: propMeta,
   operatorId = '', sectorId = '', loteId = 'LOTE-001',
   onChangeMachine,
@@ -195,6 +198,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [showLabelTypeModal, setShowLabelTypeModal] = useState(false);
   const [showChecklistLabelModal, setShowChecklistLabelModal] = useState(false);
   const [showPalletLabelModal, setShowPalletLabelModal] = useState(false);
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
 
   // Clock update
   useEffect(() => {
@@ -1134,7 +1138,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* 1. Setup Button - Only show if user has permission */}
           {hasPermission(Permission.MANAGE_MACHINE_SETUP) && (
             <button
@@ -1230,6 +1234,24 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             <div>
               <div className="font-display font-bold text-lg uppercase mb-1 text-white">Parar (Justificar)</div>
               <div className="text-xs text-text-sub-dark leading-snug">Interromper produção e informar motivo</div>
+            </div>
+          </button>
+
+          {/* 4. Maintenance Call Button (NEW) */}
+          <button
+            onClick={() => setShowMaintenanceModal(true)}
+            // Can call maintenance anytime unless the machine is already stopped for maintenance (though user might want to add info)
+            // For now, enabled always, or strictly when running/available? User said "machine stays stopped", implies it triggers a stop.
+            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between border border-border-dark group hover:border-orange-500 hover:bg-orange-500/5 cursor-pointer`}
+          >
+            <div className="flex items-start justify-between">
+              <div className="p-3 bg-orange-500/10 rounded-lg group-hover:bg-orange-500/20 transition-colors">
+                <span className="material-icons-outlined text-3xl text-orange-500">build</span>
+              </div>
+            </div>
+            <div>
+              <div className="font-display font-bold text-lg uppercase mb-1 text-white group-hover:text-orange-500 transition-colors">Chamar Manutenção</div>
+              <div className="text-xs text-text-sub-dark leading-snug">Solicitar técnico e parar máquina</div>
             </div>
           </button>
 
@@ -1348,6 +1370,18 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           operatorName={operatorName}
           sectorId={sectorId}
           sectorName={sectorName}
+        />
+      )}
+
+      {/* Maintenance Call Modal */}
+      {showMaintenanceModal && (
+        <MaintenanceCallModal
+          onClose={() => setShowMaintenanceModal(false)}
+          onConfirm={(description) => {
+            onRequestMaintenance?.(description);
+            setShowMaintenanceModal(false);
+          }}
+          machineName={machineName}
         />
       )}
 

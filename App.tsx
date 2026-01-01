@@ -14,6 +14,7 @@ import StopModal from './components/modals/StopModal';
 import FinalizeModal from './components/modals/FinalizeModal';
 import LabelModal from './components/modals/LabelModal';
 import LabelHistoryPage from './components/LabelHistoryPage';
+import MaintenanceDashboard from './components/MaintenanceDashboard';
 import TraceabilityPage from './components/TraceabilityPage';
 import Preloader from './components/Preloader';
 import { ROLE_CONFIGS } from './constants';
@@ -768,6 +769,91 @@ const App: React.FC = () => {
                         });
                         if (error) throw error;
                       }}
+                      onRequestMaintenance={async (description) => {
+                        if (currentMachine && currentUser) {
+                          const note = `[CHAMADO MANUTENÇÃO] ${description}`;
+                          console.log('Solicitando manutenção:', { machine: currentMachine.id, note });
+
+                          // 1. Create Stop Record
+                          // Try to find a stop reason ID for 'Manutenção' or fallback to text
+                          // For simplicity, we put 'Manutenção' as reason directly if we can't find ID, 
+                          // OR we assume a default ID. Ideally we query typos_parada but we want speed.
+                          // We will use a hardcoded 'Manutenção Geral' text in reason if no ID found, passing the text.
+                          // Actually Supabase might expect UUID if reason linked to FK.
+                          // Let's safe bet: Insert into 'paradas' requires 'motivo' which might be UUID or text? 
+                          // Looking at App.tsx: 'motivo' in paradas seems to be UUID (FK to tipos_parada) OR text?
+                          // Checking previous code: `motivo: reason` where reason came from StopModal (which selects from types).
+                          // We need a Maintenance Type ID. Since I can't query reliably, I'll first try to fetch one, 
+                          // if not found, I might have issues if it's a strict FK. 
+                          // RISK: If FK constraint exists, 'Manutenção' string will fail.
+                          // WORKAROUND: I'll fetch 'tipos_parada' similar to how I do in StopModal, or use a known one.
+                          // Since I can't guarantee, I will try to find one named 'Manutenção'.
+
+                          const { data: types } = await supabase.from('tipos_parada').select('id').ilike('nome', '%manutencao%').limit(1);
+                          const maintenanceTypeId = types && types[0] ? types[0].id : null;
+
+                          // If no type found, we might be in trouble if FK is strict. 
+                          // But let's assume there is one or FK isn't strict (it usually is).
+                          // If maintenanceTypeId is null, we try to use a default or just fail gracefully?
+                          // Actually, if I can't find it, I'll log it as 'Outros' or similar if reachable.
+                          // Let's assume there IS a maintenance type or I can't proceed well. 
+
+                          if (!maintenanceTypeId) {
+                            alert('Erro: Tipo de parada "Manutenção" não encontrado no sistema. Contate o administrador.');
+                            return;
+                          }
+
+                          const { error } = await supabase.from('paradas').insert({
+                            maquina_id: currentMachine.id,
+                            operador_id: currentUser.id,
+                            op_id: currentMachine.op_atual_id,
+                            motivo: maintenanceTypeId,
+                            notas: note,
+                            data_inicio: new Date().toISOString()
+                          });
+
+                          if (error) {
+                            console.error('Erro ao abrir chamado:', error);
+                            alert('Erro ao registrar chamado de manutenção.');
+                            return;
+                          }
+
+                          // 2. Stop Logic (Same as onStop)
+                          await supabase.from('op_operadores').update({ fim: new Date().toISOString() }).eq('maquina_id', currentMachine.id).is('fim', null);
+
+                          const now = new Date().toISOString();
+                          localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
+
+                          let newAccProd = accumulatedProductionTime;
+                          let newAccSetup = accumulatedSetupTime;
+
+                          if (localStatusChangeAt && opState === 'PRODUCAO') {
+                            newAccProd += Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+                          } else if (localStatusChangeAt && opState === 'SETUP') {
+                            newAccSetup += Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+                          }
+
+                          await supabase.from('maquinas').update({
+                            status_atual: MachineStatus.STOPPED,
+                            status_change_at: now
+                          }).eq('id', currentMachine.id);
+
+                          syncTimers({
+                            statusChangeAt: now,
+                            accProd: newAccProd,
+                            accSetup: newAccSetup
+                          });
+
+                          await realtimeManager.broadcastMachineUpdate(
+                            createMachineUpdate(currentMachine.id, MachineStatus.STOPPED, {
+                              operatorId: currentUser.id,
+                              opId: currentMachine.op_atual_id
+                            })
+                          );
+                          setOpState('PARADA');
+                          alert('Chamado de manutenção registrado. A máquina foi parada.');
+                        }
+                      }}
                     />
                   ) : <Navigate to="/maquinas" replace />}
                 </ProtectedRoute>
@@ -799,8 +885,14 @@ const App: React.FC = () => {
 
               <Route path="/r/:loteId" element={<TraceabilityPage loteId={currentLoteId || ''} />} />
 
-              {/* Label History Page - Accessed via QR Code */}
               <Route path="/etiqueta/:id" element={<LabelHistoryPage />} />
+
+              {/* Maintenance Dashboard - TV/Admin */}
+              <Route path="/manutencao" element={
+                <ProtectedRoute user={currentUser} permission={Permission.VIEW_ADMIN_DASHBOARD} userPermissions={userPermissions}>
+                  <MaintenanceDashboard machines={liveMachines} />
+                </ProtectedRoute>
+              } />
 
               <Route path="/" element={<Navigate to={!currentUser ? "/login" : (currentUser.role === 'ADMIN' ? "/administracao" : "/maquinas")} replace />} />
               <Route path="*" element={<Navigate to={!currentUser ? "/login" : "/"} replace />} />
