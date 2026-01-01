@@ -374,7 +374,23 @@ const App: React.FC = () => {
 
       if (prodData && !prodError) {
         const total = prodData.reduce((acc, r) => acc + (r.quantidade_boa || 0), 0);
-        setProductionData({ totalProduced: total });
+
+        // Context-aware update: Determine if we should overwrite local state
+        const currentState = useAppStore.getState();
+        const localProduced = currentState.totalProduced;
+        const isActive = currentState.opState === 'PRODUCAO' || currentState.opState === 'SETUP' || currentState.opState === 'PARADA';
+
+        // Update if:
+        // 1. Machine is IDLE/Available (starting fresh)
+        // 2. Machine is FINALIZED
+        // 3. DB has MORE production than local (synced from another source)
+        // 4. We are NOT active (fallback)
+        if (!isActive || currentState.opState === 'FINALIZADA' || total > localProduced) {
+          console.log('[App] 📥 Syncing production from DB:', total);
+          setProductionData({ totalProduced: total });
+        } else {
+          console.log('[App] 🛡️ Preserving local production state:', localProduced, '(DB:', total, ')');
+        }
       }
     };
 

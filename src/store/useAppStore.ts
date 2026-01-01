@@ -84,14 +84,16 @@ export const useAppStore = create<AppState>()(
                         meta: 0
                     });
                 } else {
-                    set({
+                    const isSameOP = get().activeOP === op.id;
+                    set((state) => ({
                         activeOP: op.id,
                         activeOPCodigo: op.codigo,
                         activeOPData: op,
-                        totalProduced: 0, // ✅ Reset counters for new OP
-                        totalScrap: 0,    // ✅ Reset counters for new OP
-                        meta: op.quantidade_meta || 0
-                    });
+                        meta: op.quantidade_meta || 0,
+                        // Only reset counters if it's a DIFFERENT OP
+                        totalProduced: isSameOP ? state.totalProduced : 0,
+                        totalScrap: isSameOP ? state.totalScrap : 0,
+                    }));
                 }
             },
 
@@ -135,11 +137,16 @@ export const useAppStore = create<AppState>()(
                 selectedMachineId: state.selectedMachineId,
                 activeOP: state.activeOP,
                 activeOPCodigo: state.activeOPCodigo,
+                activeOPData: state.activeOPData, // Persist details to avoid nulls
                 opState: state.opState,
                 statusChangeAt: state.statusChangeAt,
                 accumulatedSetupTime: state.accumulatedSetupTime,
                 accumulatedProductionTime: state.accumulatedProductionTime,
                 accumulatedStopTime: state.accumulatedStopTime,
+                // Persist Production Counters
+                totalProduced: state.totalProduced,
+                totalScrap: state.totalScrap,
+                meta: state.meta,
             }),
         }
     )
