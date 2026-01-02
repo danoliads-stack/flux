@@ -11,6 +11,9 @@ interface MaintenanceInfo {
     description: string;
     startTime: string;
     operatorName?: string;
+    priority?: string;
+    status?: string;
+    chamadoId?: string;
 }
 
 // Helper for relative time (avoids date-fns dependency)
@@ -39,45 +42,50 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ machines })
         return () => clearInterval(timer);
     }, []);
 
-    // Fetch active maintenance details
+    // Fetch active maintenance details from chamados_manutencao table
     useEffect(() => {
         const fetchMaintenanceDetails = async () => {
-            // Filter machines that are stopped
-            const stoppedMachines = machines.filter(m => m.status === MachineStatus.STOPPED);
-            if (stoppedMachines.length === 0) {
+            // Buscar chamados de manutenção ABERTOS (nova tabela separada)
+            const { data: chamados, error } = await supabase
+                .from('chamados_manutencao')
+                .select(`
+                    id,
+                    maquina_id,
+                    descricao,
+                    prioridade,
+                    status,
+                    data_abertura,
+                    operadores (nome)
+                `)
+                .in('status', ['ABERTO', 'EM_ANDAMENTO'])
+                .order('data_abertura', { ascending: false });
+
+            if (error) {
+                console.error('Erro ao buscar chamados:', error);
                 setMaintenanceInfos([]);
                 return;
             }
 
-            const promises = stoppedMachines.map(async (m) => {
-                // Get the latest active stop
-                const { data: stopData } = await supabase
-                    .from('paradas')
-                    .select('*')
-                    .eq('maquina_id', m.id)
-                    .is('fim', null)
-                    .order('data_inicio', { ascending: false })
-                    .limit(1)
-                    .single();
+            if (!chamados || chamados.length === 0) {
+                setMaintenanceInfos([]);
+                return;
+            }
 
-                // Check if it's a maintenance stop (look for keywords in notes if we can't rely on type ID here easily)
-                if (stopData && (stopData.notas?.includes('[CHAMADO MANUTENÇÃO]'))) {
-                    return {
-                        machineId: m.id,
-                        description: stopData.notas.replace('[CHAMADO MANUTENÇÃO]', '').trim(),
-                        startTime: stopData.data_inicio,
-                        operatorName: m.operadores?.nome
-                    } as MaintenanceInfo;
-                }
-                return null;
-            });
+            const infos: MaintenanceInfo[] = chamados.map(c => ({
+                machineId: c.maquina_id,
+                description: c.descricao,
+                startTime: c.data_abertura,
+                operatorName: (c.operadores as any)?.nome || 'Operador',
+                priority: c.prioridade,
+                status: c.status,
+                chamadoId: c.id
+            }));
 
-            const results = await Promise.all(promises);
-            setMaintenanceInfos(results.filter((i): i is MaintenanceInfo => i !== null));
+            setMaintenanceInfos(infos);
         };
 
         fetchMaintenanceDetails();
-        // Poll every 10s to ensure notes are fresh if simple realtime doesn't send stop notes
+        // Poll every 10s
         const interval = setInterval(fetchMaintenanceDetails, 10000);
         return () => clearInterval(interval);
 

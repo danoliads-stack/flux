@@ -800,53 +800,17 @@ const App: React.FC = () => {
                       }}
                       onRequestMaintenance={async (description) => {
                         if (currentMachine && currentUser) {
-                          const note = `[CHAMADO MANUTENÇÃO] ${description}`;
-                          console.log('Solicitando manutenção:', { machine: currentMachine.id, note });
+                          console.log('Solicitando manutenção:', { machine: currentMachine.id, description });
 
-                          // 1. Create Stop Record
-                          // Try to find a stop reason ID for 'Manutenção' or fallback to text
-                          // For simplicity, we put 'Manutenção' as reason directly if we can't find ID, 
-                          // OR we assume a default ID. Ideally we query typos_parada but we want speed.
-                          // We will use a hardcoded 'Manutenção Geral' text in reason if no ID found, passing the text.
-                          // Actually Supabase might expect UUID if reason linked to FK.
-                          // Let's safe bet: Insert into 'paradas' requires 'motivo' which might be UUID or text? 
-                          // Looking at App.tsx: 'motivo' in paradas seems to be UUID (FK to tipos_parada) OR text?
-                          // Checking previous code: `motivo: reason` where reason came from StopModal (which selects from types).
-                          // We need a Maintenance Type ID. Since I can't query reliably, I'll first try to fetch one, 
-                          // if not found, I might have issues if it's a strict FK. 
-                          // RISK: If FK constraint exists, 'Manutenção' string will fail.
-                          // WORKAROUND: I'll fetch 'tipos_parada' similar to how I do in StopModal, or use a known one.
-                          // Since I can't guarantee, I will try to find one named 'Manutenção'.
-
-                          let { data: types } = await supabase.from('tipos_parada').select('id, nome').ilike('nome', '%manutencao%').limit(1);
-                          let maintenanceTypeId = types && types[0] ? types[0].id : null;
-
-                          // Fallback: Try 'Outros'
-                          if (!maintenanceTypeId) {
-                            console.warn('Tipo "Manutenção" não encontrado. Tentando fallback para "Outros".');
-                            const { data: otherTypes } = await supabase.from('tipos_parada').select('id, nome').ilike('nome', '%outros%').limit(1);
-                            maintenanceTypeId = otherTypes && otherTypes[0] ? otherTypes[0].id : null;
-                          }
-
-                          // Fallback: Use ANY active type
-                          if (!maintenanceTypeId) {
-                            console.warn('Tipo "Outros" não encontrado. Usando qualquer tipo disponível.');
-                            const { data: anyTypes } = await supabase.from('tipos_parada').select('id, nome').eq('ativo', true).limit(1);
-                            maintenanceTypeId = anyTypes && anyTypes[0] ? anyTypes[0].id : null;
-                          }
-
-                          if (!maintenanceTypeId) {
-                            alert('Erro Crítico: Nenhum tipo de parada encontrado no banco de dados. Impossível registrar manutenção.');
-                            return;
-                          }
-
-                          const { error } = await supabase.from('paradas').insert({
+                          // 1. Criar chamado de manutenção na tabela separada
+                          const { error } = await supabase.from('chamados_manutencao').insert({
                             maquina_id: currentMachine.id,
                             operador_id: currentUser.id,
                             op_id: currentMachine.op_atual_id,
-                            motivo: maintenanceTypeId,
-                            notas: note,
-                            data_inicio: new Date().toISOString()
+                            descricao: description,
+                            prioridade: 'NORMAL',
+                            status: 'ABERTO',
+                            data_abertura: new Date().toISOString()
                           });
 
                           if (error) {
@@ -855,7 +819,7 @@ const App: React.FC = () => {
                             return;
                           }
 
-                          // 2. Stop Logic (Same as onStop)
+                          // 2. Parar a máquina (mesma lógica de onStop)
                           await supabase.from('op_operadores').update({ fim: new Date().toISOString() }).eq('maquina_id', currentMachine.id).is('fim', null);
 
                           const now = new Date().toISOString();
@@ -871,7 +835,7 @@ const App: React.FC = () => {
                           }
 
                           await supabase.from('maquinas').update({
-                            status_atual: MachineStatus.STOPPED,
+                            status_atual: MachineStatus.MAINTENANCE,  // Status específico de manutenção
                             status_change_at: now
                           }).eq('id', currentMachine.id);
 
@@ -882,13 +846,13 @@ const App: React.FC = () => {
                           });
 
                           await realtimeManager.broadcastMachineUpdate(
-                            createMachineUpdate(currentMachine.id, MachineStatus.STOPPED, {
+                            createMachineUpdate(currentMachine.id, MachineStatus.MAINTENANCE, {
                               operatorId: currentUser.id,
                               opId: currentMachine.op_atual_id
                             })
                           );
-                          setOpState('PARADA');
-                          alert('Chamado de manutenção registrado. A máquina foi parada.');
+                          setOpState('MANUTENCAO');
+                          alert('Chamado de manutenção registrado. A máquina está aguardando atendimento.');
                         }
                       }}
                     />
