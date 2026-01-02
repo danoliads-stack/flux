@@ -37,6 +37,49 @@ const AdminDashboard: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingOp, setEditingOp] = useState<any>(null);
   const [newOp, setNewOp] = useState({ nome: '', matricula: '', pin: '', setor_id: '', turno_id: '', avatar: '' });
+  const [newOpAvatarFile, setNewOpAvatarFile] = useState<File | null>(null);
+  const [editingOpAvatarFile, setEditingOpAvatarFile] = useState<File | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const uploadOperatorAvatar = async (file: File, operatorId: string): Promise<string | null> => {
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `operators/${operatorId}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true });
+
+      if (uploadError) {
+        console.error('[AdminDashboard] Upload error:', uploadError);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+      return urlData.publicUrl + '?t=' + Date.now();
+    } catch (err) {
+      console.error('[AdminDashboard] Upload exception:', err);
+      return null;
+    }
+  };
+
+  const handleDownloadOperatorAvatar = async (avatarUrl: string, operatorName: string) => {
+    try {
+      const response = await fetch(avatarUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `avatar_${operatorName.replace(/\s+/g, '_')}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[AdminDashboard] Download error:', err);
+      alert('Erro ao baixar a foto.');
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -57,19 +100,42 @@ const AdminDashboard: React.FC = () => {
   const handleAddOperator = async () => {
     if (!newOp.nome || !newOp.matricula || !newOp.setor_id) return;
 
-    await supabase.from('operadores').insert({
-      nome: newOp.nome,
-      matricula: newOp.matricula,
-      pin: newOp.pin,
-      setor_id: newOp.setor_id,
-      turno_id: newOp.turno_id || null,
-      avatar: newOp.avatar || newOp.nome.substring(0, 2).toUpperCase(),
-      ativo: true
-    });
+    try {
+      // First insert the operator to get the ID
+      const { data: insertedOp, error: insertError } = await supabase.from('operadores').insert({
+        nome: newOp.nome,
+        matricula: newOp.matricula,
+        pin: newOp.pin,
+        setor_id: newOp.setor_id,
+        turno_id: newOp.turno_id || null,
+        avatar: newOp.avatar || newOp.nome.substring(0, 2).toUpperCase(),
+        ativo: true
+      }).select().single();
 
-    setIsAddModalOpen(false);
-    setNewOp({ nome: '', matricula: '', pin: '', setor_id: '', turno_id: '', avatar: '' });
-    fetchData();
+      if (insertError) {
+        console.error('[AdminDashboard] Insert error:', insertError);
+        alert('Erro ao criar operador: ' + insertError.message);
+        return;
+      }
+
+      // Upload avatar if file is selected
+      if (newOpAvatarFile && insertedOp?.id) {
+        setUploadingAvatar(true);
+        const avatarUrl = await uploadOperatorAvatar(newOpAvatarFile, insertedOp.id);
+        if (avatarUrl) {
+          await supabase.from('operadores').update({ avatar: avatarUrl }).eq('id', insertedOp.id);
+        }
+        setUploadingAvatar(false);
+      }
+
+      setIsAddModalOpen(false);
+      setNewOp({ nome: '', matricula: '', pin: '', setor_id: '', turno_id: '', avatar: '' });
+      setNewOpAvatarFile(null);
+      fetchData();
+    } catch (err: any) {
+      console.error('[AdminDashboard] Add operator error:', err);
+      alert('Erro ao criar operador: ' + err.message);
+    }
   };
 
   const handleDeleteOperator = async (id: string) => {
@@ -81,23 +147,44 @@ const AdminDashboard: React.FC = () => {
 
   const openEditModal = (op: any) => {
     setEditingOp({ ...op });
+    setEditingOpAvatarFile(null);
     setIsEditModalOpen(true);
   };
 
   const handleEditOperator = async () => {
     if (!editingOp || !editingOp.nome || !editingOp.matricula) return;
-    await supabase.from('operadores').update({
-      nome: editingOp.nome,
-      matricula: editingOp.matricula,
-      pin: editingOp.pin,
-      setor_id: editingOp.setor_id || null,
-      turno_id: editingOp.turno_id || null,
-      avatar: editingOp.avatar || editingOp.nome.substring(0, 2).toUpperCase(),
-      ativo: editingOp.ativo
-    }).eq('id', editingOp.id);
-    setIsEditModalOpen(false);
-    setEditingOp(null);
-    fetchData();
+
+    try {
+      let avatar = editingOp.avatar;
+
+      // Upload new avatar if file is selected
+      if (editingOpAvatarFile) {
+        setUploadingAvatar(true);
+        const uploadedUrl = await uploadOperatorAvatar(editingOpAvatarFile, editingOp.id);
+        if (uploadedUrl) {
+          avatar = uploadedUrl;
+        }
+        setUploadingAvatar(false);
+      }
+
+      await supabase.from('operadores').update({
+        nome: editingOp.nome,
+        matricula: editingOp.matricula,
+        pin: editingOp.pin,
+        setor_id: editingOp.setor_id || null,
+        turno_id: editingOp.turno_id || null,
+        avatar: avatar || editingOp.nome.substring(0, 2).toUpperCase(),
+        ativo: editingOp.ativo
+      }).eq('id', editingOp.id);
+
+      setIsEditModalOpen(false);
+      setEditingOp(null);
+      setEditingOpAvatarFile(null);
+      fetchData();
+    } catch (err: any) {
+      console.error('[AdminDashboard] Edit operator error:', err);
+      alert('Erro ao atualizar operador: ' + err.message);
+    }
   };
 
   const getSectorName = (id: string) => {
@@ -465,15 +552,42 @@ const AdminDashboard: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil (opcional)</label>
-                      <input
-                        type="url"
-                        className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary"
-                        value={newOp.avatar}
-                        onChange={(e) => setNewOp({ ...newOp, avatar: e.target.value })}
-                        placeholder="https://exemplo.com/foto.jpg"
-                      />
-                      <p className="text-[10px] text-gray-600 mt-1">Deixe vazio para usar as iniciais do nome</p>
+                      <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Foto de Perfil (opcional)</label>
+                      <div className="flex items-center gap-4">
+                        {newOpAvatarFile ? (
+                          <div className="relative">
+                            <img
+                              src={URL.createObjectURL(newOpAvatarFile)}
+                              alt="Preview"
+                              className="w-16 h-16 rounded-full object-cover border-2 border-primary"
+                            />
+                            <button
+                              onClick={() => setNewOpAvatarFile(null)}
+                              className="absolute -top-1 -right-1 w-5 h-5 bg-danger rounded-full flex items-center justify-center text-white text-xs"
+                            >
+                              <span className="material-icons-outlined text-sm">close</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-[#15181e] border-2 border-dashed border-border-dark flex items-center justify-center text-gray-500">
+                            <span className="material-icons-outlined text-2xl">person</span>
+                          </div>
+                        )}
+                        <label className="flex items-center gap-2 px-4 py-2.5 bg-[#15181e] hover:bg-[#1a1c23] border border-border-dark text-white text-sm font-bold rounded-lg cursor-pointer transition-all">
+                          <span className="material-icons-outlined text-lg">upload</span>
+                          {newOpAvatarFile ? 'Trocar Foto' : 'Selecionar Foto'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) setNewOpAvatarFile(file);
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-gray-600 mt-2">Formatos aceitos: JPG, PNG, GIF, WEBP (máx. 5MB). Deixe vazio para usar iniciais.</p>
                     </div>
                   </div>
                   <div className="mt-8 flex gap-3">
@@ -551,24 +665,69 @@ const AdminDashboard: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil</label>
-                      <div className="flex gap-3 items-center">
-                        {editingOp.avatar?.startsWith('http') && (
-                          <img
-                            src={editingOp.avatar}
-                            alt="Preview"
-                            className="w-12 h-12 rounded-full object-cover border border-border-dark"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
+                      <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Foto de Perfil</label>
+                      <div className="flex items-center gap-4">
+                        {editingOpAvatarFile ? (
+                          <div className="relative">
+                            <img
+                              src={URL.createObjectURL(editingOpAvatarFile)}
+                              alt="Preview"
+                              className="w-16 h-16 rounded-full object-cover border-2 border-primary"
+                            />
+                            <button
+                              onClick={() => setEditingOpAvatarFile(null)}
+                              className="absolute -top-1 -right-1 w-5 h-5 bg-danger rounded-full flex items-center justify-center text-white text-xs"
+                            >
+                              <span className="material-icons-outlined text-sm">close</span>
+                            </button>
+                          </div>
+                        ) : editingOp.avatar?.startsWith('http') ? (
+                          <div className="relative group">
+                            <img
+                              src={editingOp.avatar}
+                              alt="Avatar atual"
+                              className="w-16 h-16 rounded-full object-cover border-2 border-border-dark"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                            <button
+                              onClick={() => handleDownloadOperatorAvatar(editingOp.avatar, editingOp.nome)}
+                              className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                              title="Baixar foto"
+                            >
+                              <span className="material-icons-outlined text-white">download</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-lg font-bold">
+                            {editingOp.avatar || editingOp.nome?.substring(0, 2).toUpperCase()}
+                          </div>
                         )}
-                        <input
-                          type="url"
-                          className="flex-1 bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary"
-                          value={editingOp.avatar?.startsWith('http') ? editingOp.avatar : ''}
-                          onChange={(e) => setEditingOp({ ...editingOp, avatar: e.target.value })}
-                          placeholder="https://exemplo.com/foto.jpg"
-                        />
+                        <div className="flex flex-col gap-2">
+                          <label className="flex items-center gap-2 px-4 py-2 bg-[#15181e] hover:bg-[#1a1c23] border border-border-dark text-white text-sm font-bold rounded-lg cursor-pointer transition-all">
+                            <span className="material-icons-outlined text-lg">upload</span>
+                            {editingOpAvatarFile || editingOp.avatar?.startsWith('http') ? 'Trocar Foto' : 'Selecionar Foto'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setEditingOpAvatarFile(file);
+                              }}
+                            />
+                          </label>
+                          {editingOp.avatar?.startsWith('http') && !editingOpAvatarFile && (
+                            <button
+                              onClick={() => handleDownloadOperatorAvatar(editingOp.avatar, editingOp.nome)}
+                              className="flex items-center gap-2 px-4 py-2 bg-secondary/10 hover:bg-secondary/20 border border-secondary/30 text-secondary text-sm font-bold rounded-lg transition-all"
+                            >
+                              <span className="material-icons-outlined text-lg">download</span>
+                              Baixar Foto
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      <p className="text-[10px] text-gray-600 mt-2">Formatos aceitos: JPG, PNG, GIF, WEBP (máx. 5MB)</p>
                     </div>
                     <div className="flex items-center gap-3 pt-2">
                       <button

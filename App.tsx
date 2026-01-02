@@ -501,10 +501,32 @@ const App: React.FC = () => {
   const handleMachineSelect = async (machine: MachineData) => {
     console.log('Selecting machine:', machine.nome, 'Current status:', machine.status_atual);
 
+    // ✅ VALIDAÇÃO: Verificar se o operador já está em outra máquina
+    if (currentUser?.role === 'OPERATOR') {
+      const { data: occupiedMachine, error } = await supabase
+        .from('maquinas')
+        .select('id, nome')
+        .eq('operador_atual_id', currentUser.id)
+        .neq('id', machine.id)
+        .maybeSingle();
+
+      if (occupiedMachine) {
+        alert(`⚠️ Você já está operando a máquina "${occupiedMachine.nome}". Por favor, finalize ou saia da máquina atual antes de selecionar outra.`);
+        return;
+      }
+    }
+
     // Update Store
     setSelectedMachine(machine.id);
     setCurrentMachine(machine);
     localStorage.setItem('flux_selected_machine', machine.id);
+
+    // ✅ Atribuir operador à máquina
+    if (currentUser?.role === 'OPERATOR') {
+      await supabase.from('maquinas').update({
+        operador_atual_id: currentUser.id
+      }).eq('id', machine.id);
+    }
 
     // Map MachineStatus to OPState
     let initialOPState: OPState = 'IDLE';
@@ -580,7 +602,14 @@ const App: React.FC = () => {
   const closeModals = () => setActiveModal(null);
 
   // Return to machine selection
-  const handleChangeMachine = () => {
+  const handleChangeMachine = async () => {
+    // ✅ Limpar operador da máquina atual no banco
+    if (selectedMachineId && currentUser?.role === 'OPERATOR') {
+      await supabase.from('maquinas').update({
+        operador_atual_id: null
+      }).eq('id', selectedMachineId);
+    }
+
     // Reset Store via Action (optional, or just clear selected)
     setSelectedMachine(null);
     localStorage.removeItem('flux_selected_machine');

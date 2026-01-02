@@ -35,6 +35,49 @@ const AdminUsuarios: React.FC = () => {
         role: 'SUPERVISOR',
         avatar_url: ''
     });
+    const [newUserAvatarFile, setNewUserAvatarFile] = useState<File | null>(null);
+    const [editingUserAvatarFile, setEditingUserAvatarFile] = useState<File | null>(null);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+    const uploadAvatar = async (file: File, userId: string): Promise<string | null> => {
+        try {
+            const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+            const path = `users/${userId}.${ext}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(path, file, { upsert: true });
+
+            if (uploadError) {
+                console.error('[AdminUsuarios] Upload error:', uploadError);
+                return null;
+            }
+
+            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+            return urlData.publicUrl + '?t=' + Date.now(); // Cache busting
+        } catch (err) {
+            console.error('[AdminUsuarios] Upload exception:', err);
+            return null;
+        }
+    };
+
+    const handleDownloadAvatar = async (avatarUrl: string, userName: string) => {
+        try {
+            const response = await fetch(avatarUrl);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `avatar_${userName.replace(/\s+/g, '_')}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('[AdminUsuarios] Download error:', err);
+            alert('Erro ao baixar a foto.');
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -130,7 +173,15 @@ const AdminUsuarios: React.FC = () => {
             if (authData.user) {
                 console.log('[AdminUsuarios] Auth user created:', authData.user.id, authData.user.email);
 
-                // 2. Create Profile row (since there's no trigger)
+                // 2. Upload avatar if file is selected
+                let avatarUrl: string | null = null;
+                if (newUserAvatarFile) {
+                    setUploadingAvatar(true);
+                    avatarUrl = await uploadAvatar(newUserAvatarFile, authData.user.id);
+                    setUploadingAvatar(false);
+                }
+
+                // 3. Create Profile row (since there's no trigger)
                 // Start with base profile data (without avatar_url to ensure compatibility)
                 const baseProfileData: any = {
                     id: authData.user.id,
@@ -143,7 +194,7 @@ const AdminUsuarios: React.FC = () => {
                 // Only add avatar_url if it's provided and column exists
                 const profileDataWithAvatar = {
                     ...baseProfileData,
-                    avatar_url: newUser.avatar_url || null
+                    avatar_url: avatarUrl || newUser.avatar_url || null
                 };
 
                 console.log('[AdminUsuarios] Creating profile with data:', profileDataWithAvatar);
@@ -187,7 +238,7 @@ const AdminUsuarios: React.FC = () => {
                     alert('Usuário criado com sucesso! O novo usuário deve confirmar o e-mail se a confirmação estiver ativa no Supabase.');
                 }
 
-                // 3. CRITICAL: Sign out the temporary client to prevent session conflicts
+                // 4. CRITICAL: Sign out the temporary client to prevent session conflicts
                 await tempSupabase.auth.signOut();
 
                 // Clear flag after a delay to ensure temp client cleanup is complete
@@ -206,6 +257,7 @@ const AdminUsuarios: React.FC = () => {
 
             setIsAddModalOpen(false);
             setNewUser({ full_name: '', email: '', password: '', role: 'SUPERVISOR', avatar_url: '' });
+            setNewUserAvatarFile(null);
 
             // Wait a bit and then refresh the list
             setTimeout(() => fetchData(), 500);
@@ -221,23 +273,41 @@ const AdminUsuarios: React.FC = () => {
     const handleEditUser = async () => {
         if (!editingUser || !editingUser.full_name) return;
 
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                full_name: editingUser.full_name,
-                role: editingUser.role,
-                avatar_url: editingUser.avatar_url || null
-            })
-            .eq('id', editingUser.id);
+        try {
+            let avatarUrl = editingUser.avatar_url;
 
-        if (error) {
-            alert('Erro ao atualizar usuário: ' + error.message);
-            return;
+            // Upload new avatar if file is selected
+            if (editingUserAvatarFile) {
+                setUploadingAvatar(true);
+                const uploadedUrl = await uploadAvatar(editingUserAvatarFile, editingUser.id);
+                if (uploadedUrl) {
+                    avatarUrl = uploadedUrl;
+                }
+                setUploadingAvatar(false);
+            }
+
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: editingUser.full_name,
+                    role: editingUser.role,
+                    avatar_url: avatarUrl || null
+                })
+                .eq('id', editingUser.id);
+
+            if (error) {
+                alert('Erro ao atualizar usuário: ' + error.message);
+                return;
+            }
+
+            setEditingUser(null);
+            setEditingUserAvatarFile(null);
+            setIsEditModalOpen(false);
+            fetchData();
+        } catch (err: any) {
+            console.error('[AdminUsuarios] Edit error:', err);
+            alert('Erro ao atualizar usuário: ' + err.message);
         }
-
-        setEditingUser(null);
-        setIsEditModalOpen(false);
-        fetchData();
     };
 
     const handleDeleteUser = async (id: string, name: string) => {
@@ -434,15 +504,42 @@ const AdminUsuarios: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil (opcional)</label>
-                                <input
-                                    type="url"
-                                    className="w-full bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
-                                    value={newUser.avatar_url}
-                                    onChange={(e) => setNewUser({ ...newUser, avatar_url: e.target.value })}
-                                    placeholder="https://exemplo.com/sua-foto.jpg"
-                                />
-                                <p className="text-[10px] text-gray-600 mt-1">Use uma URL de imagem pública (Gravatar, LinkedIn, etc.)</p>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Foto de Perfil (opcional)</label>
+                                <div className="flex items-center gap-4">
+                                    {newUserAvatarFile ? (
+                                        <div className="relative">
+                                            <img
+                                                src={URL.createObjectURL(newUserAvatarFile)}
+                                                alt="Preview"
+                                                className="w-16 h-16 rounded-full object-cover border-2 border-primary"
+                                            />
+                                            <button
+                                                onClick={() => setNewUserAvatarFile(null)}
+                                                className="absolute -top-1 -right-1 w-5 h-5 bg-danger rounded-full flex items-center justify-center text-white text-xs"
+                                            >
+                                                <span className="material-icons-outlined text-sm">close</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="w-16 h-16 rounded-full bg-[#15181e] border-2 border-dashed border-border-dark flex items-center justify-center text-gray-500">
+                                            <span className="material-icons-outlined text-2xl">person</span>
+                                        </div>
+                                    )}
+                                    <label className="flex items-center gap-2 px-4 py-2.5 bg-[#15181e] hover:bg-[#1a1c23] border border-border-dark text-white text-sm font-bold rounded-lg cursor-pointer transition-all">
+                                        <span className="material-icons-outlined text-lg">upload</span>
+                                        {newUserAvatarFile ? 'Trocar Foto' : 'Selecionar Foto'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) setNewUserAvatarFile(file);
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+                                <p className="text-[10px] text-gray-600 mt-2">Formatos aceitos: JPG, PNG, GIF, WEBP (máx. 5MB)</p>
                             </div>
                         </div>
                         <div className="mt-8 flex gap-3">
@@ -490,24 +587,69 @@ const AdminUsuarios: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">URL da Foto de Perfil</label>
-                                <div className="flex gap-3 items-center">
-                                    {editingUser.avatar_url && (
-                                        <img
-                                            src={editingUser.avatar_url}
-                                            alt="Preview"
-                                            className="w-12 h-12 rounded-full object-cover border border-border-dark"
-                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        />
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Foto de Perfil</label>
+                                <div className="flex items-center gap-4">
+                                    {editingUserAvatarFile ? (
+                                        <div className="relative">
+                                            <img
+                                                src={URL.createObjectURL(editingUserAvatarFile)}
+                                                alt="Preview"
+                                                className="w-16 h-16 rounded-full object-cover border-2 border-primary"
+                                            />
+                                            <button
+                                                onClick={() => setEditingUserAvatarFile(null)}
+                                                className="absolute -top-1 -right-1 w-5 h-5 bg-danger rounded-full flex items-center justify-center text-white text-xs"
+                                            >
+                                                <span className="material-icons-outlined text-sm">close</span>
+                                            </button>
+                                        </div>
+                                    ) : editingUser.avatar_url ? (
+                                        <div className="relative group">
+                                            <img
+                                                src={editingUser.avatar_url}
+                                                alt="Avatar atual"
+                                                className="w-16 h-16 rounded-full object-cover border-2 border-border-dark"
+                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                            />
+                                            <button
+                                                onClick={() => handleDownloadAvatar(editingUser.avatar_url!, editingUser.full_name || 'usuario')}
+                                                className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                                title="Baixar foto"
+                                            >
+                                                <span className="material-icons-outlined text-white">download</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="w-16 h-16 rounded-full bg-[#15181e] border-2 border-dashed border-border-dark flex items-center justify-center text-gray-500">
+                                            <span className="material-icons-outlined text-2xl">person</span>
+                                        </div>
                                     )}
-                                    <input
-                                        type="url"
-                                        className="flex-1 bg-[#15181e] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
-                                        value={editingUser.avatar_url || ''}
-                                        onChange={(e) => setEditingUser({ ...editingUser, avatar_url: e.target.value })}
-                                        placeholder="https://exemplo.com/sua-foto.jpg"
-                                    />
+                                    <div className="flex flex-col gap-2">
+                                        <label className="flex items-center gap-2 px-4 py-2 bg-[#15181e] hover:bg-[#1a1c23] border border-border-dark text-white text-sm font-bold rounded-lg cursor-pointer transition-all">
+                                            <span className="material-icons-outlined text-lg">upload</span>
+                                            {editingUserAvatarFile || editingUser.avatar_url ? 'Trocar Foto' : 'Selecionar Foto'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) setEditingUserAvatarFile(file);
+                                                }}
+                                            />
+                                        </label>
+                                        {editingUser.avatar_url && !editingUserAvatarFile && (
+                                            <button
+                                                onClick={() => handleDownloadAvatar(editingUser.avatar_url!, editingUser.full_name || 'usuario')}
+                                                className="flex items-center gap-2 px-4 py-2 bg-secondary/10 hover:bg-secondary/20 border border-secondary/30 text-secondary text-sm font-bold rounded-lg transition-all"
+                                            >
+                                                <span className="material-icons-outlined text-lg">download</span>
+                                                Baixar Foto
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
+                                <p className="text-[10px] text-gray-600 mt-2">Formatos aceitos: JPG, PNG, GIF, WEBP (máx. 5MB)</p>
                             </div>
                         </div>
                         <div className="mt-8 flex gap-3">
