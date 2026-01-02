@@ -74,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('role, full_name')
+                    .select('role, full_name, avatar_url')
                     .eq('id', userId)
                     .maybeSingle();
 
@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     id: userId,
                     name: data.full_name,
                     role: data.role as UserRole,
-                    avatar: data.full_name.charAt(0),
+                    avatar: data.avatar_url || data.full_name.charAt(0),
                     sector: 'Administração'
                 };
             } catch (err: any) {

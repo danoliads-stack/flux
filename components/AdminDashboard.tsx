@@ -275,8 +275,17 @@ const AdminDashboard: React.FC = () => {
         {/* User Profile Footer */}
         <div className="mt-auto p-4 border-t border-border-dark flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-border-dark">
-              <img src={currentUser?.avatar || 'https://picsum.photos/seed/admin/40/40'} alt="profile" />
+            <div className="w-10 h-10 rounded-full overflow-hidden border border-border-dark bg-primary flex items-center justify-center text-white font-bold">
+              {currentUser?.avatar?.startsWith('http') ? (
+                <img
+                  src={currentUser.avatar}
+                  alt="profile"
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : (
+                currentUser?.avatar || currentUser?.name?.charAt(0) || '?'
+              )}
             </div>
             <div>
               <p className="text-white text-sm font-bold leading-tight">{currentUser?.name}</p>
