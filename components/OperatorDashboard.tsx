@@ -301,13 +301,19 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     setRecords(allRecords.slice(0, 5).map(x => x.data));
   };
 
-  // Fetch checklists
+  // Fetch checklists - Filtered by SECTOR
   const fetchChecklists = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('checklists')
       .select('id, nome, tipo, obrigatorio, intervalo_minutos, intervalo_etiqueta_minutos')
-      .eq('ativo', true)
-      .order('obrigatorio', { ascending: false });
+      .eq('ativo', true);
+
+    // Filter by sector if provided
+    if (sectorId) {
+      query = query.eq('setor_id', sectorId);
+    }
+
+    const { data } = await query.order('obrigatorio', { ascending: false });
 
     if (data) setChecklists(data);
   };
@@ -899,114 +905,143 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
       {/* Fixed Sidebar with OP Sequence and Checklists */}
       <div
-        className={`fixed top-0 right-0 h-full z-40 w-64 bg-surface-dark/95 backdrop-blur-sm border-l border-border-dark shadow-2xl transform transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full z-40 w-80 md:w-96 bg-surface-dark border-l border-white/5 shadow-2xl transform transition-transform duration-300 flex flex-col ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Header */}
-        <div className="flex items-center gap-2 p-3 border-b border-border-dark bg-surface-dark">
-          <span className="material-icons-outlined text-primary text-sm">space_dashboard</span>
-          <span className="text-white text-xs font-bold uppercase tracking-wide flex-1">Painel de Controle</span>
+        <div className="flex items-center justify-between p-5 border-b border-white/10 bg-gradient-to-r from-surface-dark to-surface-dark/50 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <span className="material-icons-outlined text-primary text-lg">dashboard_customize</span>
+            </div>
+            <div>
+              <h3 className="text-white font-display font-bold text-sm tracking-wide uppercase">Painel de Controle</h3>
+              <p className="text-xs text-text-sub-dark">Ferramentas do Operador</p>
+            </div>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-text-sub-dark hover:text-white transition-colors">
+            <span className="material-icons-outlined">close</span>
+          </button>
         </div>
 
-        <div className="p-3 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
           {/* OP Sequence Section */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
+          <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <div className="flex items-center gap-2 mb-3 px-1">
               <span className="material-icons-outlined text-primary text-sm">playlist_play</span>
-              <span className="text-white text-[10px] font-bold uppercase">Sequência OPs</span>
+              <span className="text-white text-xs font-bold uppercase tracking-wider">Sequência de Produção</span>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               {sequencedOPs.length > 0 ? (
                 sequencedOPs.slice(0, 5).map((op, idx) => (
                   <div
                     key={op.id}
-                    className={`p-2 rounded-md border text-xs flex items-center gap-2 transition-colors ${op.id === opId
-                      ? 'bg-primary/20 border-primary text-white shadow-[0_0_10px_rgba(34,211,238,0.2)]'
-                      : 'bg-surface-dark border-border-dark text-text-sub-dark hover:bg-surface-dark-highlight hover:border-text-sub-dark'
+                    className={`relative p-3 rounded-xl border flex items-center gap-3 transition-all duration-200 group ${op.id === opId
+                      ? 'bg-primary/10 border-primary/50 text-white shadow-[0_0_15px_rgba(34,211,238,0.15)]'
+                      : 'bg-[#15181e] border-white/5 text-gray-400 hover:bg-white/5 hover:border-white/10'
                       }`}
                   >
-                    <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-border-dark text-text-sub-dark'
+                    <div className={`w-6 h-6 flex items-center justify-center rounded-md text-[10px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-white/5 text-gray-500'
                       }`}>
                       {idx + 1}
-                    </span>
-                    <span className="font-bold truncate flex-1">{op.codigo}</span>
-                    {op.id === opId && <span className="material-icons-outlined text-primary text-sm animate-pulse">play_arrow</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-mono font-bold text-xs truncate ${op.id === opId ? 'text-primary' : 'text-gray-300'}`}>{op.codigo}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{op.produto_nome || 'Produto padrão'}</p>
+                    </div>
+                    {op.id === opId && (
+                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-glow-blue"></div>
+                    )}
                   </div>
                 ))
               ) : (
-                <div className="flex flex-col items-center justify-center py-4 text-center opacity-50">
-                  <span className="material-icons-outlined text-text-sub-dark text-lg mb-1">playlist_remove</span>
-                  <p className="text-text-sub-dark text-[10px] italic">Sem OPs na fila</p>
+                <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
+                  <span className="material-icons-outlined text-gray-600 text-2xl mb-2">playlist_remove</span>
+                  <p className="text-gray-500 text-xs">Fila de produção vazia</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Checklists Section */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
+          <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            <div className="flex items-center gap-2 mb-3 px-1">
               <span className="material-icons-outlined text-secondary text-sm">fact_check</span>
-              <span className="text-white text-[10px] font-bold uppercase">Checklists</span>
+              <span className="text-white text-xs font-bold uppercase tracking-wider">Checklists do Setor</span>
             </div>
-            <div className="space-y-1">
+            <div className="grid grid-cols-1 gap-2">
               {checklists.length > 0 ? (
                 checklists.slice(0, 5).map((checklist) => (
                   <button
                     key={checklist.id}
                     onClick={() => openChecklist(checklist.id)}
-                    className="w-full p-1.5 rounded border bg-background-dark border-border-dark/50 text-[10px] flex items-center gap-1.5 text-text-sub-dark hover:border-secondary hover:text-secondary transition-colors text-left"
+                    className="w-full p-3 rounded-xl border border-white/5 bg-[#15181e] text-left group hover:border-secondary/50 hover:bg-secondary/5 transition-all duration-200"
                   >
-                    <span className="material-icons-outlined text-xs">assignment</span>
-                    <span className="truncate flex-1">{checklist.nome}</span>
-                    {checklist.intervalo_minutos && (
-                      <span className="text-[8px] bg-secondary/20 text-secondary px-1 rounded">{checklist.intervalo_minutos}min</span>
-                    )}
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className={`p-1.5 rounded-md ${checklist.obrigatorio ? 'bg-red-500/10 text-red-500' : 'bg-secondary/10 text-secondary'}`}>
+                        <span className="material-icons-outlined text-sm">{checklist.obrigatorio ? 'priority_high' : 'assignment'}</span>
+                      </div>
+                      <span className="font-bold text-xs text-gray-300 group-hover:text-white flex-1 truncate">{checklist.nome}</span>
+                      {checklist.intervalo_minutos && (
+                        <span className="text-[9px] font-mono bg-white/5 text-gray-400 px-1.5 py-0.5 rounded border border-white/5">
+                          {checklist.intervalo_minutos}m
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))
               ) : (
-                <p className="text-text-sub-dark text-[10px] text-center py-2">Sem checklists</p>
+                <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
+                  <span className="material-icons-outlined text-gray-600 text-2xl mb-2">fact_check</span>
+                  <p className="text-gray-500 text-xs">Nenhum checklist disponível</p>
+                </div>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Diary Section (New) */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="material-icons-outlined text-purple-400 text-sm">menu_book</span>
-              <span className="text-white text-[10px] font-bold uppercase">Diário de Bordo</span>
+          {/* Diary Section */}
+          <div className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-purple-400 text-sm">menu_book</span>
+                <span className="text-white text-xs font-bold uppercase tracking-wider">Diário de Bordo</span>
+              </div>
+              <button
+                onClick={() => setShowDiaryInputModal(true)}
+                className="w-6 h-6 rounded-md bg-purple-500/10 text-purple-400 flex items-center justify-center hover:bg-purple-500 hover:text-white transition-all"
+                title="Novo registro"
+              >
+                <span className="material-icons-outlined text-sm">add</span>
+              </button>
             </div>
-            <button
-              onClick={() => setShowDiaryInputModal(true)}
-              className="text-[10px] text-primary hover:text-white flex items-center gap-1"
-            >
-              <span className="material-icons-outlined text-[10px]">add</span>
-              Adicionar
-            </button>
-          </div>
 
-          {/* Mini Input for Diary - REMOVED, now uses modal */}
-          {/* Button to open large input modal moved inside the header */}
-
-          <div className="space-y-1 max-h-[120px] overflow-y-auto custom-scrollbar">
-            {diaryEntries.length > 0 ? (
-              diaryEntries.slice(0, 5).map((entry) => (
-                <div key={entry.id} className="p-1.5 rounded border bg-background-dark border-border-dark/50 text-[10px] text-text-sub-dark hover:text-white group">
-                  <p className="line-clamp-2">{entry.descricao}</p>
-                  <span className="text-[8px] text-text-sub-dark/50 block mt-0.5">{new Date(entry.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+            <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+              {diaryEntries.length > 0 ? (
+                diaryEntries.slice(0, 5).map((entry) => (
+                  <div key={entry.id} className="p-3 rounded-xl border border-white/5 bg-[#15181e] text-xs text-gray-400 hover:text-gray-200 transition-colors">
+                    <p className="line-clamp-2 leading-relaxed">{entry.descricao}</p>
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                      <span className="text-[10px] text-gray-600 font-mono">{new Date(entry.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
+                  <span className="material-icons-outlined text-gray-600 text-2xl mb-2">edit_note</span>
+                  <p className="text-gray-500 text-xs">Nenhum registro hoje</p>
                 </div>
-              ))
-            ) : (
-              <p className="text-text-sub-dark text-[10px] text-center py-2">Sem registros</p>
+              )}
+            </div>
+
+            {diaryEntries.length > 0 && (
+              <button
+                onClick={() => { fetchAllDiaryEntries(); setShowDiaryModal(true); }}
+                className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-white border border-transparent hover:border-white/10 rounded-lg transition-all"
+              >
+                Ver Histórico Completo
+              </button>
             )}
           </div>
-          {/* View All Button */}
-          <button
-            onClick={() => { fetchAllDiaryEntries(); setShowDiaryModal(true); }}
-            className="w-full mt-2 text-[10px] text-text-sub-dark hover:text-white border-t border-border-dark/50 pt-1"
-          >
-            Ver Diário Completo
-          </button>
         </div>
       </div>
 
