@@ -120,7 +120,7 @@ const App: React.FC = () => {
           console.log('[App] 🔍 Fetching OP from database:', machineData.op_atual_id);
           const { data: opData, error: opError } = await supabase
             .from('ordens_producao')
-            .select('*, produtos(nome, codigo)')
+            .select('*')
             .eq('id', machineData.op_atual_id)
             .single();
 
@@ -355,7 +355,7 @@ const App: React.FC = () => {
       // 1. Fetch OP meta and product info
       const { data, error } = await supabase
         .from('ordens_producao')
-        .select('*, produtos(nome, codigo)')
+        .select('*')
         .eq('id', activeOP)
         .single();
 
@@ -412,7 +412,7 @@ const App: React.FC = () => {
         console.log('[App] 📋 Syncing active OP from machine:', currentMachine.op_atual_id);
         const { data: opData, error } = await supabase
           .from('ordens_producao')
-          .select('*, produtos(nome, codigo)')
+          .select('*')
           .eq('id', currentMachine.op_atual_id)
           .single();
 
@@ -548,7 +548,7 @@ const App: React.FC = () => {
     if (machine.op_atual_id) {
       const { data: opData } = await supabase
         .from('ordens_producao')
-        .select('*, produtos(nome, codigo)')
+        .select('*')
         .eq('id', machine.op_atual_id)
         .single();
 
