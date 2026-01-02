@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
+import { logger } from '../src/utils/logger';
 
 const LoginScreen: React.FC = () => {
   const { loginAsAdmin, loginAsOperator } = useAuth();
@@ -38,7 +39,7 @@ const LoginScreen: React.FC = () => {
 
   const handleClearCache = () => {
     if (window.confirm('Isso irá limpar todos os dados salvos neste navegador e recarregar a aplicação. Resolver problemas de acesso?')) {
-      console.log('Clearing cache and reloading...');
+      logger.log('Clearing cache and reloading...');
       localStorage.clear();
       sessionStorage.clear();
       window.location.reload();

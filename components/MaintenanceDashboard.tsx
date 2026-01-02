@@ -14,6 +14,8 @@ interface MaintenanceInfo {
     priority?: string;
     status?: string;
     chamadoId?: string;
+    opId?: string;
+    opCodigo?: string;
 }
 
 // Helper for relative time (avoids date-fns dependency)
@@ -51,11 +53,13 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ machines })
                 .select(`
                     id,
                     maquina_id,
+                    op_id,
                     descricao,
                     prioridade,
                     status,
                     data_abertura,
-                    operadores (nome)
+                    operadores (nome),
+                    ordens_producao (codigo)
                 `)
                 .in('status', ['ABERTO', 'EM_ANDAMENTO'])
                 .order('data_abertura', { ascending: false });
@@ -78,7 +82,9 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ machines })
                 operatorName: (c.operadores as any)?.nome || 'Operador',
                 priority: c.prioridade,
                 status: c.status,
-                chamadoId: c.id
+                chamadoId: c.id,
+                opId: c.op_id,
+                opCodigo: (c.ordens_producao as any)?.codigo
             }));
 
             setMaintenanceInfos(infos);
@@ -152,9 +158,27 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ machines })
 
                             {/* Footer */}
                             {isMaintenance && (
-                                <div className="p-4 bg-orange-500/20 border-t border-orange-500/30 flex justify-between items-center text-xs">
-                                    <span className="text-orange-300">{getTimeSince(maintenanceInfo.startTime)}</span>
-                                    <span className="font-bold text-white uppercase">{maintenanceInfo.operatorName || 'Operador'}</span>
+                                <div className="p-4 bg-orange-500/20 border-t border-orange-500/30 text-xs space-y-2">
+                                    {/* Linha 1: OP e Tempo */}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-orange-300 font-bold">
+                                            {maintenanceInfo.opCodigo ? `OP: ${maintenanceInfo.opCodigo}` : 'Sem OP'}
+                                        </span>
+                                        <span className="text-orange-400">{getTimeSince(maintenanceInfo.startTime)}</span>
+                                    </div>
+                                    {/* Linha 2: Operador e Prioridade */}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-white font-bold uppercase">
+                                            <span className="material-icons-outlined text-xs mr-1 align-middle">person</span>
+                                            {maintenanceInfo.operatorName || 'Operador'}
+                                        </span>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${maintenanceInfo.priority === 'ALTA' ? 'bg-red-500 text-white' :
+                                                maintenanceInfo.priority === 'BAIXA' ? 'bg-gray-500 text-white' :
+                                                    'bg-orange-500 text-black'
+                                            }`}>
+                                            {maintenanceInfo.priority || 'NORMAL'}
+                                        </span>
+                                    </div>
                                 </div>
                             )}
                         </div>

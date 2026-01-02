@@ -202,6 +202,7 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
               <MachineCard
                 key={machine.id}
                 machine={machine}
+                currentUserId={user.id}
                 onSelect={() => onSelect(machine as MachineData)}
               />
             ))}
@@ -225,16 +226,27 @@ const FilterButton = ({ label, dotColor, active, onClick }: { label: string, dot
 
 interface MachineCardProps {
   machine: any;
+  currentUserId: string;
   onSelect: () => void;
 }
 
-const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) => {
-  const isAvailable = machine.status_atual === 'AVAILABLE';
-  const isProducing = machine.status_atual === 'RUNNING' || machine.status_atual === 'SETUP';
-  const isStopped = machine.status_atual === 'STOPPED';
-  const isMaintenance = machine.status_atual === 'MAINTENANCE';
+const MachineCard: React.FC<MachineCardProps> = ({ machine, currentUserId, onSelect }) => {
+  const isOccupied = machine.operador_atual_id && machine.operador_atual_id !== currentUserId;
+  const isAvailable = !isOccupied && machine.status_atual === 'AVAILABLE';
+  const isProducing = !isOccupied && (machine.status_atual === 'RUNNING' || machine.status_atual === 'SETUP');
+  const isStopped = !isOccupied && machine.status_atual === 'STOPPED';
+  const isMaintenance = !isOccupied && machine.status_atual === 'MAINTENANCE';
 
   const getStatusConfig = () => {
+    if (isOccupied) return {
+      bg: 'bg-surface-dark border-white/5 opacity-60',
+      border: 'border-white/10',
+      glow: '',
+      text: 'text-gray-500',
+      dot: 'bg-gray-500',
+      icon: 'lock',
+      label: 'Ocupada'
+    };
     if (isAvailable) return {
       bg: 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/10',
       border: 'border-emerald-500/40',
@@ -277,8 +289,8 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) => {
 
   return (
     <div
-      onClick={onSelect}
-      className={`group relative flex flex-col ${status.bg} border ${status.border} rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer hover:scale-[1.02] hover:shadow-2xl ${status.glow} active:scale-[0.98] backdrop-blur-sm`}
+      onClick={!isOccupied ? onSelect : undefined}
+      className={`group relative flex flex-col ${status.bg} border ${status.border} rounded-2xl overflow-hidden transition-all duration-300 ${!isOccupied ? 'cursor-pointer hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98]' : 'cursor-not-allowed grayscale-[0.5]'} ${status.glow} backdrop-blur-sm`}
     >
       {/* Decorative Corner Accent */}
       <div className={`absolute top-0 right-0 w-24 h-24 ${status.bg} opacity-50 blur-2xl`}></div>
@@ -318,9 +330,18 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) => {
           </div>
 
           {/* Action Indicator */}
-          <div className={`flex items-center gap-1.5 ${status.text} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}>
-            <span className="text-xs font-bold uppercase">Selecionar</span>
-            <span className="material-icons-outlined text-sm">arrow_forward</span>
+          <div className={`flex items-center gap-1.5 ${status.text} opacity-0 ${!isOccupied && 'group-hover:opacity-100'} transition-opacity duration-300`}>
+            {isOccupied ? (
+              <>
+                <span className="text-xs font-bold uppercase">Bloqueada</span>
+                <span className="material-icons-outlined text-sm">lock</span>
+              </>
+            ) : (
+              <>
+                <span className="text-xs font-bold uppercase">Selecionar</span>
+                <span className="material-icons-outlined text-sm">arrow_forward</span>
+              </>
+            )}
           </div>
         </div>
       </div>

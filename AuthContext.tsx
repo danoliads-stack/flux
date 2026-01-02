@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { supabase } from './supabase';
 import { AppUser, UserRole } from './types';
 import { SessionStorage } from './src/utils/storageManager';
+import { logger } from './src/utils/logger';
 import type { Session } from '@supabase/supabase-js';
 
 // Namespace para sessão de operador
@@ -24,7 +25,7 @@ const clearOperatorSession = () => {
     localStorage.removeItem(OPERATOR_SESSION_KEY);
     localStorage.removeItem('flux_selected_machine');
     localStorage.removeItem('flux_current_shift');
-    console.log('[Auth] Operator session cleared');
+    logger.log('[Auth] Operator session cleared');
 };
 
 // Limpa APENAS dados do Supabase Auth
@@ -33,7 +34,7 @@ const clearSupabaseAuthData = () => {
         key.startsWith('sb-') || key === 'flux_auth_session'
     );
     supabaseKeys.forEach(key => localStorage.removeItem(key));
-    console.log('[Auth] Supabase auth data cleared');
+    logger.log('[Auth] Supabase auth data cleared');
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -59,13 +60,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 🔍 Fetch profile com timeout de 3s usando Promise.race
     const fetchProfile = useCallback(async (userId: string): Promise<AppUser | null> => {
-        console.log(`[PROFILE] Fetch started for ${userId}`);
+        logger.log(`[PROFILE] Fetch started for ${userId}`);
         const startTime = Date.now();
 
         // Timeout de 3 segundos
         const timeoutPromise = new Promise<null>((resolve) => {
             setTimeout(() => {
-                console.warn('[PROFILE] Query timeout (3s) - using fallback');
+                logger.warn('[PROFILE] Query timeout (3s) - using fallback');
                 resolve(null);
             }, 3000);
         });
@@ -79,16 +80,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     .maybeSingle();
 
                 if (error) {
-                    console.warn('[PROFILE] Query error:', error.message);
+                    logger.warn('[PROFILE] Query error:', error.message);
                     return null;
                 }
 
                 if (!data) {
-                    console.log(`[PROFILE] Not found -> using fallback user`);
+                    logger.log(`[PROFILE] Not found -> using fallback user`);
                     return null;
                 }
 
-                console.log(`[PROFILE] Loaded in ${Date.now() - startTime}ms:`, data.role);
+                logger.log(`[PROFILE] Loaded in ${Date.now() - startTime}ms:`, data.role);
                 return {
                     id: userId,
                     name: data.full_name,
@@ -97,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     sector: 'Administração'
                 };
             } catch (err: any) {
-                console.warn('[PROFILE] Exception:', err.message);
+                logger.warn('[PROFILE] Exception:', err.message);
                 return null;
             }
         })();
@@ -112,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Se não há sessão, limpa user
         if (!session?.user) {
-            console.log(`[AUTH] ${source}: No session`);
+            logger.log(`[AUTH] ${source}: No session`);
             lastUserIdRef.current = null;
             setUser(null);
             setLoading(false);
@@ -121,12 +122,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // ✅ Evita processar mesmo usuário duas vezes
         if (lastUserIdRef.current === session.user.id) {
-            console.log(`[AUTH] ${source}: Same user (${session.user.email}), skipping`);
+            logger.log(`[AUTH] ${source}: Same user (${session.user.email}), skipping`);
             setLoading(false);
             return;
         }
 
-        console.log(`[AUTH] ${source}: Processing user ${session.user.email}`);
+        logger.log(`[AUTH] ${source}: Processing user ${session.user.email}`);
         lastUserIdRef.current = session.user.id;
 
         // Busca profile (com timeout de 3s)
@@ -136,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isMountedRef.current) {
             setUser(userToSet);
             setLoading(false);
-            console.log(`[AUTH] ${source}: User set ->`, userToSet.name, profile ? '(with profile)' : '(fallback)');
+            logger.log(`[AUTH] ${source}: User set ->`, userToSet.name, profile ? '(with profile)' : '(fallback)');
         }
     }, [fetchProfile, createFallbackUser]);
 
@@ -144,20 +145,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         // Trava de inicialização única
         if (initialized.current) {
-            console.log('[AUTH] Already initialized, skipping');
+            logger.log('[AUTH] Already initialized, skipping');
             return;
         }
         initialized.current = true;
         isMountedRef.current = true;
 
-        console.log('[AUTH] Initializing...');
+        logger.log('[AUTH] Initializing...');
 
         const initAuth = async () => {
             try {
                 // 1️⃣ PRIMEIRO: Verifica operador (sessionStorage - instantâneo)
                 const operator = SessionStorage.getOperator();
                 if (operator) {
-                    console.log('[AUTH] Operator found in sessionStorage:', operator.name);
+                    logger.log('[AUTH] Operator found in sessionStorage:', operator.name);
                     lastUserIdRef.current = operator.id;
                     setUser(operator);
                     setLoading(false);
@@ -165,18 +166,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
                 // 2️⃣ Busca sessão Supabase
-                console.log('[AUTH] Checking Supabase session...');
+                logger.log('[AUTH] Checking Supabase session...');
                 const { data: { session }, error } = await supabase.auth.getSession();
 
                 if (error) {
-                    console.error('[AUTH] getSession error:', error.message);
+                    logger.error('[AUTH] getSession error:', error.message);
                 }
 
                 // Processa sessão inicial
                 await handleSessionChange(session, 'INIT');
 
             } catch (err) {
-                console.error('[AUTH] Initialization error:', err);
+                logger.error('[AUTH] Initialization error:', err);
                 if (isMountedRef.current) {
                     setUser(null);
                     setLoading(false);
@@ -192,17 +193,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Ignora se operador está logado
                 const currentOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
                 if (currentOperator) {
-                    console.log('[AUTH] Event ignored - operator logged in');
+                    logger.log('[AUTH] Event ignored - operator logged in');
                     return;
                 }
 
                 // Ignora durante criação admin de usuário
                 if (typeof window !== 'undefined' && (window as any).isCreatingUserAdmin) {
-                    console.log('[AUTH] Event ignored - admin creating user');
+                    logger.log('[AUTH] Event ignored - admin creating user');
                     return;
                 }
 
-                console.log(`[AUTH] onAuthStateChange: ${event}`);
+                logger.log(`[AUTH] onAuthStateChange: ${event}`);
 
                 switch (event) {
                     case 'INITIAL_SESSION':
@@ -215,10 +216,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         lastUserIdRef.current = null;
                         setUser(null);
                         setLoading(false);
-                        console.log('[AUTH] User signed out');
+                        logger.log('[AUTH] User signed out');
                         break;
                     case 'TOKEN_REFRESHED':
-                        console.log('[AUTH] Token refreshed');
+                        logger.log('[AUTH] Token refreshed');
                         break;
                     // Ignora outros eventos (USER_UPDATED, etc)
                 }
@@ -230,7 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // 🧹 Cleanup
         return () => {
-            console.log('[AUTH] Cleanup - unsubscribing');
+            logger.log('[AUTH] Cleanup - unsubscribing');
             isMountedRef.current = false;
             initialized.current = false; // Reset for StrictMode remount
             subscription.unsubscribe();
@@ -240,7 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 🔐 Login Admin/Supervisor - Usa Supabase Auth
     const loginAsAdmin = useCallback(async (email: string, pass: string) => {
-        console.log('[AUTH] Admin login attempt:', email);
+        logger.log('[AUTH] Admin login attempt:', email);
 
         // Limpa sessão de operador desta aba
         sessionStorage.removeItem(OPERATOR_SESSION_KEY);
@@ -251,43 +252,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         if (error) {
-            console.error('[AUTH] Login error:', error.message);
+            logger.error('[AUTH] Login error:', error.message);
             return { error };
         }
 
-        console.log('[AUTH] Login successful');
+        logger.log('[AUTH] Login successful');
         return { error: null };
     }, []);
 
-    // 👷 Login Operador - NÃO usa Supabase Auth, usa tabela operadores + sessionStorage
+    // 👷 Login Operador - Usa função RPC segura (PIN validado no servidor via hash)
     const loginAsOperator = useCallback(async (matricula: string, pin: string) => {
-        console.log('[AUTH] Operator login attempt:', matricula);
+        logger.log('[AUTH] Operator login attempt:', matricula);
 
         // Limpa sessão anterior
         sessionStorage.removeItem(OPERATOR_SESSION_KEY);
 
+        // ✅ Usa função RPC que valida PIN hash no servidor (PIN nunca exposto na query)
         const { data, error } = await supabase
-            .from('operadores')
-            .select('*, setores(nome), turnos(nome)')
-            .eq('matricula', matricula)
-            .eq('pin', pin)
-            .eq('ativo', true)
-            .single();
+            .rpc('validate_operator_pin', {
+                p_matricula: matricula,
+                p_pin: pin
+            });
 
-        if (error || !data) {
-            console.error('[AUTH] Operator login error:', error?.message);
+        if (error) {
+            logger.error('[AUTH] Operator login RPC error:', error.message);
+            return { error: 'Erro ao validar credenciais' };
+        }
+
+        if (!data || data.length === 0) {
+            logger.warn('[AUTH] Operator not found or invalid PIN');
             return { error: 'Matrícula ou PIN inválido' };
         }
 
+        const operatorData = data[0];
         const opUser: AppUser = {
-            id: data.id,
-            name: data.nome,
+            id: operatorData.id,
+            name: operatorData.nome,
             role: 'OPERATOR',
-            avatar: data.avatar || data.nome.charAt(0),
-            sector: data.setores?.nome || 'Produção',
-            setor_id: data.setor_id,
-            turno: data.turnos?.nome || 'Turno',
-            matricula: data.matricula
+            avatar: operatorData.avatar || operatorData.nome.charAt(0),
+            sector: operatorData.setor_nome || 'Produção',
+            setor_id: operatorData.setor_id,
+            turno: operatorData.turno_nome || 'Turno',
+            matricula: operatorData.matricula
         };
 
         // Salva no sessionStorage e atualiza estado
@@ -295,13 +301,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastUserIdRef.current = opUser.id;
         setUser(opUser);
 
-        console.log('[AUTH] Operator logged in:', opUser.name);
+        logger.log('[AUTH] Operator logged in:', opUser.name);
         return { error: null };
     }, []);
 
+
     // 🚪 Logout - Apenas desta aba
     const logout = useCallback(async () => {
-        console.log('[AUTH] Logging out...');
+        logger.log('[AUTH] Logging out...');
 
         const wasOperator = sessionStorage.getItem(OPERATOR_SESSION_KEY);
 
@@ -325,13 +332,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!wasOperator) {
             try {
                 await supabase.auth.signOut();
-                console.log('[AUTH] Supabase signOut complete');
+                logger.log('[AUTH] Supabase signOut complete');
             } catch (e) {
-                console.error('[AUTH] Supabase signOut error:', e);
+                logger.error('[AUTH] Supabase signOut error:', e);
             }
         }
 
-        console.log('[AUTH] Logout complete');
+        logger.log('[AUTH] Logout complete');
     }, []);
 
     // 🧹 Função para limpar TUDO (uso manual/debug)
@@ -340,7 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearSupabaseAuthData();
         lastUserIdRef.current = null;
         setUser(null);
-        console.log('[AUTH] All sessions cleared');
+        logger.log('[AUTH] All sessions cleared');
     }, []);
 
     return (

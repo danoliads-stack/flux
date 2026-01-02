@@ -1,5 +1,6 @@
 import { AppUser, MachineStatus } from '../../types';
 import { supabase } from '../../supabase';
+import { logger } from './logger';
 
 // ============================================
 // CONSTANTS
@@ -130,9 +131,9 @@ export const MachineStateStorage = {
             const key = `${STORAGE_KEYS.MACHINE_STATE_PREFIX}${state.machineId}`;
             state.lastSync = new Date().toISOString();
             localStorage.setItem(key, JSON.stringify(state));
-            console.log('[MachineState] 💾 Saved:', state.machineId, state.status);
+            logger.log('[MachineState] 💾 Saved:', state.machineId, state.status);
         } catch (e) {
-            console.error('[MachineState] ❌ Error saving:', e);
+            logger.error('[MachineState] ❌ Error saving:', e);
         }
     },
 
@@ -147,7 +148,7 @@ export const MachineStateStorage = {
 
             return JSON.parse(saved) as MachineState;
         } catch (e) {
-            console.error('[MachineState] ❌ Error loading:', e);
+            logger.error('[MachineState] ❌ Error loading:', e);
             return null;
         }
     },
@@ -172,13 +173,13 @@ export const MachineStateStorage = {
 
             if (error) throw error;
 
-            console.log('[MachineState] ☁️ Synced to Supabase:', machineId);
+            logger.log('[MachineState] ☁️ Synced to Supabase:', machineId);
 
             // Atualiza timestamp de sync
             state.lastSync = new Date().toISOString();
             this.saveMachineState(state);
         } catch (e) {
-            console.error('[MachineState] ❌ Sync error:', e);
+            logger.error('[MachineState] ❌ Sync error:', e);
         }
     },
 
@@ -206,10 +207,10 @@ export const MachineStateStorage = {
             };
 
             this.saveMachineState(state);
-            console.log('[MachineState] ⬇️ Restored from Supabase:', machineId);
+            logger.log('[MachineState] ⬇️ Restored from Supabase:', machineId);
             return state;
         } catch (e) {
-            console.error('[MachineState] ❌ Restore error:', e);
+            logger.error('[MachineState] ❌ Restore error:', e);
             return null;
         }
     },
@@ -220,7 +221,7 @@ export const MachineStateStorage = {
     clearMachineState(machineId: string): void {
         const key = `${STORAGE_KEYS.MACHINE_STATE_PREFIX}${machineId}`;
         localStorage.removeItem(key);
-        console.log('[MachineState] 🗑️ Cleared:', machineId);
+        logger.log('[MachineState] 🗑️ Cleared:', machineId);
     },
 
     /**
@@ -254,9 +255,9 @@ export const AccumulatedTimesStorage = {
             const key = `${STORAGE_KEYS.ACCUMULATED_TIMES_PREFIX}${times.opId}`;
             times.lastUpdate = new Date().toISOString();
             localStorage.setItem(key, JSON.stringify(times));
-            console.log('[AccumulatedTimes] 💾 Saved for OP:', times.opId);
+            logger.log('[AccumulatedTimes] 💾 Saved for OP:', times.opId);
         } catch (e) {
-            console.error('[AccumulatedTimes] ❌ Error saving:', e);
+            logger.error('[AccumulatedTimes] ❌ Error saving:', e);
         }
     },
 
@@ -271,7 +272,7 @@ export const AccumulatedTimesStorage = {
 
             return JSON.parse(saved) as AccumulatedTimes;
         } catch (e) {
-            console.error('[AccumulatedTimes] ❌ Error loading:', e);
+            logger.error('[AccumulatedTimes] ❌ Error loading:', e);
             return null;
         }
     },
@@ -282,7 +283,7 @@ export const AccumulatedTimesStorage = {
     clearTimes(opId: string): void {
         const key = `${STORAGE_KEYS.ACCUMULATED_TIMES_PREFIX}${opId}`;
         localStorage.removeItem(key);
-        console.log('[AccumulatedTimes] 🗑️ Cleared for OP:', opId);
+        logger.log('[AccumulatedTimes] 🗑️ Cleared for OP:', opId);
     },
 };
 
@@ -296,7 +297,7 @@ export const StorageCleaner = {
      * NÃO toca em dados de máquina ou produção
      */
     clearSession(): void {
-        console.log('[StorageCleaner] 🧹 Clearing session...');
+        logger.log('[StorageCleaner] 🧹 Clearing session...');
 
         // Preserva tabId
         const tabId = SessionStorage.getTabId();
@@ -317,7 +318,7 @@ export const StorageCleaner = {
      * Limpa estado de máquina específica e tempos da OP
      */
     clearMachineState(machineId: string, opId?: string): void {
-        console.log('[StorageCleaner] 🧹 Clearing machine state:', machineId);
+        logger.log('[StorageCleaner] 🧹 Clearing machine state:', machineId);
 
         MachineStateStorage.clearMachineState(machineId);
 
@@ -325,14 +326,14 @@ export const StorageCleaner = {
             AccumulatedTimesStorage.clearTimes(opId);
         }
 
-        console.log('[StorageCleaner] ✅ Machine state cleared');
+        logger.log('[StorageCleaner] ✅ Machine state cleared');
     },
 
     /**
      * Limpa estados antigos (> 24h sem uso)
      */
     clearStaleStates(): void {
-        console.log('[StorageCleaner] 🧹 Clearing stale states...');
+        logger.log('[StorageCleaner] 🧹 Clearing stale states...');
 
         const now = new Date();
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -349,7 +350,7 @@ export const StorageCleaner = {
             }
         });
 
-        console.log(`[StorageCleaner] ✅ Cleared ${clearedCount} stale machine states`);
+        logger.log(`[StorageCleaner] ✅ Cleared ${clearedCount} stale machine states`);
     },
 
     /**
@@ -361,7 +362,7 @@ export const StorageCleaner = {
             return;
         }
 
-        console.log('[StorageCleaner] 🚨 CLEARING ALL LOCAL DATA...');
+        logger.log('[StorageCleaner] 🚨 CLEARING ALL LOCAL DATA...');
 
         // Limpa sessionStorage
         sessionStorage.clear();
@@ -378,8 +379,8 @@ export const StorageCleaner = {
 
         keysToRemove.forEach(key => localStorage.removeItem(key));
 
-        console.log(`[StorageCleaner] ✅ Cleared ${keysToRemove.length} items from localStorage`);
-        console.log('[StorageCleaner] ℹ️ Supabase data (production records) preserved');
+        logger.log(`[StorageCleaner] ✅ Cleared ${keysToRemove.length} items from localStorage`);
+        logger.log('[StorageCleaner] ℹ️ Supabase data (production records) preserved');
     },
 };
 

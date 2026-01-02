@@ -25,6 +25,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 're
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { useAppStore } from './src/store/useAppStore';
 import { getMachineSlug } from './src/utils/slug';
+import { logger } from './src/utils/logger';
 
 // --- PROTECTED ROUTE COMPONENT ---
 interface ProtectedRouteProps {
@@ -44,14 +45,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, user, permiss
 
 const App: React.FC = () => {
   useEffect(() => {
-    console.log('[DEBUG-APP] 🏗️ App component MOUNTED');
-    return () => console.log('[DEBUG-APP] 🏚️ App component UNMOUNTED');
+    logger.log('[DEBUG-APP] 🏗️ App component MOUNTED');
+    return () => logger.log('[DEBUG-APP] 🏚️ App component UNMOUNTED');
   }, []);
 
   const { user: currentUser, logout: handleLogout, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    console.log(`[DEBUG-APP] 🔄 Auth State Tracer -> loading: ${authLoading}, user: ${currentUser?.name || 'GUEST'}`);
+    logger.log(`[DEBUG-APP] 🔄 Auth State Tracer -> loading: ${authLoading}, user: ${currentUser?.name || 'GUEST'}`);
   }, [authLoading, currentUser]);
 
   const navigate = useNavigate();
@@ -91,7 +92,7 @@ const App: React.FC = () => {
     const recoverState = async () => {
       // Only run if we have a persisted machineId but no currentMachine loaded
       if (selectedMachineId && !currentMachine && currentUser) {
-        console.log('[App] 🔄 Recovering state for machine:', selectedMachineId);
+        logger.log('[App] 🔄 Recovering state for machine:', selectedMachineId);
 
         // 1. Fetch machine from database
         const { data: machineData, error: machineError } = await supabase
@@ -101,13 +102,13 @@ const App: React.FC = () => {
           .single();
 
         if (machineError || !machineData) {
-          console.error('[App] ❌ Failed to recover machine:', machineError);
+          logger.error('[App] ❌ Failed to recover machine:', machineError);
           // Clear stale persisted state
           setSelectedMachine(null);
           return;
         }
 
-        console.log('[App] ✅ Recovered machine:', machineData.nome, 'status:', machineData.status_atual, 'op_atual_id:', machineData.op_atual_id);
+        logger.log('[App] ✅ Recovered machine:', machineData.nome, 'status:', machineData.status_atual, 'op_atual_id:', machineData.op_atual_id);
         setCurrentMachine(machineData);
 
         // 2. Sync timers from database
@@ -117,7 +118,7 @@ const App: React.FC = () => {
 
         // 3. Fetch active OP if exists
         if (machineData.op_atual_id) {
-          console.log('[App] 🔍 Fetching OP from database:', machineData.op_atual_id);
+          logger.log('[App] 🔍 Fetching OP from database:', machineData.op_atual_id);
           const { data: opData, error: opError } = await supabase
             .from('ordens_producao')
             .select('*')
@@ -125,13 +126,13 @@ const App: React.FC = () => {
             .single();
 
           if (opError) {
-            console.error('[App] ❌ Failed to fetch OP:', opError);
+            logger.error('[App] ❌ Failed to fetch OP:', opError);
           } else if (opData) {
-            console.log('[App] ✅ Recovered OP:', opData.codigo);
+            logger.log('[App] ✅ Recovered OP:', opData.codigo);
             setActiveOP(opData as any);
           }
         } else {
-          console.log('[App] ⚠️ Machine has no op_atual_id - OP will be null');
+          logger.log('[App] ⚠️ Machine has no op_atual_id - OP will be null');
         }
 
         // 4. Map machine status to opState (database is source of truth)
@@ -139,7 +140,7 @@ const App: React.FC = () => {
 
         // ✅ Detect Inconsistency: Running without OP
         if ((machineData.status_atual === MachineStatus.RUNNING || machineData.status_atual === MachineStatus.SETUP) && !machineData.op_atual_id) {
-          console.warn('[App] ⚠️ State recovery detected production/setup without OP. Forcing IDLE.');
+          logger.warn('[App] ⚠️ State recovery detected production/setup without OP. Forcing IDLE.');
           dbOpState = 'IDLE';
           await supabase.from('maquinas').update({
             status_atual: MachineStatus.AVAILABLE,
@@ -156,7 +157,7 @@ const App: React.FC = () => {
         }
 
         setOpState(dbOpState);
-        console.log('[App] ✅ State recovery complete. opState:', dbOpState, 'activeOP:', activeOP);
+        logger.log('[App] ✅ State recovery complete. opState:', dbOpState, 'activeOP:', activeOP);
       }
     };
 
@@ -165,7 +166,7 @@ const App: React.FC = () => {
 
   // DEBUG: Log activeOP changes
   useEffect(() => {
-    console.log('[App] 🔔 activeOP changed:', activeOP, 'activeOPCodigo:', activeOPCodigo);
+    logger.log('[App] 🔔 activeOP changed:', activeOP, 'activeOPCodigo:', activeOPCodigo);
   }, [activeOP, activeOPCodigo]);
 
   // SLUG-BASED URL: Detect machine slug from URL and load machine
@@ -183,7 +184,7 @@ const App: React.FC = () => {
     }
 
     const findMachineBySlug = async () => {
-      console.log('[App] 🔍 Looking for machine by slug:', slug);
+      logger.log('[App] 🔍 Looking for machine by slug:', slug);
 
       // First try exact codigo match (most efficient)
       let { data: machine, error } = await supabase
@@ -209,11 +210,11 @@ const App: React.FC = () => {
       }
 
       if (machine) {
-        console.log('[App] ✅ Found machine by slug:', machine.nome);
+        logger.log('[App] ✅ Found machine by slug:', machine.nome);
         setSelectedMachine(machine.id);
         setCurrentMachine(machine);
       } else {
-        console.warn('[App] ⚠️ Machine not found for slug:', slug);
+        logger.warn('[App] ⚠️ Machine not found for slug:', slug);
         navigate('/maquinas');
       }
     };
@@ -240,20 +241,20 @@ const App: React.FC = () => {
     if (location.pathname.startsWith('/r/')) return;
 
     if (currentUser) {
-      console.log(`[DEBUG-APP] 👤 User identified: ${currentUser.name} (${currentUser.role})`);
-      console.log(`[DEBUG-APP] 📍 Current Path: ${location.pathname}`);
+      logger.log(`[DEBUG-APP] 👤 User identified: ${currentUser.name} (${currentUser.role})`);
+      logger.log(`[DEBUG-APP] 📍 Current Path: ${location.pathname}`);
 
       if (location.pathname === '/' || location.pathname === '/login') {
         let target = '/maquinas';
         if (currentUser.role === 'ADMIN') target = '/administracao';
         else if (currentUser.role === 'SUPERVISOR') target = '/supervisao';
 
-        console.log(`[DEBUG-APP] 🚀 Redirecting to role default: ${target}`);
+        logger.log(`[DEBUG-APP] 🚀 Redirecting to role default: ${target}`);
         navigate(target);
       }
     } else if (!authLoading) {
       if (location.pathname === '/' || (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/r/'))) {
-        console.log('[DEBUG-APP] 🔓 No user, redirecting to login');
+        logger.log('[DEBUG-APP] 🔓 No user, redirecting to login');
         navigate('/login');
       }
     }
@@ -281,7 +282,7 @@ const App: React.FC = () => {
           .select('*')
           .order('created_at', { ascending: false });
 
-        console.log('Paradas encontradas:', paradas, paradasError);
+        logger.log('Paradas encontradas:', paradas, paradasError);
 
         // Buscar todos os tipos de parada para mapear ID -> Nome
         const { data: tiposParada } = await supabase
@@ -304,7 +305,7 @@ const App: React.FC = () => {
           }
         });
 
-        console.log('ParadasMap:', Object.fromEntries(paradasMap));
+        logger.log('ParadasMap:', Object.fromEntries(paradasMap));
 
         setLiveMachines(data.map(m => ({
           ...m,
@@ -318,7 +319,7 @@ const App: React.FC = () => {
 
     // ✅ Subscribe to realtime updates para sincronização instantânea
     const unsubscribe = realtimeManager.subscribeMachineUpdates((update) => {
-      console.log('[App] 🔄 Machine update received:', update);
+      logger.log('[App] 🔄 Machine update received:', update);
 
       // Atualiza apenas a máquina específica na lista
       setLiveMachines(prev => prev.map(m =>
@@ -334,7 +335,7 @@ const App: React.FC = () => {
 
       // Se for a máquina selecionada ou update veio do banco, faz refresh completo
       if (update.machineId === selectedMachineId || update.source === 'database') {
-        console.log('[App] 🔃 Refreshing machines due to update');
+        logger.log('[App] 🔃 Refreshing machines due to update');
         fetchMachines();
       }
     });
@@ -387,10 +388,10 @@ const App: React.FC = () => {
         // 3. DB has MORE production than local (synced from another source)
         // 4. We are NOT active (fallback)
         if (!isActive || currentState.opState === 'FINALIZADA' || total > localProduced) {
-          console.log('[App] 📥 Syncing production from DB:', total);
+          logger.log('[App] 📥 Syncing production from DB:', total);
           setProductionData({ totalProduced: total });
         } else {
-          console.log('[App] 🛡️ Preserving local production state:', localProduced, '(DB:', total, ')');
+          logger.log('[App] 🛡️ Preserving local production state:', localProduced, '(DB:', total, ')');
         }
       }
     };
@@ -409,7 +410,7 @@ const App: React.FC = () => {
     const syncOP = async () => {
       // Sync if: machine has OP ID AND (activeOP is missing OR activeOPData is missing)
       if (currentMachine?.op_atual_id && (!activeOP || !activeOPData)) {
-        console.log('[App] 📋 Syncing active OP from machine:', currentMachine.op_atual_id);
+        logger.log('[App] 📋 Syncing active OP from machine:', currentMachine.op_atual_id);
         const { data: opData, error } = await supabase
           .from('ordens_producao')
           .select('*')
@@ -417,12 +418,12 @@ const App: React.FC = () => {
           .single();
 
         if (error) {
-          console.error('[App] ❌ Error fetching OP:', error.message);
+          logger.error('[App] ❌ Error fetching OP:', error.message);
           return;
         }
 
         if (opData) {
-          console.log('[App] ✅ OP data loaded:', opData.codigo);
+          logger.log('[App] ✅ OP data loaded:', opData.codigo);
           // Update Store
           setActiveOP(opData as any);
 
@@ -472,7 +473,7 @@ const App: React.FC = () => {
         updates.operador_atual_id = currentUser?.id;
       } else if (opState === 'PRODUCAO' || opState === 'SETUP') {
         // ⚠️ INCONSISTENCY: Producing without OP. Force IDLE in DB to prevent invalid shift logs.
-        console.warn('[App] ⚠️ syncStatus detected production/setup without OP. Forcing IDLE in DB.');
+        logger.warn('[App] ⚠️ syncStatus detected production/setup without OP. Forcing IDLE in DB.');
         updates.status_atual = MachineStatus.AVAILABLE;
         updates.op_atual_id = null;
         updates.operador_atual_id = null;
@@ -500,11 +501,18 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   const handleMachineSelect = async (machine: MachineData) => {
-    console.log('Selecting machine:', machine.nome, 'Current status:', machine.status_atual);
+    logger.log('Selecting machine:', machine.nome, 'Current status:', machine.status_atual);
 
     // ✅ VALIDAÇÃO: Verificar se o operador já está em outra máquina
     if (currentUser?.role === 'OPERATOR') {
-      const { data: occupiedMachine, error } = await supabase
+      // 1. Prevent selecting a machine preoccupied by ANOTHER operator
+      if (machine.operador_atual_id && machine.operador_atual_id !== currentUser.id) {
+        alert(`⛔ Máquina Ocupada!\n\nEsta máquina já está sendo operada por outro usuário. Não é possível acessá-la no momento.`);
+        return;
+      }
+
+      // 2. Warn if operator is leaving a machine active (Optional: Logic exists below to clear it)
+      const { data: occupiedMachine } = await supabase
         .from('maquinas')
         .select('id, nome')
         .eq('operador_atual_id', currentUser.id)
@@ -512,8 +520,10 @@ const App: React.FC = () => {
         .maybeSingle();
 
       if (occupiedMachine) {
-        alert(`⚠️ Você já está operando a máquina "${occupiedMachine.nome}". Por favor, finalize ou saia da máquina atual antes de selecionar outra.`);
-        return;
+        // Allow switching, but warn/inform (Logic handled in handleChangeMachine mostly, but here we just warn)
+        // Actually user said: "can pular de uma maquina pra outra". 
+        // So we should ALLOW it, provided the TARGET is free.
+        // We will clear the old machine binding below.
       }
     }
 
@@ -560,7 +570,7 @@ const App: React.FC = () => {
     } else {
       // ✅ FIX: Se a máquina está em status de produção/setup mas SEM OP, reseta ela
       if (initialOPState === 'PRODUCAO' || initialOPState === 'SETUP' || initialOPState === 'PARADA') {
-        console.warn('[App] ⚠️ Máquina em estado inconsistente (sem OP). Resetando para IDLE.');
+        logger.warn('[App] ⚠️ Máquina em estado inconsistente (sem OP). Resetando para IDLE.');
         setOpState('IDLE');
         await updateSelectedMachine({
           status_atual: MachineStatus.AVAILABLE,
@@ -589,15 +599,15 @@ const App: React.FC = () => {
 
   const updateSelectedMachine = async (updates: any) => {
     if (!selectedMachineId) {
-      console.log('No machine selected, cannot update');
+      logger.log('No machine selected, cannot update');
       return;
     }
-    console.log('Updating machine:', selectedMachineId, 'with:', updates);
+    logger.log('Updating machine:', selectedMachineId, 'with:', updates);
     const { error } = await supabase.from('maquinas').update(updates).eq('id', selectedMachineId);
     if (error) {
-      console.error('Error updating machine:', error);
+      logger.error('Error updating machine:', error);
     } else {
-      console.log('Machine updated successfully');
+      logger.log('Machine updated successfully');
     }
   };
 
@@ -620,7 +630,7 @@ const App: React.FC = () => {
 
   // Emergency clear function for stuck loading
   const handleEmergencyClear = () => {
-    console.log('Emergency clear triggered');
+    logger.log('Emergency clear triggered');
     // Clear ALL localStorage
     localStorage.clear();
     sessionStorage.clear();
@@ -688,7 +698,7 @@ const App: React.FC = () => {
                       onOpenSetup={() => setActiveModal('setup')}
                       onOpenStop={() => setActiveModal('stop')}
                       onOpenFinalize={() => {
-                        console.log('Opening Finalize Modal');
+                        logger.log('Opening Finalize Modal');
                         setActiveModal('finalize');
                       }}
                       onGenerateLabel={() => setActiveModal('label')}
@@ -802,7 +812,7 @@ const App: React.FC = () => {
                       }}
                       onRequestMaintenance={async (description) => {
                         if (currentMachine && currentUser) {
-                          console.log('Solicitando manutenção:', { machine: currentMachine.id, description });
+                          logger.log('Solicitando manutenção:', { machine: currentMachine.id, description });
 
                           // 1. Criar chamado de manutenção na tabela separada
                           const { error } = await supabase.from('chamados_manutencao').insert({
@@ -816,14 +826,13 @@ const App: React.FC = () => {
                           });
 
                           if (error) {
-                            console.error('Erro ao abrir chamado:', error);
+                            logger.error('Erro ao abrir chamado:', error);
                             alert('Erro ao registrar chamado de manutenção.');
                             return;
                           }
 
-                          // 2. Parar a máquina (mesma lógica de onStop)
-                          await supabase.from('op_operadores').update({ fim: new Date().toISOString() }).eq('maquina_id', currentMachine.id).is('fim', null);
-
+                          // 2. Mudar status para MAINTENANCE (mantém OP e operador vinculados)
+                          // NÃO fechamos op_operadores - a manutenção é temporária
                           const now = new Date().toISOString();
                           localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
 
@@ -954,7 +963,7 @@ const App: React.FC = () => {
             onClose={closeModals}
             onConfirm={async (reason, notes) => {
               if (currentMachine && currentUser) {
-                console.log('Salvando parada:', {
+                logger.log('Salvando parada:', {
                   maquina_id: currentMachine.id,
                   operador_id: currentUser.id,
                   op_id: currentMachine.op_atual_id,
@@ -972,10 +981,10 @@ const App: React.FC = () => {
                 }).select();
 
                 if (error) {
-                  console.error('Erro ao salvar parada:', error);
+                  logger.error('Erro ao salvar parada:', error);
                   alert(`Erro ao salvar parada: ${error.message}`);
                 } else {
-                  console.log('Parada salva com sucesso:', data);
+                  logger.log('Parada salva com sucesso:', data);
                 }
 
                 // End assignment
