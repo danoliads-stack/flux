@@ -102,22 +102,15 @@ const AdminDashboard: React.FC = () => {
 
     try {
       // ✅ Hash the PIN server-side before storing
-      let pinHash = null;
-      if (newOp.pin) {
-        const { data: hashData, error: hashError } = await supabase.rpc('hash_pin', { p_pin: newOp.pin });
-        if (hashError) {
-          console.error('[AdminDashboard] Hash PIN error:', hashError);
-          alert('Erro ao processar PIN: ' + hashError.message);
-          return;
-        }
-        pinHash = hashData;
-      }
+      // PIN será hasheado automaticamente pelo Trigger no banco de dados
+      // Mantemos o pin no payload, o trigger vai gerar o pin_hash e (opcionalmente) limpar o pin
+      const pinToSave = newOp.pin;
 
       // Insert the operator with hashed PIN
       const { data: insertedOp, error: insertError } = await supabase.from('operadores').insert({
         nome: newOp.nome,
         matricula: newOp.matricula,
-        pin_hash: pinHash,
+        pin: pinToSave, // Envia o PIN normal, trigger processa
         setor_id: newOp.setor_id,
         turno_id: newOp.turno_id || null,
         avatar: newOp.avatar || newOp.nome.substring(0, 2).toUpperCase(),
@@ -189,15 +182,9 @@ const AdminDashboard: React.FC = () => {
         ativo: editingOp.ativo
       };
 
-      // ✅ Only hash and update PIN if a new one was provided
+      // ✅ Update: Envia o PIN novo (se houve troca), o Trigger cuida do Hash
       if (editingOp.pin && editingOp.pin.trim() !== '') {
-        const { data: hashData, error: hashError } = await supabase.rpc('hash_pin', { p_pin: editingOp.pin });
-        if (hashError) {
-          console.error('[AdminDashboard] Hash PIN error:', hashError);
-          alert('Erro ao processar PIN: ' + hashError.message);
-          return;
-        }
-        updateData.pin_hash = hashData;
+        updateData.pin = editingOp.pin;
       }
 
       await supabase.from('operadores').update(updateData).eq('id', editingOp.id);

@@ -1225,7 +1225,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO') ? 'bg-primary/20 text-primary' :
                   'bg-gray-700/20 text-gray-500'
                 }`}>
-                <span className={`material-icons-outlined text-2xl ${opState === 'PRODUCAO' ? 'animate-spin-slow' : ''}`}>
+                <span className={`material-icons-outlined text-2xl`}>
                   {opState === 'PRODUCAO' ? 'settings' : 'play_arrow'}
                 </span>
               </div>
@@ -1284,7 +1284,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           >
             <div className="flex items-start justify-between">
               <div className={`p-3 rounded-lg transition-colors ${opState === 'MANUTENCAO' ? 'bg-orange-500/30' : 'bg-orange-500/10 group-hover:bg-orange-500/20'}`}>
-                <span className={`material-icons-outlined text-3xl text-orange-500 ${opState === 'MANUTENCAO' ? 'animate-spin-slow' : ''}`}>
+                <span className={`material-icons-outlined text-3xl text-orange-500`}>
                   {opState === 'MANUTENCAO' ? 'engineering' : 'build'}
                 </span>
               </div>

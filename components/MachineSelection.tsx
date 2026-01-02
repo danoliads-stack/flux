@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { MachineData, MachineStatus, AppUser } from '../types';
+import { logger } from '../src/utils/logger';
 
 interface MachineSelectionProps {
   user: AppUser;
@@ -20,7 +21,7 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
   useEffect(() => {
     const fetchMachines = async () => {
       setLoading(true);
-      console.log('Fetching machines for user:', user.name, 'setor_id:', user.setor_id);
+      logger.log('Fetching machines for user:', user.name, 'setor_id:', user.setor_id);
 
       // Build query - filter by operator's sector if setor_id exists
       let query = supabase
@@ -35,10 +36,10 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
 
       const { data, error } = await query;
 
-      console.log('Machines result:', { data, error, setor_id: user.setor_id });
+      logger.log('Machines result:', { data, error, setor_id: user.setor_id });
 
       if (error) {
-        console.error('Error fetching machines:', error);
+        logger.error('Error fetching machines:', error);
         setLoading(false);
         return;
       }
@@ -65,7 +66,7 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
           setor_nome: m.setores?.nome || 'N/A',
           imageUrl: abstractImages[index % abstractImages.length]
         }));
-        console.log('Mapped machines:', mapped.length, 'for sector:', user.setor_id);
+        logger.log('Mapped machines:', mapped.length, 'for sector:', user.setor_id);
         setMachines(mapped);
       }
       setLoading(false);
