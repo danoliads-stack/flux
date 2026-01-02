@@ -458,6 +458,7 @@ const App: React.FC = () => {
         case 'PARADA': dbStatus = MachineStatus.STOPPED; break;
         case 'SUSPENSA': dbStatus = MachineStatus.SUSPENDED; break;
         case 'FINALIZADA': dbStatus = MachineStatus.AVAILABLE; break;
+        case 'MANUTENCAO': dbStatus = MachineStatus.MAINTENANCE; break;
       }
 
       const updates: any = { status_atual: dbStatus };
@@ -466,7 +467,7 @@ const App: React.FC = () => {
       if (opState === 'IDLE' || opState === 'FINALIZADA') {
         updates.op_atual_id = null;
         updates.operador_atual_id = null;
-      } else if ((opState === 'SETUP' || opState === 'PRODUCAO' || opState === 'PARADA') && activeOP) {
+      } else if ((opState === 'SETUP' || opState === 'PRODUCAO' || opState === 'PARADA' || opState === 'MANUTENCAO') && activeOP) {
         updates.op_atual_id = activeOP;
         updates.operador_atual_id = currentUser?.id;
       } else if (opState === 'PRODUCAO' || opState === 'SETUP') {
@@ -535,6 +536,7 @@ const App: React.FC = () => {
       case MachineStatus.RUNNING: initialOPState = 'PRODUCAO'; break;
       case MachineStatus.STOPPED: initialOPState = 'PARADA'; break;
       case MachineStatus.SUSPENDED: initialOPState = 'SUSPENSA'; break;
+      case MachineStatus.MAINTENANCE: initialOPState = 'MANUTENCAO'; break;
       default: initialOPState = 'IDLE';
     }
     setOpState(initialOPState);

@@ -1012,11 +1012,11 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
       {/* Machine Status indicator */}
       <div className="flex items-center gap-2">
-        <span className={`w-2.5 h-2.5 rounded-full shadow-glow-green ${opState === 'PRODUCAO' ? 'bg-secondary animate-pulse' : opState === 'PARADA' ? 'bg-danger shadow-glow-red' : opState === 'SUSPENSA' ? 'bg-orange-500 shadow-glow-orange' : 'bg-primary shadow-glow-blue'
+        <span className={`w-2.5 h-2.5 rounded-full shadow-glow-green ${opState === 'PRODUCAO' ? 'bg-secondary animate-pulse' : opState === 'PARADA' ? 'bg-danger shadow-glow-red' : opState === 'SUSPENSA' ? 'bg-orange-500 shadow-glow-orange' : opState === 'MANUTENCAO' ? 'bg-orange-500 shadow-glow-orange animate-pulse' : 'bg-primary shadow-glow-blue'
           }`}></span>
-        <span className={`text-sm font-bold tracking-wide uppercase ${opState === 'PRODUCAO' ? 'text-secondary' : opState === 'PARADA' ? 'text-danger' : 'text-primary'
+        <span className={`text-sm font-bold tracking-wide uppercase ${opState === 'PRODUCAO' ? 'text-secondary' : opState === 'PARADA' ? 'text-danger' : opState === 'MANUTENCAO' ? 'text-orange-500' : 'text-primary'
           }`}>
-          {opState === 'PRODUCAO' ? 'Máquina Rodando' : opState === 'PARADA' ? 'Máquina Parada' : opState === 'SETUP' ? 'Em Ajuste (Setup)' : opState === 'SUSPENSA' ? 'OP Suspensa' : 'Máquina Disponível'}
+          {opState === 'PRODUCAO' ? 'Máquina Rodando' : opState === 'PARADA' ? 'Máquina Parada' : opState === 'SETUP' ? 'Em Ajuste (Setup)' : opState === 'SUSPENSA' ? 'OP Suspensa' : opState === 'MANUTENCAO' ? 'Em Manutenção' : 'Máquina Disponível'}
         </span>
       </div>
 
@@ -1059,9 +1059,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className={`inline-block px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${opState === 'PRODUCAO'
             ? 'bg-secondary/10 text-secondary border-secondary/30'
             : opState === 'SUSPENSA' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
-              : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
+              : opState === 'MANUTENCAO' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
+                : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
             }`}>
-            {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : 'Aguardando'}
+            {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : opState === 'MANUTENCAO' ? 'Manutenção' : 'Aguardando'}
           </div>
         </div>
       </div>
@@ -1169,24 +1170,24 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <button
             onClick={() => {
               console.log('Production button clicked, opState:', opState);
-              if (!opId && (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA')) {
+              if (!opId && (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO')) {
                 alert('⚠️ Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
                 return;
               }
               if (opState === 'SETUP') onStartProduction();
-              if (opState === 'PARADA' || opState === 'SUSPENSA') onRetomar();
+              if (opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO') onRetomar();
             }}
-            disabled={(opState !== 'SETUP' && opState !== 'PARADA' && opState !== 'SUSPENSA') || !opId}
+            disabled={(opState !== 'SETUP' && opState !== 'PARADA' && opState !== 'SUSPENSA' && opState !== 'MANUTENCAO') || !opId}
             className={`rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between relative overflow-hidden ${opState === 'PRODUCAO'
               ? 'bg-green-900/10 border-2 border-green-500 shadow-lg shadow-green-500/20 cursor-default'
-              : (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA')
+              : (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO')
                 ? 'bg-primary/10 border-2 border-primary hover:bg-primary/20 cursor-pointer'
                 : 'bg-surface-dark border border-border-dark opacity-40 grayscale cursor-not-allowed'
               }`}
           >
             <div className="flex items-start justify-between">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center ${opState === 'PRODUCAO' ? 'bg-green-500/20 text-green-500' :
-                (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA') ? 'bg-primary/20 text-primary' :
+                (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO') ? 'bg-primary/20 text-primary' :
                   'bg-gray-700/20 text-gray-500'
                 }`}>
                 <span className={`material-icons-outlined text-2xl ${opState === 'PRODUCAO' ? 'animate-spin-slow' : ''}`}>
@@ -1202,10 +1203,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
             <div>
               <div className="font-display font-bold text-lg uppercase mb-1 text-white">
-                {opState === 'PRODUCAO' ? 'Produzindo...' : (opState === 'PARADA' || opState === 'SUSPENSA') ? 'Retomar Produção' : 'Iniciar Produção'}
+                {opState === 'PRODUCAO' ? 'Produzindo...' : (opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO') ? 'Retomar Produção' : 'Iniciar Produção'}
               </div>
               <div className="text-xs text-text-sub-dark leading-snug">
-                {opState === 'PRODUCAO' ? 'Contagem ativa' : (opState === 'PARADA' || opState === 'SUSPENSA') ? 'Voltar ao trabalho' : 'Clique para iniciar'}
+                {opState === 'PRODUCAO' ? 'Contagem ativa' : (opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO') ? 'Voltar ao trabalho' : 'Clique para iniciar'}
               </div>
             </div>
           </button>
@@ -1237,21 +1238,35 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
           </button>
 
-          {/* 4. Maintenance Call Button (NEW) */}
+          {/* 4. Maintenance Call Button */}
           <button
-            onClick={() => setShowMaintenanceModal(true)}
-            // Can call maintenance anytime unless the machine is already stopped for maintenance (though user might want to add info)
-            // For now, enabled always, or strictly when running/available? User said "machine stays stopped", implies it triggers a stop.
-            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between border border-border-dark group hover:border-orange-500 hover:bg-orange-500/5 cursor-pointer`}
+            onClick={() => opState !== 'MANUTENCAO' && setShowMaintenanceModal(true)}
+            disabled={opState === 'MANUTENCAO'}
+            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opState === 'MANUTENCAO'
+              ? 'border-2 border-orange-500 shadow-lg shadow-orange-500/20 cursor-default animate-pulse-border'
+              : 'border border-border-dark group hover:border-orange-500 hover:bg-orange-500/5 cursor-pointer'
+              }`}
           >
             <div className="flex items-start justify-between">
-              <div className="p-3 bg-orange-500/10 rounded-lg group-hover:bg-orange-500/20 transition-colors">
-                <span className="material-icons-outlined text-3xl text-orange-500">build</span>
+              <div className={`p-3 rounded-lg transition-colors ${opState === 'MANUTENCAO' ? 'bg-orange-500/30' : 'bg-orange-500/10 group-hover:bg-orange-500/20'}`}>
+                <span className={`material-icons-outlined text-3xl text-orange-500 ${opState === 'MANUTENCAO' ? 'animate-spin-slow' : ''}`}>
+                  {opState === 'MANUTENCAO' ? 'engineering' : 'build'}
+                </span>
               </div>
+              {opState === 'MANUTENCAO' && (
+                <div className="text-right">
+                  <div className="text-xs text-orange-500 font-bold">MANUTENÇÃO</div>
+                  <div className="text-2xl font-mono font-bold text-orange-500">{displayTimer}</div>
+                </div>
+              )}
             </div>
             <div>
-              <div className="font-display font-bold text-lg uppercase mb-1 text-white group-hover:text-orange-500 transition-colors">Chamar Manutenção</div>
-              <div className="text-xs text-text-sub-dark leading-snug">Solicitar técnico e parar máquina</div>
+              <div className={`font-display font-bold text-lg uppercase mb-1 ${opState === 'MANUTENCAO' ? 'text-orange-500' : 'text-white group-hover:text-orange-500'} transition-colors`}>
+                {opState === 'MANUTENCAO' ? 'Aguardando Técnico' : 'Chamar Manutenção'}
+              </div>
+              <div className="text-xs text-text-sub-dark leading-snug">
+                {opState === 'MANUTENCAO' ? 'Manutenção em andamento' : 'Solicitar técnico e parar máquina'}
+              </div>
             </div>
           </button>
 

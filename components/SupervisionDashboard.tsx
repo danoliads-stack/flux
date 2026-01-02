@@ -234,16 +234,15 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     if (!turnoStartTime) return;
     const turnoStartISO = turnoStartTime.toISOString();
 
-    // Fetch active maintenance stops
-    const { data: maintenanceStops } = await supabase
-      .from('paradas')
-      .select('maquina_id, notas')
-      .is('fim', null)
-      .ilike('notas', '%[CHAMADO MANUTENÇÃO]%');
+    // Fetch active maintenance calls from dedicated table
+    const { data: maintenanceCalls } = await supabase
+      .from('chamados_manutencao')
+      .select('maquina_id, descricao, status')
+      .in('status', ['ABERTO', 'EM_ANDAMENTO']);
 
     const maintenanceSet = new Set<string>();
-    if (maintenanceStops) {
-      maintenanceStops.forEach(stop => maintenanceSet.add(stop.maquina_id));
+    if (maintenanceCalls) {
+      maintenanceCalls.forEach(call => maintenanceSet.add(call.maquina_id));
     }
     setMaintenanceMachines(maintenanceSet);
 
@@ -344,7 +343,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     }
 
     // Atualizar timestamp
-    setLastUpdateTime(new Date());
+    setlastUpdateTime(new Date());
   }, [turnoStartTime]);
 
   useEffect(() => {
@@ -374,8 +373,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     const now = Date.now();
 
     machines.forEach(m => {
-      // Chamados de manutenção (PRIORIDADE MÁXIMA)
-      if (maintenanceMachines.has(m.id)) {
+      // Máquinas em manutenção (PRIORIDADE MÁXIMA) - por status ou chamados
+      if (m.status_atual === MachineStatus.MAINTENANCE || maintenanceMachines.has(m.id)) {
         const stoppedMs = m.status_change_at ? now - new Date(m.status_change_at).getTime() : 0;
         const stoppedMins = Math.floor(stoppedMs / 60000);
         items.push({
@@ -383,7 +382,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
           type: 'stopped',
           machineName: m.nome,
           machineId: m.id,
-          detail: `🔧 MANUTENÇÃO SOLICITADA há ${formatStopTime(stoppedMins)}`,
+          detail: `🔧 EM MANUTENÇÃO há ${formatStopTime(stoppedMins)}`,
           severity: 0, // Maior prioridade
           stoppedMinutes: stoppedMins
         });
