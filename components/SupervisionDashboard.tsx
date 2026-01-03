@@ -534,7 +534,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       {/* Header com turno e OEE */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
-          <h2 className="text-2xl font-display font-bold tracking-tight text-white uppercase">Status Geral do Turno</h2>
+          <h2 className="text-2xl font-display font-bold tracking-tight text-white uppercase">Status Geral do Turno (v2)</h2>
           {currentTurno && (
             <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider">
               {currentTurno.nome}
@@ -555,9 +555,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         <div className="flex-1">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {[
-              { label: 'Máquinas Rodando', val: stats.running, icon: 'settings_motion_mode', color: 'text-emerald-500', filter: 'RUNNING' as StatusFilterType, progress: (stats.running / machines.length) * 100 },
+              { label: 'Máquinas Rodando', val: stats.running, icon: 'settings_motion_mode', color: 'text-green-500', filter: 'RUNNING' as StatusFilterType, progress: (stats.running / machines.length) * 100 },
               { label: 'Máquinas Paradas', val: stats.stopped, icon: 'warning', color: 'text-orange-500', filter: 'STOPPED' as StatusFilterType, progress: (stats.stopped / machines.length) * 100 },
-              { label: 'Em Manutenção', val: stats.maintenance, icon: 'engineering', color: 'text-danger', filter: 'MAINTENANCE' as StatusFilterType, progress: (stats.maintenance / machines.length) * 100 },
+              { label: 'Em Manutenção', val: stats.maintenance, icon: 'engineering', color: 'text-red-600', filter: 'MAINTENANCE' as StatusFilterType, progress: (stats.maintenance / machines.length) * 100 },
               { label: 'Em Setup', val: stats.setup, icon: 'settings', color: 'text-warning', filter: 'SETUP' as StatusFilterType, progress: (stats.setup / machines.length) * 100 },
               { label: 'OPs em Andamento', val: machines.filter(m => m.op_atual_id).length, icon: 'play_circle', color: 'text-primary' },
               { label: 'Total Produzido', val: totalProduzido, icon: 'inventory_2', color: 'text-blue-400' },
@@ -689,10 +689,10 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   Limpar Filtro
                 </button>
               )}
-              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase tracking-widest">Rodando</span>
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-green-500/10 text-green-500 border border-green-500/20 uppercase tracking-widest">Rodando</span>
               <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-warning/10 text-warning border border-warning/20 uppercase tracking-widest">Setup</span>
               <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-widest">Parado</span>
-              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-danger/10 text-danger border border-danger/20 uppercase tracking-widest">Manutenção</span>
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-red-600/10 text-red-600 border border-red-600/20 uppercase tracking-widest">Manutenção</span>
             </div>
           </div>
 
@@ -732,10 +732,10 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                     key={m.id}
                     onDoubleClick={() => openOperatorPanel(m)}
                     className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full relative 
-                      ${hasMaintenanceCall ? 'border-l-danger shadow-danger/20 animate-pulse-border ring-2 ring-danger/50' :
-                        isActive ? 'border-l-emerald-500 shadow-emerald-500/5' :
+                      ${hasMaintenanceCall ? 'border-l-red-600 shadow-red-600/20 animate-pulse-border ring-2 ring-red-600/50' :
+                        isActive ? 'border-l-green-500 shadow-green-500/5' :
                           isStopped ? 'border-l-orange-500 shadow-orange-500/5' :
-                            isMaintenance ? 'border-l-danger shadow-danger/5' :
+                            isMaintenance ? 'border-l-red-600 shadow-red-600/5' :
                               isSetup ? 'border-l-warning shadow-warning/5' :
                                 isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
                       }`}
@@ -743,7 +743,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                     {/* NOVO: Ícone de manutenção ou alerta */}
                     {hasMaintenanceCall ? (
                       <div className="absolute top-2 right-2">
-                        <span className="material-icons-outlined text-danger text-2xl animate-bounce" title="Chamado de Manutenção Ativo">
+                        <span className="material-icons-outlined text-red-600 text-2xl animate-bounce" title="Chamado de Manutenção Ativo">
                           build_circle
                         </span>
                       </div>
@@ -759,9 +759,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       <div className="min-w-0 flex-1">
                         <h3 className="text-lg font-bold text-white mb-2 leading-tight text-left">{m.nome}</h3>
                         <div className="flex flex-col gap-1 items-start">
-                          <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isActive ? 'text-emerald-500' :
+                          <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isActive ? 'text-green-500' :
                             isStopped ? 'text-orange-500' :
-                              isMaintenance ? 'text-danger' :
+                              isMaintenance ? 'text-red-600' :
                                 isSetup ? 'text-warning' :
                                   isSuspended ? 'text-orange-500' : 'text-text-sub-dark'
                             }`}>
