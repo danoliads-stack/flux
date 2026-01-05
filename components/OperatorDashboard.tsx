@@ -1086,6 +1086,16 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               <span className="material-icons-outlined text-lg">schedule</span>
               <span>Turno: <strong className="text-text-main-dark">{shiftName}</strong></span>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="material-icons-outlined text-lg">person</span>
+              <span>Operador: <strong className="text-text-main-dark">{operatorName}</strong></span>
+            </div>
+            {productInfo?.nome && (
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-lg">inventory_2</span>
+                <span>Produto: <strong className="text-secondary">{productInfo.nome}</strong></span>
+              </div>
+            )}
           </div>
         </div>
         <div className="text-right">

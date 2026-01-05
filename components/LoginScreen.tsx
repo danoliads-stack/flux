@@ -197,14 +197,6 @@ const LoginScreen: React.FC = () => {
                 <span className="flex w-2 h-2 rounded-full bg-primary/20 group-hover:bg-primary transition-colors"></span>
                 Support Center
               </button>
-              <button
-                onClick={handleClearCache}
-                className="text-[10px] font-bold text-text-sub-dark/60 hover:text-red-400 flex items-center gap-2 transition-all uppercase tracking-widest group/clear"
-                title="Limpar dados locais e recarregar"
-              >
-                <span className="material-icons-outlined text-xs group-hover/clear:rotate-12 transition-transform">cleaning_services</span>
-                Reset App
-              </button>
             </div>
           </div>
         </div>

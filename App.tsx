@@ -640,9 +640,11 @@ const App: React.FC = () => {
 
   // Wrapper para logout com navegação
   const handleLogoutWithNav = async () => {
+    // ✅ FIX: Navega para login PRIMEIRO usando window.location para garantir a navegação
+    // Isso evita tela preta porque a navegação acontece antes do state mudar
     await handleLogout();
-    // Navegação explícita para login após logout
-    navigate('/login', { replace: true });
+    // Força navegação com window.location para garantir que a página recarrega
+    window.location.href = '/login';
   };
 
 
@@ -1088,6 +1090,13 @@ const App: React.FC = () => {
                   })
                 );
 
+                // ✅ CRITICAL FIX: Atualizar currentMachine local
+                setCurrentMachine({
+                  ...currentMachine,
+                  op_atual_id: null,
+                  status_atual: MachineStatus.AVAILABLE
+                });
+
                 setOpState('IDLE');
                 setActiveOP(null);
                 closeModals();
@@ -1182,65 +1191,30 @@ const App: React.FC = () => {
                 localStorage.removeItem(`flux_phase_start_${activeOP}`);
                 localStorage.removeItem(`flux_status_change_${activeOP}`);
 
-                console.log('[App] ⏭️ Verificando próxima OP...');
-                // --- AUTO-START NEXT OP ---
-                // Buscar a próxima OP na sequência
-                const { data: nextOPs } = await supabase
-                  .from('ordens_producao')
-                  .select('*')
-                  .eq('maquina_id', currentMachine.id)
-                  .neq('status', 'FINALIZADA')
-                  .neq('status', 'CANCELADA')
-                  .neq('id', activeOP) // Garante que não pega a mesma
-                  .order('posicao_sequencia', { ascending: true })
-                  .limit(1);
+                // ✅ FIX: Após encerrar OP, a máquina SEMPRE volta para IDLE
+                // O operador deve iniciar manualmente a próxima OP via SETUP
+                console.log('[App] ℹ️ OP Finalizada. Retornando máquina para estado IDLE/Aguardando.');
 
-                const nextOP = nextOPs && nextOPs.length > 0 ? nextOPs[0] : null;
-
-                if (nextOP) {
-                  console.log('Iniciando próxima OP automaticamente:', nextOP.codigo);
-
-                  // 1. Criar vínculo operador-máquina-OP
-                  await supabase.from('op_operadores').insert({
-                    op_id: nextOP.id,
-                    operador_id: currentUser.id,
-                    maquina_id: currentMachine.id,
-                    inicio: new Date().toISOString()
-                  });
-
-                  // 2. Atualizar Máquina para SETUP com nova OP
-                  const now = new Date().toISOString();
-                  await supabase.from('maquinas').update({
-                    status_atual: MachineStatus.SETUP,
-                    status_change_at: now,
-                    op_atual_id: nextOP.id,
-                    operador_atual_id: currentUser.id
-                  }).eq('id', currentMachine.id);
-
-                  // 3. Resetar estados locais e carregar nova OP
-                  syncTimers({
-                    accSetup: 0,
-                    accProd: 0,
-                    accStop: 0,
-                    statusChangeAt: now
-                  });
-                  setOpState('SETUP');
-                  setProductionData({ totalProduced: 0 }); // ✅ FIX: Reset Realizado para nova OP
-                  setActiveOP(nextOP); // will fully load details via useEffect if needed, but here we set basic info
-                } else {
-                  // ✅ FIX: Sem próxima OP, garantir que a máquina volte para IDLE imediatamente
-                  console.log('[App] ℹ️ Sem próxima OP na fila. Retornando para IDLE.');
-                  setOpState('IDLE');
-                  setActiveOP(null);
-                  setProductionData({ totalProduced: 0, totalScrap: 0 });
-                  // Resetar acumuladores de tempo
-                  syncTimers({
-                    accSetup: 0,
-                    accProd: 0,
-                    accStop: 0,
-                    statusChangeAt: new Date().toISOString()
+                // ✅ CRITICAL FIX: Atualizar currentMachine local para evitar que o useEffect de sync restaure a OP
+                if (currentMachine) {
+                  setCurrentMachine({
+                    ...currentMachine,
+                    op_atual_id: null,
+                    status_atual: MachineStatus.AVAILABLE
                   });
                 }
+
+                setOpState('IDLE');
+                setActiveOP(null);
+                setProductionData({ totalProduced: 0, totalScrap: 0 });
+
+                // Resetar acumuladores de tempo
+                syncTimers({
+                  accSetup: 0,
+                  accProd: 0,
+                  accStop: 0,
+                  statusChangeAt: new Date().toISOString()
+                });
 
                 setActiveModal('label');
                 console.log('[App] ✅ OP Finalizada com sucesso!');
@@ -1307,6 +1281,13 @@ const App: React.FC = () => {
                     opId: null
                   })
                 );
+
+                // ✅ CRITICAL FIX: Atualizar currentMachine local
+                setCurrentMachine({
+                  ...currentMachine,
+                  op_atual_id: null,
+                  status_atual: MachineStatus.SUSPENDED
+                });
 
                 setActiveOP(null); // ✅ Clear local OP state
                 setOpState('IDLE'); // ✅ Return dashboard to IDLE (Free machine)
