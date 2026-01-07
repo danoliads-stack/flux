@@ -7,6 +7,7 @@ import SupervisionDashboard from './components/SupervisionDashboard';
 import QualityDashboard from './components/QualityDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import Reports from './components/Reports';
+import AdminInsights from './components/AdminInsights';
 import LoginScreen from './components/LoginScreen';
 import MachineSelection from './components/MachineSelection';
 import SetupModal from './components/modals/SetupModal';
@@ -888,6 +889,12 @@ const App: React.FC = () => {
               <Route path="/relatorios" element={
                 <ProtectedRoute user={currentUser} userPermissions={userPermissions}>
                   <Reports />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/admin/insights" element={
+                <ProtectedRoute user={currentUser} permission={Permission.VIEW_SUPERVISOR_DASHBOARD} userPermissions={userPermissions}>
+                  <AdminInsights />
                 </ProtectedRoute>
               } />
 

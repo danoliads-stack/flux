@@ -63,6 +63,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions }) => {
       permission: Permission.VIEW_SUPERVISOR_DASHBOARD
     },
     {
+      id: '/admin/insights',
+      icon: 'psychology',
+      label: 'Insights IA',
+      permission: Permission.VIEW_SUPERVISOR_DASHBOARD
+    },
+    {
       id: '/administracao',
       icon: 'manage_accounts',
       label: 'Admin',

@@ -373,8 +373,11 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     const now = Date.now();
 
     machines.forEach(m => {
-      // Máquinas em manutenção (PRIORIDADE MÁXIMA) - por status ou chamados
-      if (m.status_atual === MachineStatus.MAINTENANCE || maintenanceMachines.has(m.id)) {
+      // Normalize status for comparison
+      const status = String(m.status_atual || '').toUpperCase();
+
+      // Máquinas em manutenção (PRIORIDADE MÁXIMA) - apenas por STATUS real
+      if (status === 'MAINTENANCE') {
         const stoppedMs = m.status_change_at ? now - new Date(m.status_change_at).getTime() : 0;
         const stoppedMins = Math.floor(stoppedMs / 60000);
         items.push({
@@ -387,8 +390,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
           stoppedMinutes: stoppedMins
         });
       }
-      // Máquinas paradas (sem manutenção)
-      else if (m.status_atual === MachineStatus.STOPPED && m.status_change_at) {
+      // Máquinas paradas
+      else if (status === 'STOPPED' && m.status_change_at) {
         const stoppedMs = now - new Date(m.status_change_at).getTime();
         const stoppedMins = Math.floor(stoppedMs / 60000);
         items.push({
@@ -415,8 +418,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         });
       }
 
-      // Sem operador alocado
-      if (!m.operador_atual_id && m.status_atual !== MachineStatus.AVAILABLE && m.status_atual !== MachineStatus.IDLE) {
+      // Sem operador alocado (apenas para máquinas que deveriam ter operador)
+      if (!m.operador_atual_id && status !== 'AVAILABLE' && status !== 'IDLE' && status !== '') {
         items.push({
           id: `no-op-${m.id}`,
           type: 'no_operator',
@@ -699,13 +702,40 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
             {filteredAndSortedMachines
               .map((m) => {
-                // Map DB status to UI logic
-                const isActive = m.status_atual === MachineStatus.RUNNING || m.status_atual === MachineStatus.IN_USE;
-                const isStopped = m.status_atual === MachineStatus.STOPPED;
-                const isMaintenance = m.status_atual === MachineStatus.MAINTENANCE;
-                const isSetup = m.status_atual === MachineStatus.SETUP;
-                const isSuspended = m.status_atual === MachineStatus.SUSPENDED;
+                // Map DB status to UI logic - normalize status to uppercase for reliable comparison
+                const status = String(m.status_atual || '').toUpperCase();
+
+                // DEBUG: Log status value for BB1
+                if (m.nome.includes('BB1')) {
+                  console.log('BB1 status normalized:', status, 'original:', m.status_atual);
+                }
+
+                // Status flags using normalized uppercase comparison
+                const isActive = status === 'RUNNING' || status === 'IN_USE';
+                const isStopped = status === 'STOPPED';
+                const isMaintenance = status === 'MAINTENANCE';
+                const isSetup = status === 'SETUP';
+                const isSuspended = status === 'SUSPENDED';
+                const isAvailable = status === 'AVAILABLE' || status === 'IDLE' || status === '';
                 const hasMaintenanceCall = maintenanceMachines.has(m.id);
+
+                // Calculate border color class - prioritize actual machine status
+                const getBorderColorClass = () => {
+                  // Only show maintenance call animation if machine is actually in MAINTENANCE status
+                  if (isMaintenance && hasMaintenanceCall) return 'border-l-red-600 shadow-red-600/20 animate-pulse-border ring-2 ring-red-600/50';
+                  if (isMaintenance) return 'border-l-red-600 shadow-red-600/5';
+                  if (isStopped) return 'border-l-orange-500 shadow-orange-500/5';
+                  if (isSetup) return 'border-l-yellow-500 shadow-yellow-500/5';
+                  if (isActive) return 'border-l-green-500 shadow-green-500/5';
+                  if (isSuspended) return 'border-l-orange-500 shadow-orange-500/5';
+                  if (isAvailable) return 'border-l-blue-500 shadow-blue-500/5';
+                  return 'border-l-gray-500 shadow-gray-500/5'; // Fallback
+                };
+
+                // DEBUG: Log border class for BB1
+                if (m.nome.includes('BB1')) {
+                  console.log('BB1 border class:', getBorderColorClass(), 'isAvailable:', isAvailable);
+                }
 
                 // Safe value access
                 const machineLiveProd = machineProductionMap.get(m.id);
@@ -731,17 +761,10 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   <div
                     key={m.id}
                     onDoubleClick={() => openOperatorPanel(m)}
-                    className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full relative 
-                      ${hasMaintenanceCall ? 'border-l-red-600 shadow-red-600/20 animate-pulse-border ring-2 ring-red-600/50' :
-                        isActive ? 'border-l-green-500 shadow-green-500/5' :
-                          isStopped ? 'border-l-orange-500 shadow-orange-500/5' :
-                            isMaintenance ? 'border-l-red-600 shadow-red-600/5' :
-                              isSetup ? 'border-l-warning shadow-warning/5' :
-                                isSuspended ? 'border-l-orange-500 shadow-orange-500/5' : 'border-l-text-sub-dark'
-                      }`}
+                    className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full relative ${getBorderColorClass()}`}
                   >
-                    {/* NOVO: Ícone de manutenção ou alerta */}
-                    {hasMaintenanceCall ? (
+                    {/* Ícone de manutenção ou alerta */}
+                    {(isMaintenance && hasMaintenanceCall) ? (
                       <div className="absolute top-2 right-2">
                         <span className="material-icons-outlined text-red-600 text-2xl animate-bounce" title="Chamado de Manutenção Ativo">
                           build_circle
@@ -759,18 +782,20 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       <div className="min-w-0 flex-1">
                         <h3 className="text-lg font-bold text-white mb-2 leading-tight text-left">{m.nome}</h3>
                         <div className="flex flex-col gap-1 items-start">
-                          <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isActive ? 'text-green-500' :
+                          <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isMaintenance ? 'text-red-600' :
                             isStopped ? 'text-orange-500' :
-                              isMaintenance ? 'text-red-600' :
-                                isSetup ? 'text-warning' :
-                                  isSuspended ? 'text-orange-500' : 'text-text-sub-dark'
+                              isSetup ? 'text-yellow-500' :
+                                isActive ? 'text-green-500' :
+                                  isSuspended ? 'text-orange-500' :
+                                    isAvailable ? 'text-blue-500' : 'text-text-sub-dark'
                             }`}>
                             <span className="material-icons-outlined text-base">{
-                              isActive ? 'play_arrow' :
+                              isMaintenance ? 'engineering' :
                                 isStopped ? 'error' :
-                                  isMaintenance ? 'engineering' :
-                                    isSetup ? 'settings' :
-                                      isSuspended ? 'pause_circle' : 'check_circle'
+                                  isSetup ? 'settings' :
+                                    isActive ? 'play_arrow' :
+                                      isSuspended ? 'pause_circle' :
+                                        isAvailable ? 'check_circle' : 'check_circle'
                             }</span> {translateStatus(m.status_atual)}
                           </span>
                           <StatusTimer statusChangeAt={m.status_change_at} status={m.status_atual} />
@@ -783,12 +808,14 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       </div>
                     </div>
 
-                    {isStopped && (
-                      <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mb-4">
-                        <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Motivo da Parada:</p>
-                        <p className="text-sm text-white font-medium">{m.stopReason || 'Aguardando justificativa...'}</p>
-                      </div>
-                    )}
+                    {
+                      isStopped && (
+                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mb-4">
+                          <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Motivo da Parada:</p>
+                          <p className="text-sm text-white font-medium">{m.stopReason || 'Aguardando justificativa...'}</p>
+                        </div>
+                      )
+                    }
 
                     <div className="space-y-4 mb-4 bg-white/[0.02] p-4 rounded-xl border border-white/5">
                       <div>
@@ -924,84 +951,86 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       </div>
 
       {/* FASE 2: Modal de Alertas */}
-      {showAlertsModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowAlertsModal(false)}>
-          <div
-            className="bg-surface-dark rounded-2xl border border-border-dark w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-6 border-b border-border-dark">
-              <div className="flex items-center gap-3">
-                <span className="material-icons-outlined text-danger text-2xl">notifications_active</span>
-                <h2 className="text-xl font-display font-bold text-white">Alertas Ativos</h2>
-                <span className="px-2 py-0.5 rounded-full bg-danger/20 text-danger text-xs font-bold">
-                  {attentionItems.length}
-                </span>
+      {
+        showAlertsModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowAlertsModal(false)}>
+            <div
+              className="bg-surface-dark rounded-2xl border border-border-dark w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-6 border-b border-border-dark">
+                <div className="flex items-center gap-3">
+                  <span className="material-icons-outlined text-danger text-2xl">notifications_active</span>
+                  <h2 className="text-xl font-display font-bold text-white">Alertas Ativos</h2>
+                  <span className="px-2 py-0.5 rounded-full bg-danger/20 text-danger text-xs font-bold">
+                    {attentionItems.length}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowAlertsModal(false)}
+                  className="w-10 h-10 rounded-full bg-surface-dark-highlight hover:bg-danger/20 flex items-center justify-center transition-colors group"
+                >
+                  <span className="material-icons-outlined text-text-sub-dark group-hover:text-danger">close</span>
+                </button>
               </div>
-              <button
-                onClick={() => setShowAlertsModal(false)}
-                className="w-10 h-10 rounded-full bg-surface-dark-highlight hover:bg-danger/20 flex items-center justify-center transition-colors group"
-              >
-                <span className="material-icons-outlined text-text-sub-dark group-hover:text-danger">close</span>
-              </button>
-            </div>
 
-            <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
-              {attentionItems.length > 0 ? (
-                <div className="space-y-4">
-                  {attentionItems.map((item, i) => (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        const machine = machines.find(m => m.id === item.machineId);
-                        if (machine) {
-                          openOperatorPanel(machine);
-                          setShowAlertsModal(false);
-                        }
-                      }}
-                      className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all hover:scale-[1.02] ${item.type === 'stopped' ? 'bg-danger/10 border border-danger/20 hover:bg-danger/20' :
-                        item.type === 'low_oee' ? 'bg-warning/10 border border-warning/20 hover:bg-warning/20' :
-                          'bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20'
-                        }`}
-                    >
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${item.type === 'stopped' ? 'bg-danger/20' :
-                        item.type === 'low_oee' ? 'bg-warning/20' : 'bg-orange-500/20'
-                        }`}>
-                        <span className={`material-icons-outlined text-2xl ${item.type === 'stopped' ? 'text-danger' :
-                          item.type === 'low_oee' ? 'text-warning' : 'text-orange-500'
+              <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
+                {attentionItems.length > 0 ? (
+                  <div className="space-y-4">
+                    {attentionItems.map((item, i) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          const machine = machines.find(m => m.id === item.machineId);
+                          if (machine) {
+                            openOperatorPanel(machine);
+                            setShowAlertsModal(false);
+                          }
+                        }}
+                        className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all hover:scale-[1.02] ${item.type === 'stopped' ? 'bg-danger/10 border border-danger/20 hover:bg-danger/20' :
+                          item.type === 'low_oee' ? 'bg-warning/10 border border-warning/20 hover:bg-warning/20' :
+                            'bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20'
+                          }`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${item.type === 'stopped' ? 'bg-danger/20' :
+                          item.type === 'low_oee' ? 'bg-warning/20' : 'bg-orange-500/20'
                           }`}>
-                          {item.type === 'stopped' ? 'pause_circle' :
-                            item.type === 'low_oee' ? 'trending_down' : 'person_off'}
-                        </span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${item.type === 'stopped' ? 'bg-danger/20 text-danger' :
-                            item.type === 'low_oee' ? 'bg-warning/20 text-warning' : 'bg-orange-500/20 text-orange-500'
+                          <span className={`material-icons-outlined text-2xl ${item.type === 'stopped' ? 'text-danger' :
+                            item.type === 'low_oee' ? 'text-warning' : 'text-orange-500'
                             }`}>
-                            {item.type === 'stopped' ? 'Parada' :
-                              item.type === 'low_oee' ? 'OEE Baixo' : 'Sem Operador'}
+                            {item.type === 'stopped' ? 'pause_circle' :
+                              item.type === 'low_oee' ? 'trending_down' : 'person_off'}
                           </span>
                         </div>
-                        <h3 className="text-lg font-bold text-white">{item.machineName}</h3>
-                        <p className="text-sm text-text-sub-dark">{item.detail}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${item.type === 'stopped' ? 'bg-danger/20 text-danger' :
+                              item.type === 'low_oee' ? 'bg-warning/20 text-warning' : 'bg-orange-500/20 text-orange-500'
+                              }`}>
+                              {item.type === 'stopped' ? 'Parada' :
+                                item.type === 'low_oee' ? 'OEE Baixo' : 'Sem Operador'}
+                            </span>
+                          </div>
+                          <h3 className="text-lg font-bold text-white">{item.machineName}</h3>
+                          <p className="text-sm text-text-sub-dark">{item.detail}</p>
+                        </div>
+                        <span className="material-icons-outlined text-text-sub-dark">chevron_right</span>
                       </div>
-                      <span className="material-icons-outlined text-text-sub-dark">chevron_right</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <span className="material-icons-outlined text-5xl text-secondary/30 mb-4 block">check_circle</span>
-                  <h3 className="text-lg font-bold text-white mb-2">Tudo em ordem!</h3>
-                  <p className="text-sm text-text-sub-dark">Nenhum alerta ativo no momento</p>
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <span className="material-icons-outlined text-5xl text-secondary/30 mb-4 block">check_circle</span>
+                    <h3 className="text-lg font-bold text-white mb-2">Tudo em ordem!</h3>
+                    <p className="text-sm text-text-sub-dark">Nenhum alerta ativo no momento</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 
