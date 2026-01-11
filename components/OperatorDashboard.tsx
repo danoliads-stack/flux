@@ -448,7 +448,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if (!opId || !machineId) return;
 
     // Optimistic Update
-    // Optimistic Update
     if (type === 'produced') {
       setProductionData({ totalProduced: totalProduced + delta });
     } else {
@@ -456,38 +455,18 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     }
 
     try {
-      // 1. Insert Record into registros_producao (Audit Trail)
-      const { error: logError } = await supabase.from('registros_producao').insert({
-        op_id: opId,
-        maquina_id: machineId,
-        operador_id: operatorId,
-        quantidade_boa: type === 'produced' ? delta : 0,
-        quantidade_refugo: type === 'scrap' ? delta : 0,
-        created_at: new Date().toISOString()
+      const { error: logError } = await supabase.rpc('mes_record_production', {
+        p_op_id: opId,
+        p_machine_id: machineId,
+        p_operator_id: operatorId || null,
+        p_good_qty: type === 'produced' ? delta : 0,
+        p_scrap_qty: type === 'scrap' ? delta : 0,
+        p_data_inicio: new Date().toISOString(),
+        p_data_fim: new Date().toISOString(),
+        p_turno: null
       });
 
       if (logError) throw logError;
-
-      // 2. Update ordens_producao (Persistence)
-      const { data: currentOp } = await supabase
-        .from('ordens_producao')
-        .select('quantidade_produzida, quantidade_refugo')
-        .eq('id', opId)
-        .single();
-
-      if (currentOp) {
-        const newProduced = (currentOp.quantidade_produzida || 0) + (type === 'produced' ? delta : 0);
-        const newScrap = (currentOp.quantidade_refugo || 0) + (type === 'scrap' ? delta : 0);
-
-        await supabase
-          .from('ordens_producao')
-          .update({
-            quantidade_produzida: newProduced,
-            quantidade_refugo: newScrap
-          })
-          .eq('id', opId);
-      }
-
     } catch (error) {
       console.error('Error in quick update:', error);
       // Revert optimistic update on error

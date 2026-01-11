@@ -447,43 +447,9 @@ const App: React.FC = () => {
   // Legacy Timer Logic Removed - Handled by Store and OperatorDashboard
 
 
-  // Sync opState to DB status_atual
+  // opState is UI-only; RPCs handle DB transitions.
   useEffect(() => {
-    const syncStatus = async () => {
-      if (!selectedMachineId) return;
-      let dbStatus: MachineStatus = MachineStatus.AVAILABLE;
-
-      switch (opState) {
-        case 'IDLE': dbStatus = MachineStatus.AVAILABLE; break;
-        case 'SETUP': dbStatus = MachineStatus.SETUP; break;
-        case 'PRODUCAO': dbStatus = MachineStatus.RUNNING; break;
-        case 'PARADA': dbStatus = MachineStatus.STOPPED; break;
-        case 'SUSPENSA': dbStatus = MachineStatus.SUSPENDED; break;
-        case 'FINALIZADA': dbStatus = MachineStatus.AVAILABLE; break;
-        case 'MANUTENCAO': dbStatus = MachineStatus.MAINTENANCE; break;
-      }
-
-      const updates: any = { status_atual: dbStatus };
-
-      // ✅ ENFORCE OP: If in production or setup, MUST have an OP in DB
-      if (opState === 'IDLE' || opState === 'FINALIZADA') {
-        updates.op_atual_id = null;
-        updates.operador_atual_id = null;
-      } else if ((opState === 'SETUP' || opState === 'PRODUCAO' || opState === 'PARADA' || opState === 'MANUTENCAO') && activeOP) {
-        updates.op_atual_id = activeOP;
-        updates.operador_atual_id = currentUser?.id;
-      } else if (opState === 'PRODUCAO' || opState === 'SETUP') {
-        // ⚠️ INCONSISTENCY: Producing without OP. Force IDLE in DB to prevent invalid shift logs.
-        logger.warn('[App] ⚠️ syncStatus detected production/setup without OP. Forcing IDLE in DB.');
-        updates.status_atual = MachineStatus.AVAILABLE;
-        updates.op_atual_id = null;
-        updates.operador_atual_id = null;
-        // Local state will be handled by the UI/recovery logic
-      }
-
-      await supabase.from('maquinas').update(updates).eq('id', selectedMachineId);
-    };
-    syncStatus();
+    // RPCs own machine state transitions to keep DB consistent.
   }, [opState, selectedMachineId, activeOP]);
 
   // Format seconds to HH:MM:SS
@@ -723,11 +689,20 @@ const App: React.FC = () => {
                           const nextStatus = lastState === 'SETUP' ? MachineStatus.SETUP : MachineStatus.RUNNING;
                           const nextOpState = lastState === 'SETUP' ? 'SETUP' : 'PRODUCAO';
 
-                          await supabase.from('maquinas').update({
-                            status_atual: nextStatus,
-                            status_change_at: now,
-                            op_atual_id: activeOP // Ensure OP is pinned
-                          }).eq('id', currentMachine.id);
+                          const operatorId = currentUser?.role === 'OPERATOR'
+                            ? currentUser.id
+                            : (currentMachine.operador_atual_id || null);
+                          const { error: resumeError } = await supabase.rpc('mes_resume_machine', {
+                            p_machine_id: currentMachine.id,
+                            p_next_status: nextStatus,
+                            p_operator_id: operatorId,
+                            p_op_id: activeOP || null
+                          });
+                          if (resumeError) {
+                            logger.error('Erro ao retomar maquina:', resumeError);
+                            alert(`Erro ao retomar maquina: ${resumeError.message}`);
+                            return;
+                          }
 
                           syncTimers({
                             statusChangeAt: now,
@@ -757,11 +732,19 @@ const App: React.FC = () => {
                             newAccSetup += elapsed;
                           }
 
-                          await supabase.from('maquinas').update({
-                            status_atual: MachineStatus.RUNNING,
-                            status_change_at: now,
-                            op_atual_id: activeOP // Ensure OP is pinned
-                          }).eq('id', currentMachine.id);
+                          const operatorId = currentUser?.role === 'OPERATOR'
+                            ? currentUser.id
+                            : (currentMachine.operador_atual_id || null);
+                          const { error: prodStartError } = await supabase.rpc('mes_start_production', {
+                            p_machine_id: currentMachine.id,
+                            p_op_id: activeOP,
+                            p_operator_id: operatorId
+                          });
+                          if (prodStartError) {
+                            logger.error('Erro ao iniciar producao:', prodStartError);
+                            alert(`Erro ao iniciar producao: ${prodStartError.message}`);
+                            return;
+                          }
 
                           syncTimers({
                             statusChangeAt: now,
@@ -938,11 +921,19 @@ const App: React.FC = () => {
                     inicio: new Date().toISOString()
                   });
                   const now = new Date().toISOString();
-                  await supabase.from('maquinas').update({
-                    status_atual: MachineStatus.SETUP,
-                    status_change_at: now,
-                    op_atual_id: op.id
-                  }).eq('id', selectedMachineId);
+                  const operatorId = currentUser.role === 'OPERATOR'
+                    ? currentUser.id
+                    : (currentMachine?.operador_atual_id || null);
+                  const { error: setupError } = await supabase.rpc('mes_start_setup', {
+                    p_machine_id: selectedMachineId,
+                    p_op_id: op.id,
+                    p_operator_id: operatorId
+                  });
+                  if (setupError) {
+                    logger.error('Erro ao iniciar setup:', setupError);
+                    alert(`Erro ao iniciar setup: ${setupError.message}`);
+                    return;
+                  }
 
                   // Update Store
                   syncTimers({
@@ -980,20 +971,20 @@ const App: React.FC = () => {
                   notas: notes
                 });
 
-                const { data, error } = await supabase.from('paradas').insert({
-                  maquina_id: currentMachine.id,
-                  operador_id: currentUser.id,
-                  op_id: currentMachine.op_atual_id,
-                  motivo: reason,
-                  notas: notes,
-                  data_inicio: new Date().toISOString()
-                }).select();
-
-                if (error) {
-                  logger.error('Erro ao salvar parada:', error);
-                  alert(`Erro ao salvar parada: ${error.message}`);
-                } else {
-                  logger.log('Parada salva com sucesso:', data);
+                const operatorId = currentUser.role === 'OPERATOR'
+                  ? currentUser.id
+                  : (currentMachine.operador_atual_id || null);
+                const { error: stopError } = await supabase.rpc('mes_stop_machine', {
+                  p_machine_id: currentMachine.id,
+                  p_reason: reason,
+                  p_notes: notes,
+                  p_operator_id: operatorId,
+                  p_op_id: currentMachine.op_atual_id || null
+                });
+                if (stopError) {
+                  logger.error('Erro ao salvar parada:', stopError);
+                  alert(`Erro ao salvar parada: ${stopError.message}`);
+                  return;
                 }
 
                 // End assignment
@@ -1022,11 +1013,6 @@ const App: React.FC = () => {
                   const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
                   newAccSetup += elapsed;
                 }
-
-                await supabase.from('maquinas').update({
-                  status_atual: MachineStatus.STOPPED,
-                  status_change_at: now
-                }).eq('id', currentMachine.id);
 
                 syncTimers({
                   statusChangeAt: now,
@@ -1059,17 +1045,24 @@ const App: React.FC = () => {
               if (currentMachine && activeOP) {
                 const delta = Math.max(0, produced - totalProduced);
 
-                await supabase.from('registros_producao').insert({
-                  op_id: activeOP,
-                  maquina_id: currentMachine.id,
-                  // Fix: Handle non-operator users (Admins) to prevent FK violation
-                  operador_id: currentUser?.role === 'OPERATOR' ? currentUser.id : (currentMachine.operador_atual_id || null),
-                  quantidade_boa: delta,
-                  quantidade_refugo: 0,
-                  data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
-                  data_fim: new Date().toISOString(),
-                  turno: 'Transferência'
+                const operatorId = currentUser?.role === 'OPERATOR'
+                  ? currentUser.id
+                  : (currentMachine.operador_atual_id || null);
+                const { error: recordError } = await supabase.rpc('mes_record_production', {
+                  p_op_id: activeOP,
+                  p_machine_id: currentMachine.id,
+                  p_operator_id: operatorId,
+                  p_good_qty: delta,
+                  p_scrap_qty: 0,
+                  p_data_inicio: localStatusChangeAt || new Date().toISOString(),
+                  p_data_fim: new Date().toISOString(),
+                  p_turno: 'Transferencia'
                 });
+                if (recordError) {
+                  logger.error('Erro ao registrar producao:', recordError);
+                  alert(`Erro ao registrar producao: ${recordError.message}`);
+                  return;
+                }
 
                 setProductionData({ totalProduced: totalProduced + delta });
 
@@ -1131,19 +1124,21 @@ const App: React.FC = () => {
 
                 console.log('[App] 💾 Salvando registro de produção...');
                 // Save production log (historical record)
-                const { error: prodError } = await supabase.from('registros_producao').insert({
-                  op_id: activeOP, // activeOP is already the UUID
-                  maquina_id: currentMachine.id,
-                  // Fix: If user is ADMIN/SUPERVISOR, their ID is not in 'operadores' table. Use machine's operator or null.
-                  operador_id: currentUser.role === 'OPERATOR' ? currentUser.id : (currentMachine.operador_atual_id || null),
-                  quantidade_boa: delta,
-                  quantidade_refugo: scrap,
-                  data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
-                  data_fim: new Date().toISOString(),
-                  turno: turno
+                const operatorId = currentUser.role === 'OPERATOR'
+                  ? currentUser.id
+                  : (currentMachine.operador_atual_id || null);
+                const { error: recordError } = await supabase.rpc('mes_record_production', {
+                  p_op_id: activeOP,
+                  p_machine_id: currentMachine.id,
+                  p_operator_id: operatorId,
+                  p_good_qty: delta,
+                  p_scrap_qty: scrap,
+                  p_data_inicio: localStatusChangeAt || new Date().toISOString(),
+                  p_data_fim: new Date().toISOString(),
+                  p_turno: turno
                 });
 
-                if (prodError) throw new Error(`Erro ao salvar registro de produção: ${prodError.message}`);
+                if (recordError) throw new Error(`Erro ao salvar registro de producao: ${recordError.message}`);
 
                 setProductionData({ totalProduced: totalProduced + delta });
 
@@ -1160,16 +1155,19 @@ const App: React.FC = () => {
                 if (loteError) console.error('[App] ⚠️ Erro ao gerar lote (não bloqueante):', loteError);
                 if (lote) setCurrentLoteId(lote.id);
 
-                console.log('[App] 🔄 Atualizando status da máquina...');
-                // Update Machine Status & Timestamp (Reset to AVAILABLE but KEEP operator)
-                const { error: machineError } = await supabase.from('maquinas').update({
-                  status_atual: MachineStatus.AVAILABLE,
-                  status_change_at: new Date().toISOString(),
-                  op_atual_id: null
-                  // ✅ operador_atual_id NOT cleared - operator stays logged in
-                }).eq('id', currentMachine.id);
+                console.log('[App] Finalizando OP...');
+                const { error: finalizeError } = await supabase.rpc('mes_finalize_op', {
+                  p_machine_id: currentMachine.id,
+                  p_op_id: activeOP,
+                  p_operator_id: operatorId,
+                  p_good_qty: good,
+                  p_scrap_qty: scrap,
+                  p_tempo_setup: accumulatedSetupTime,
+                  p_tempo_producao: accumulatedProductionTime,
+                  p_tempo_parada: accumulatedStopTime
+                });
 
-                if (machineError) throw new Error(`Erro ao liberar máquina: ${machineError.message}`);
+                if (finalizeError) throw new Error(`Erro ao finalizar OP: ${finalizeError.message}`);
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
@@ -1178,18 +1176,6 @@ const App: React.FC = () => {
                   })
                 );
 
-                console.log('[App] 📝 Atualizando Ordem de Produção...');
-                // Update OP Status with accumulated quantities and times
-                const { error: opError } = await supabase.from('ordens_producao').update({
-                  status: 'FINALIZADA',
-                  quantidade_produzida: good,
-                  quantidade_refugo: scrap,
-                  tempo_producao_segundos: accumulatedProductionTime,
-                  tempo_setup_segundos: accumulatedSetupTime,
-                  tempo_parada_segundos: accumulatedStopTime
-                }).eq('id', activeOP);
-
-                if (opError) throw new Error(`Erro ao atualizar OP: ${opError.message}`);
 
                 // ✅ FIX: Limpar localStorage da OP finalizada
                 localStorage.removeItem(`flux_acc_setup_${activeOP}`);
@@ -1237,21 +1223,23 @@ const App: React.FC = () => {
                 const delta = Math.max(0, produced - totalProduced);
 
                 // Save partial production record (the delta)
-                const { error: prodError } = await supabase.from('registros_producao').insert({
-                  op_id: activeOP,
-                  maquina_id: currentMachine.id,
-                  // Fix: Handle non-operator users (Admins) to prevent FK violation
-                  operador_id: currentUser?.role === 'OPERATOR' ? currentUser.id : (currentMachine.operador_atual_id || null),
-                  quantidade_boa: delta,
-                  quantidade_refugo: 0,
-                  data_inicio: localStatusChangeAt || new Date().toISOString(), // ✅ Added data_inicio
-                  data_fim: new Date().toISOString(),
-                  turno: 'Parcial'
+                const operatorId = currentUser?.role === 'OPERATOR'
+                  ? currentUser.id
+                  : (currentMachine.operador_atual_id || null);
+                const { error: prodError } = await supabase.rpc('mes_record_production', {
+                  p_op_id: activeOP,
+                  p_machine_id: currentMachine.id,
+                  p_operator_id: operatorId,
+                  p_good_qty: delta,
+                  p_scrap_qty: 0,
+                  p_data_inicio: localStatusChangeAt || new Date().toISOString(),
+                  p_data_fim: new Date().toISOString(),
+                  p_turno: 'Parcial'
                 });
 
                 if (prodError) {
-                  console.error('Erro ao salvar produção parcial:', prodError);
-                  alert(`Erro ao salvar produção: ${prodError.message}`);
+                  console.error('Erro ao salvar producao parcial:', prodError);
+                  alert(`Erro ao salvar producao: ${prodError.message}`);
                 }
 
                 setProductionData({ totalProduced: totalProduced + delta });
@@ -1327,3 +1315,5 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
