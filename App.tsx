@@ -44,6 +44,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, user, permiss
 
 
 
+type ThemeMode = 'dark' | 'light';
+
 const App: React.FC = () => {
   useEffect(() => {
     logger.log('[DEBUG-APP] 🏗️ App component MOUNTED');
@@ -60,6 +62,23 @@ const App: React.FC = () => {
   const location = useLocation();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'dark';
+    const saved = localStorage.getItem('flux_theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('dark', 'light');
+    root.classList.add(theme);
+    localStorage.setItem('flux_theme', theme);
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // --- ZUSTAND STORE ---
   const {
@@ -621,12 +640,13 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-background-dark text-white overflow-hidden font-sans selection:bg-primary/30 selection:text-white">
+    <div className="flex h-screen bg-background-dark text-text-main-dark overflow-hidden selection:bg-primary/30 selection:text-white">
       {location.pathname !== '/login' && !location.pathname.startsWith('/r/') && (
         <Sidebar
           onLogout={handleLogoutWithNav}
           userRole={currentUser?.role || 'OPERATOR'}
           userPermissions={userPermissions}
+          sectorId={currentUser?.setor_id || null}
         />
       )}
 
@@ -635,6 +655,8 @@ const App: React.FC = () => {
           <Header
             onLogout={handleLogoutWithNav}
             user={currentUser}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
           />
         )}
 

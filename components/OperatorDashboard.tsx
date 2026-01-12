@@ -61,6 +61,19 @@ interface DiaryEntry {
   created_at: string;
 }
 
+interface SequencedOP {
+  id: string;
+  codigo: string;
+  status: string;
+  produto_nome?: string;
+}
+
+interface PendingAlert {
+  type: 'checklist' | 'etiqueta';
+  message: string;
+  checklistId?: string;
+}
+
 const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   opState, statusChangeAt, realized, oee, opId, opCodigo,
   onOpenSetup, onOpenStop, onOpenFinalize, machineId,
@@ -171,6 +184,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   }, [accumulatedProductionTime, totalProduced, cycleTime]);
 
   // Checklist states
+  const [sequencedOPs, setSequencedOPs] = useState<SequencedOP[]>([]);
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [allDiaryEntries, setAllDiaryEntries] = useState<DiaryEntry[]>([]); // For full view
@@ -179,6 +193,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [selectedChecklistId, setSelectedChecklistId] = useState<string>('');
   const [newDiaryText, setNewDiaryText] = useState('');
   const [showDiaryInput, setShowDiaryInput] = useState(false);
+  const [pendingAlert, setPendingAlert] = useState<PendingAlert | null>(null);
 
   // Diary editing state
   const [editingDiaryId, setEditingDiaryId] = useState<string | null>(null);
@@ -186,13 +201,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [showDiaryInputModal, setShowDiaryInputModal] = useState(false); // NEW: Large input modal
 
   // Alert states for timer notifications
-  const [pendingAlert, setPendingAlert] = useState<{ type: 'checklist' | 'etiqueta'; message: string; checklistId?: string } | null>(null);
-
-  // OP Sequence for machine
-  const [sequencedOPs, setSequencedOPs] = useState<{ id: string; codigo: string; status: string; produto_nome?: string }[]>([]);
 
   // Sidebar toggle state (replacing draggable)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // NEW: Manual Label Emission States
   const [showLabelTypeModal, setShowLabelTypeModal] = useState(false);
@@ -234,7 +245,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     const tiposMap = new Map<string, string>();
     tiposParada?.forEach((t: any) => tiposMap.set(t.id, t.nome));
 
-    // 3. Buscar checklists para nome
+        // 3. Buscar checklists para nome
     const { data: checklistData } = await supabase
       .from('checklist_eventos')
       .select('*, checklists(nome)')
@@ -242,7 +253,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       .order('created_at', { ascending: false })
       .limit(10);
 
-    // 4. Diário de Bordo (NOVO)
+    // 4. Diario de bordo
     const { data: diaryData } = await supabase
       .from('diario_bordo_eventos')
       .select('*')
@@ -250,13 +261,12 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       .order('created_at', { ascending: false })
       .limit(10);
 
-    // Combinar e Ordenar
     const allRecords = [
       ...(prodData || []).map(p => ({
         timestamp: p.created_at,
         data: {
           time: new Date(p.created_at).toLocaleTimeString('pt-BR'),
-          event: 'Produção',
+          event: 'Producao',
           detail: `Meta: ${p.quantidade_meta || 0} | Bom: ${p.quantidade_boa}`,
           user: operatorName, // TODO: Fetch actual user name
           status: 'Finalizado'
@@ -279,16 +289,16 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           event: 'Checklist',
           detail: c.checklists?.nome || 'Checklist',
           user: operatorName,
-          status: c.status === 'ok' ? 'OK' : c.status === 'NAO_REALIZADO' ? 'Não Realizado' : c.status
+          status: c.status === 'ok' ? 'OK' : c.status === 'NAO_REALIZADO' ? 'Nao Realizado' : c.status
         }
       })),
       ...(diaryData || []).map(d => ({
         timestamp: d.created_at,
         data: {
           time: new Date(d.created_at).toLocaleTimeString('pt-BR'),
-          event: 'Diário',
+          event: 'Diario',
           detail: d.descricao,
-          user: d.autor,
+          user: d.autor || 'Operador',
           status: 'Nota'
         }
       }))
@@ -874,13 +884,16 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         </div>
       )}
 
-      {/* Toggle Sidebar Button */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className={`fixed top-20 right-4 z-50 p-3 rounded-xl shadow-lg transition-all duration-300 ${isSidebarOpen ? 'bg-primary text-black' : 'bg-surface-dark border border-border-dark text-white hover:border-primary/50'}`}
-      >
-        <span className="material-icons-outlined">{isSidebarOpen ? 'close' : 'menu_open'}</span>
-      </button>
+      {/* Open Control Panel Button (shown only when closed) */}
+      {!isSidebarOpen && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed top-20 right-4 z-50 p-3 rounded-xl shadow-lg transition-all duration-300 bg-surface-dark border border-border-dark text-white hover:border-primary/50"
+          title="Abrir Painel de Controle"
+        >
+          <span className="material-icons-outlined">menu_open</span>
+        </button>
+      )}
 
       {/* Fixed Sidebar with OP Sequence and Checklists */}
       <div
@@ -903,11 +916,56 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
+          {/* Quick Summary */}
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-[#14171d] to-[#0f1218] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-primary text-sm">insights</span>
+                <span className="text-white text-xs font-bold uppercase tracking-wider">Resumo rapido</span>
+              </div>
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${opState === 'PRODUCAO'
+                ? 'bg-secondary/10 text-secondary border-secondary/30'
+                : opState === 'PARADA' ? 'bg-danger/10 text-danger border-danger/30'
+                  : opState === 'SUSPENSA' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
+                    : opState === 'MANUTENCAO' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
+                      : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
+                }`}>
+                {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : opState === 'MANUTENCAO' ? 'Manutencao' : 'Aguardando'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">OP atual</div>
+                <div className="text-sm font-bold text-white truncate">{opCodigo || opId || 'Sem OP'}</div>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">Checklists</div>
+                <div className="text-sm font-bold text-white">{checklists.length}</div>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">Diario</div>
+                <div className="text-sm font-bold text-white">{diaryEntries.length}</div>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">Sequencia</div>
+                <div className="text-sm font-bold text-white">{sequencedOPs.length}</div>
+              </div>
+            </div>
+          </div>
           {/* OP Sequence Section */}
           <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <span className="material-icons-outlined text-primary text-sm">playlist_play</span>
-              <span className="text-white text-xs font-bold uppercase tracking-wider">Sequência de Produção</span>
+            <div className="flex items-start gap-3 mb-3 px-1">
+              <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                1
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="material-icons-outlined text-primary text-sm">playlist_play</span>
+                  <span className="text-white text-xs font-bold uppercase tracking-wider">Fila de Producao</span>
+                </div>
+                <p className="text-[10px] text-text-sub-dark mt-1">Ordem das OPs desta maquina (a atual fica em destaque)</p>
+              </div>
             </div>
             <div className="space-y-2">
               {sequencedOPs.length > 0 ? (
@@ -925,8 +983,17 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`font-mono font-bold text-xs truncate ${op.id === opId ? 'text-primary' : 'text-gray-300'}`}>{op.codigo}</p>
-                      <p className="text-[10px] text-gray-500 truncate">{op.produto_nome || 'Produto padrão'}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{op.produto_nome || 'Produto padrao'}</p>
                     </div>
+                    {op.id === opId ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded border bg-primary/15 text-primary border-primary/30">
+                        Atual
+                      </span>
+                    ) : idx === 0 ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded border bg-white/5 text-gray-300 border-white/10">
+                        Proxima
+                      </span>
+                    ) : null}
                     {op.id === opId && (
                       <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-glow-blue"></div>
                     )}
@@ -935,7 +1002,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               ) : (
                 <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
                   <span className="material-icons-outlined text-gray-600 text-2xl mb-2">playlist_remove</span>
-                  <p className="text-gray-500 text-xs">Fila de produção vazia</p>
+                  <p className="text-gray-500 text-xs">Fila de producao vazia</p>
                 </div>
               )}
             </div>
@@ -943,9 +1010,17 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
           {/* Checklists Section */}
           <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <span className="material-icons-outlined text-secondary text-sm">fact_check</span>
-              <span className="text-white text-xs font-bold uppercase tracking-wider">Checklists do Setor</span>
+            <div className="flex items-start gap-3 mb-3 px-1">
+              <div className="w-6 h-6 rounded-md bg-secondary/10 text-secondary flex items-center justify-center text-[10px] font-bold">
+                2
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="material-icons-outlined text-secondary text-sm">fact_check</span>
+                  <span className="text-white text-xs font-bold uppercase tracking-wider">Checklists do Setor</span>
+                </div>
+                <p className="text-[10px] text-text-sub-dark mt-1">Toque para abrir e registrar</p>
+              </div>
             </div>
             <div className="grid grid-cols-1 gap-2">
               {checklists.length > 0 ? (
@@ -960,6 +1035,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                         <span className="material-icons-outlined text-sm">{checklist.obrigatorio ? 'priority_high' : 'assignment'}</span>
                       </div>
                       <span className="font-bold text-xs text-gray-300 group-hover:text-white flex-1 truncate">{checklist.nome}</span>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${checklist.obrigatorio ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-secondary/10 text-secondary border-secondary/30'}`}>
+                        {checklist.obrigatorio ? 'Obrig.' : 'Rotina'}
+                      </span>
                       {checklist.intervalo_minutos && (
                         <span className="text-[9px] font-mono bg-white/5 text-gray-400 px-1.5 py-0.5 rounded border border-white/5">
                           {checklist.intervalo_minutos}m
@@ -971,7 +1049,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               ) : (
                 <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
                   <span className="material-icons-outlined text-gray-600 text-2xl mb-2">fact_check</span>
-                  <p className="text-gray-500 text-xs">Nenhum checklist disponível</p>
+                  <p className="text-gray-500 text-xs">Nenhum checklist disponivel</p>
                 </div>
               )}
             </div>
@@ -979,18 +1057,27 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
           {/* Diary Section */}
           <div className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
-            <div className="flex items-center justify-between mb-3 px-1">
-              <div className="flex items-center gap-2">
-                <span className="material-icons-outlined text-purple-400 text-sm">menu_book</span>
-                <span className="text-white text-xs font-bold uppercase tracking-wider">Diário de Bordo</span>
+            <div className="flex items-start gap-3 mb-3 px-1">
+              <div className="w-6 h-6 rounded-md bg-purple-500/10 text-purple-300 flex items-center justify-center text-[10px] font-bold">
+                3
               </div>
-              <button
-                onClick={() => setShowDiaryInputModal(true)}
-                className="w-6 h-6 rounded-md bg-purple-500/10 text-purple-400 flex items-center justify-center hover:bg-purple-500 hover:text-white transition-all"
-                title="Novo registro"
-              >
-                <span className="material-icons-outlined text-sm">add</span>
-              </button>
+              <div className="flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="material-icons-outlined text-purple-400 text-sm">menu_book</span>
+                    <span className="text-white text-xs font-bold uppercase tracking-wider">Diario de Bordo</span>
+                  </div>
+                  <button
+                    onClick={() => setShowDiaryInputModal(true)}
+                    className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-300 hover:bg-purple-500 hover:text-white transition-all"
+                    title="Novo registro"
+                  >
+                    <span className="material-icons-outlined text-xs">add</span>
+                    Novo
+                  </button>
+                </div>
+                <p className="text-[10px] text-text-sub-dark mt-1">Registre ocorrencias rapidas e observacoes</p>
+              </div>
             </div>
 
             <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
@@ -1015,9 +1102,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             {diaryEntries.length > 0 && (
               <button
                 onClick={() => { fetchAllDiaryEntries(); setShowDiaryModal(true); }}
-                className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-white border border-transparent hover:border-white/10 rounded-lg transition-all"
+                className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 hover:text-white border border-white/10 rounded-lg transition-all flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10"
               >
-                Ver Histórico Completo
+                <span className="material-icons-outlined text-sm">history</span>
+                Historico completo
               </button>
             )}
           </div>
@@ -1044,11 +1132,11 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             {onChangeMachine && (
               <button
                 onClick={onChangeMachine}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border-dark bg-surface-dark hover:bg-primary/20 hover:border-primary/50 text-text-sub-dark hover:text-white transition-all duration-200 group"
-                title="Voltar para seleção de máquinas"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border-dark bg-surface-dark/80 hover:bg-primary/10 hover:border-primary/50 text-text-main-dark/80 hover:text-primary transition-all duration-200 group"
+                title="Voltar para selecao de maquinas"
               >
-                <span className="material-icons-outlined text-lg group-hover:text-primary transition-colors">swap_horiz</span>
-                <span className="text-sm font-semibold hidden md:inline">Trocar Máquina</span>
+                <span className="material-icons-outlined text-lg text-text-main-dark/70 group-hover:text-primary transition-colors">swap_horiz</span>
+                <span className="text-sm font-semibold hidden md:inline">Trocar Maquina</span>
               </button>
             )}
           </div>
@@ -1628,3 +1716,16 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 };
 
 export default OperatorDashboard;
+
+
+
+
+
+
+
+
+
+
+
+
+

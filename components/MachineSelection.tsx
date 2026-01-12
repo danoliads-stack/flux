@@ -90,9 +90,9 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0c10] text-[#f3f4f6] flex flex-col font-body">
+    <div className="min-h-screen bg-background-dark text-text-main-dark flex flex-col font-body">
       {/* Header - Responsivo */}
-      <header className="border-b border-[#2d3342]/30 bg-[#0b0c10] sticky top-0 z-20">
+      <header className="border-b border-border-dark/30 bg-background-dark sticky top-0 z-20">
         <div className="flex items-center justify-between px-4 md:px-8 py-3 md:py-4">
           <div className="flex items-center gap-2 md:gap-4">
             <img
@@ -100,14 +100,14 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
               alt="FLUX Logo"
               className="h-8 md:h-10 w-auto object-contain"
             />
-            <div className="hidden md:block w-px h-6 bg-[#2d3342] mx-2"></div>
-            <span className="hidden md:block text-white font-bold tracking-tight uppercase text-sm font-display">Painel do Operador</span>
+            <div className="hidden md:block w-px h-6 bg-border-dark mx-2"></div>
+            <span className="hidden md:block text-text-main-dark font-bold tracking-tight uppercase text-sm font-display">Painel do Operador</span>
           </div>
 
           <div className="flex items-center gap-3 md:gap-6">
             <div className="flex items-center gap-2 md:gap-3">
               <div className="hidden sm:block text-right">
-                <p className="text-xs md:text-sm font-bold text-white">{user.name}</p>
+                <p className="text-xs md:text-sm font-bold text-text-main-dark">{user.name}</p>
                 <p className="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase">Matrícula: {user.matricula || user.id}</p>
               </div>
               <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs md:text-sm">

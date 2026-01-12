@@ -1,0 +1,132 @@
+html.dark {
+  color-scheme: dark;
+  --color-background: 11 12 16;
+  --color-surface: 21 24 30;
+  --color-surface-highlight: 31 36 45;
+  --color-text-main: 243 244 246;
+  --color-text-sub: 156 163 175;
+  --color-border: 45 51 66;
+  --color-primary: 14 165 233;
+  --color-secondary: 16 185 129;
+  --color-danger: 239 68 68;
+  --color-warning: 245 158 11;
+  --font-body: "Inter", sans-serif;
+  --font-weight-body: 400;
+  --scrollbar-track: 11 12 16;
+  --scrollbar-thumb: 45 51 66;
+  --scrollbar-thumb-hover: 61 68 82;
+}
+
+html.light {
+  color-scheme: light;
+  --color-background: 245 246 248;
+  --color-surface: 228 233 240;
+  --color-surface-highlight: 214 221 232;
+  --color-text-main: 20 27 38;
+  --color-text-sub: 76 88 104;
+  --color-border: 190 198 210;
+  --color-primary: 37 99 235;
+  --color-secondary: 5 150 105;
+  --color-danger: 220 38 38;
+  --color-warning: 217 119 6;
+  --font-body: "Manrope", sans-serif;
+  --font-weight-body: 500;
+  --scrollbar-track: 224 230 239;
+  --scrollbar-thumb: 184 193 207;
+  --scrollbar-thumb-hover: 160 171 188;
+}
+
+body {
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-text-main));
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-body);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--scrollbar-track));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--scrollbar-thumb));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--scrollbar-thumb-hover));
+}
+
+html.light [class*="text-white"] {
+  color: rgb(var(--color-text-main)) !important;
+}
+
+html.light [class*="text-[#f3f4f6]"] {
+  color: rgb(var(--color-text-main)) !important;
+}
+
+html.light [class*="bg-primary"][class*="text-white"],
+html.light [class*="bg-secondary"][class*="text-white"],
+html.light [class*="bg-danger"][class*="text-white"],
+html.light [class*="bg-warning"][class*="text-white"] {
+  color: #ffffff !important;
+}
+
+html.light [class*="bg-[#0b0c10]"] {
+  background-color: rgb(var(--color-background)) !important;
+}
+
+html.light [class*="bg-[#0f1115]"],
+html.light [class*="bg-[#111217]"],
+html.light [class*="bg-[#111318]"] {
+  background-color: rgb(var(--color-surface)) !important;
+}
+
+html.light [class*="bg-[#15181e]"],
+html.light [class*="bg-[#161920]"] {
+  background-color: rgb(var(--color-surface)) !important;
+}
+
+html.light [class*="bg-[#1a1c23]"],
+html.light [class*="bg-[#1a1d24]"],
+html.light [class*="bg-[#1f242d]"],
+html.light [class*="bg-[#20242c]"],
+html.light [class*="bg-[#252830]"],
+html.light [class*="bg-[#252831]"] {
+  background-color: rgb(var(--color-surface-highlight)) !important;
+}
+
+html.light [class*="bg-[#2d3342]"] {
+  background-color: rgb(var(--color-border)) !important;
+}
+
+html.light [class*="border-[#0b0c10]"],
+html.light [class*="border-[#2d3342]"] {
+  border-color: rgb(var(--color-border)) !important;
+}
+
+html.light header,
+html.light aside {
+  background-color: rgb(var(--color-surface-highlight)) !important;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

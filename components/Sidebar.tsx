@@ -7,6 +7,7 @@ interface SidebarProps {
   onLogout: () => void;
   userRole: UserRole;
   userPermissions: Permission[];
+  sectorId?: string | null;
 }
 
 interface Notification {
@@ -18,35 +19,152 @@ interface Notification {
   read: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [sectorMachineIds, setSectorMachineIds] = useState<string[] | null>(null);
 
-  // Fetch notifications (machine alerts/stops)
+  const fetchNotifications = async () => {
+    const paradasQuery = supabase
+      .from('paradas')
+      .select('id, motivo, data_inicio, data_fim, created_at, maquinas!inner(nome, setor_id)')
+      .is('data_fim', null)
+      .order('data_inicio', { ascending: false })
+      .limit(10);
+
+    const chamadosQuery = supabase
+      .from('chamados_manutencao')
+      .select('id, descricao, prioridade, status, data_abertura, maquinas!inner(nome, setor_id)')
+      .in('status', ['ABERTO', 'EM_ANDAMENTO'])
+      .order('data_abertura', { ascending: false })
+      .limit(10);
+
+    if (sectorId) {
+      paradasQuery.eq('maquinas.setor_id', sectorId);
+      chamadosQuery.eq('maquinas.setor_id', sectorId);
+    }
+
+    const [{ data: paradas }, { data: chamados }] = await Promise.all([
+      paradasQuery,
+      chamadosQuery
+    ]);
+
+    type NotificationWithSort = Notification & { sortTime: number };
+
+    const stopNotifs: NotificationWithSort[] = (paradas || []).map(p => {
+      const startedAt = p.data_inicio || p.created_at;
+      const minutesOpen = startedAt
+        ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000)
+        : 0;
+      const type: Notification['type'] = minutesOpen >= 10 ? 'danger' : 'warning';
+      const message = ((p.maquinas as any)?.nome || 'Maquina') +
+        ': ' + (p.motivo || 'Sem motivo') +
+        ' (aberta ha ' + minutesOpen + ' min)';
+
+      return {
+        id: `stop-${p.id}`,
+        title: 'Parada Ativa',
+        message,
+        type,
+        time: startedAt
+          ? new Date(startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        read: false,
+        sortTime: startedAt ? new Date(startedAt).getTime() : 0
+      };
+    });
+
+    const maintNotifs: NotificationWithSort[] = (chamados || []).map(c => {
+      const startedAt = c.data_abertura;
+      const minutesOpen = startedAt
+        ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000)
+        : 0;
+      const priority = (c.prioridade || '').toUpperCase();
+      const type: Notification['type'] =
+        priority === 'CRITICA' || minutesOpen >= 30 ? 'danger' : 'warning';
+      const message = ((c.maquinas as any)?.nome || 'Maquina') +
+        ': ' + (c.descricao || 'Sem descricao') +
+        ' (aberta ha ' + minutesOpen + ' min)';
+
+      return {
+        id: `maint-${c.id}`,
+        title: 'Manutencao Aberta',
+        message,
+        type,
+        time: startedAt
+          ? new Date(startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        read: false,
+        sortTime: startedAt ? new Date(startedAt).getTime() : 0
+      };
+    });
+
+    const combined = [...stopNotifs, ...maintNotifs]
+      .sort((a, b) => b.sortTime - a.sortTime)
+      .slice(0, 10)
+      .map(({ sortTime, ...n }) => n);
+
+    setNotifications(combined);
+  };
+
   useEffect(() => {
-    const fetchNotifications = async () => {
-      const { data: paradas } = await supabase
-        .from('paradas')
-        .select('id, motivo, created_at, maquinas(nome)')
-        .order('created_at', { ascending: false })
-        .limit(10);
+    let isMounted = true;
 
-      if (paradas) {
-        const notifs: Notification[] = paradas.map(p => ({
-          id: p.id,
-          title: 'Parada Registrada',
-          message: `${(p.maquinas as any)?.nome || 'Máquina'}: ${p.motivo || 'Sem motivo'}`,
-          type: 'warning' as const,
-          time: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          read: false
-        }));
-        setNotifications(notifs);
+    const loadSectorMachines = async () => {
+      if (!sectorId) {
+        setSectorMachineIds(null);
+        return;
+      }
+      const { data } = await supabase
+        .from('maquinas')
+        .select('id')
+        .eq('setor_id', sectorId);
+
+      if (isMounted) {
+        setSectorMachineIds((data || []).map(m => m.id));
       }
     };
+
+    loadSectorMachines();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sectorId]);
+
+  useEffect(() => {
     fetchNotifications();
+
+    if (sectorId && (!sectorMachineIds || sectorMachineIds.length === 0)) {
+      return;
+    }
+
+    const filter = sectorMachineIds && sectorMachineIds.length > 0
+      ? `maquina_id=in.(${sectorMachineIds.join(',')})`
+      : undefined;
+
+    const channel = supabase
+      .channel('sidebar-alerts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'paradas', filter }, () => {
+        fetchNotifications();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chamados_manutencao', filter }, () => {
+        fetchNotifications();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sectorId, sectorMachineIds ? sectorMachineIds.join(',') : '']);
+
+  useEffect(() => {
+    if (showNotifications) {
+      fetchNotifications();
+    }
   }, [showNotifications]);
 
   const navItems = [
@@ -123,12 +241,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions }) => {
 
           <button
             onClick={() => setShowNotifications(true)}
-            title="Notificações"
+            title="Notificacoes"
             className="relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl text-text-sub-dark hover:bg-surface-dark-highlight hover:text-primary transition-colors"
           >
-            <span className="material-icons-outlined">notifications</span>
+            <span className="material-icons-outlined">
+              {notifications.length > 0 ? 'notifications_active' : 'notifications'}
+            </span>
             {notifications.length > 0 && (
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-danger rounded-full animate-pulse"></span>
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center shadow">
+                {notifications.length > 9 ? '9+' : notifications.length}
+              </span>
             )}
           </button>
         </nav>

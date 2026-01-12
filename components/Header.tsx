@@ -6,9 +6,11 @@ import { AppUser } from '../types';
 interface HeaderProps {
   onLogout: () => void;
   user: AppUser | null;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ user }) => {
+const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme }) => {
   const location = useLocation();
 
   const getTitle = () => {
@@ -35,11 +37,24 @@ const Header: React.FC<HeaderProps> = ({ user }) => {
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4">
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-green-900/20 border border-green-500/30">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
           <span className="text-xs font-semibold text-green-500 uppercase tracking-tighter">SISTEMA ONLINE</span>
         </div>
+
+        <button
+          onClick={onToggleTheme}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border-dark bg-background-dark/60 text-text-sub-dark hover:text-text-main-dark hover:bg-surface-dark-highlight transition-colors"
+          title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+        >
+          <span className="material-icons-outlined text-base">
+            {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+          </span>
+          <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider">
+            {theme === 'dark' ? 'Claro' : 'Escuro'}
+          </span>
+        </button>
 
         <div className="flex items-center gap-3 border-l border-border-dark pl-6">
           <div className="text-right hidden sm:block">

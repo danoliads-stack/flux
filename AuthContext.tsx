@@ -326,7 +326,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Limpa dados relacionados de localStorage
         localStorage.removeItem('flux_selected_machine');
         const fluxKeys = Object.keys(localStorage).filter(k =>
-            k.startsWith('flux_') && !k.startsWith('sb-')
+            k.startsWith('flux_') && !k.startsWith('sb-') && k !== 'flux_theme'
         );
         fluxKeys.forEach(k => localStorage.removeItem(k));
 
