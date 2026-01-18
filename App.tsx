@@ -566,7 +566,17 @@ const App: React.FC = () => {
 
   const handleOperatorSwitchConfirm = async (matricula: string, shiftId?: string | null) => {
     if (!selectedMachineId || !currentMachine) {
-      setSwitchError('Selecione uma máquina antes de trocar o operador.');
+      setSwitchError('Selecione uma maquina antes de trocar o operador.');
+      return;
+    }
+
+    if (!currentMachine?.id) {
+      setSwitchError('Maquina nao encontrada para registrar a sessao.');
+      return;
+    }
+
+    if (!currentMachine?.op_atual_id) {
+      setSwitchError('Nenhuma OP ativa encontrada para esta maquina.');
       return;
     }
 
@@ -583,16 +593,27 @@ const App: React.FC = () => {
 
       if (opError) throw opError;
       if (!opData) {
-        setSwitchError('Matrícula não encontrada ou operador inativo.');
+        setSwitchError('Matricula nao encontrada ou operador inativo.');
         setIsSubmittingSwitch(false);
         return;
       }
 
       if (opData.setor_id !== currentMachine.setor_id) {
-        setSwitchError('Operador não pertence ao setor desta máquina.');
+        setSwitchError('Operador nao pertence ao setor desta maquina.');
         setIsSubmittingSwitch(false);
         return;
       }
+      if (!opData.id) {
+        setSwitchError('Operador invalido para troca.');
+        setIsSubmittingSwitch(false);
+        return;
+      }
+
+      logger.log('[OperatorSwitch] Chamando mes_switch_operator', {
+        op_id: currentMachine.op_atual_id,
+        operator_id: opData.id,
+        maquina_id: currentMachine.id
+      });
 
       const { data: sessionResult, error: sessionError } = await supabase.rpc('mes_switch_operator', {
         p_op_id: currentMachine.op_atual_id,
@@ -1491,6 +1512,9 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
 
 
 
