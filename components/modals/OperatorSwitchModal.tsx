@@ -16,7 +16,6 @@ const OperatorSwitchModal: React.FC<OperatorSwitchModalProps> = ({
   isOpen,
   onClose,
   onConfirm,
-  operators,
   shifts,
   isLoading,
   isSubmitting,

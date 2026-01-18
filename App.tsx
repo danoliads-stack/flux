@@ -558,19 +558,25 @@ const App: React.FC = () => {
   }, [isSwitchModalOpen]);
 
   const handleOperatorSwitchConfirm = async (matricula: string, shiftId?: string | null) => {
+    // Validações iniciais
     if (!selectedMachineId || !currentMachine) {
-      setSwitchError('Selecione uma maquina antes de trocar o operador.');
+      setSwitchError('Selecione uma máquina antes de trocar o operador.');
       return;
     }
 
     if (!currentMachine?.id) {
-      setSwitchError('Maquina nao encontrada para registrar a sessao.');
+      setSwitchError('Máquina não encontrada para registrar a sessão.');
+      return;
+    }
+
+    if (!matricula?.trim()) {
+      setSwitchError('Digite uma matrícula válida.');
       return;
     }
 
     const opIdForSession = currentMachine.op_atual_id || activeOP || activeOPCodigo || null;
     if (!opIdForSession) {
-      setSwitchError('Nenhuma OP ativa encontrada para esta maquina.');
+      setSwitchError('Nenhuma OP ativa encontrada para esta máquina.');
       return;
     }
 
@@ -578,66 +584,89 @@ const App: React.FC = () => {
     setSwitchError(null);
 
     try {
+      // Busca dados do operador
       const { data: opData, error: opError } = await supabase
         .from('operadores')
         .select('id, nome, matricula, setor_id, turno_id, turnos(nome)')
-        .eq('matricula', matricula)
+        .eq('matricula', matricula.trim())
         .eq('ativo', true)
         .maybeSingle();
 
-      if (opError) throw opError;
+      if (opError) {
+        logger.error('[OperatorSwitch] Erro ao buscar operador:', opError);
+        throw new Error('Erro ao validar matrícula do operador.');
+      }
+
       if (!opData) {
-        setSwitchError('Matricula nao encontrada ou operador inativo.');
-        setIsSubmittingSwitch(false);
+        setSwitchError('Matrícula não encontrada ou operador inativo.');
         return;
       }
 
+      // Validação de setor
       if (opData.setor_id !== currentMachine.setor_id) {
-        setSwitchError('Operador nao pertence ao setor desta maquina.');
-        setIsSubmittingSwitch(false);
-        return;
-      }
-      if (!opData.id) {
-        setSwitchError('Operador invalido para troca.');
-        setIsSubmittingSwitch(false);
+        setSwitchError('Operador não pertence ao setor desta máquina.');
         return;
       }
 
-      logger.log('[OperatorSwitch] Chamando mes_switch_operator', {
+      if (!opData.id) {
+        setSwitchError('Operador inválido para troca.');
+        return;
+      }
+
+      logger.log('[OperatorSwitch] Iniciando troca de operador:', {
         op_id: opIdForSession,
         operator_id: opData.id,
-        maquina_id: currentMachine.id
+        operator_name: opData.nome,
+        maquina_id: currentMachine.id,
+        shift_id: shiftId
       });
 
+      // Executa a RPC de troca de operador
       const { data: sessionResult, error: sessionError } = await supabase.rpc('mes_switch_operator', {
         p_op_id: opIdForSession,
         p_operator_id: opData.id,
-        p_shift_id: currentMachine.id // usa id da m quina conforme orientaÇõÇœo
+        p_shift_id: shiftId || null
       });
-      if (sessionError) throw sessionError;
+
+      if (sessionError) {
+        logger.error('[OperatorSwitch] Erro na RPC mes_switch_operator:', sessionError);
+        throw new Error('Falha ao registrar troca de operador: ' + sessionError.message);
+      }
+
       const sessionId = Array.isArray(sessionResult) ? sessionResult[0] : sessionResult;
-      setActiveOperatorSessionId(sessionId || null);
+      if (!sessionId) {
+        throw new Error('Não foi possível criar a sessão do operador.');
+      }
+
+      setActiveOperatorSessionId(sessionId);
 
       // Atualiza operador atual da máquina para UI
       await supabase.from('maquinas').update({
         operador_atual_id: opData.id
       }).eq('id', selectedMachineId);
 
+      // Atualiza estados locais para refletir a troca imediatamente
       setLiveMachines(prev => prev.map(m =>
         m.id === selectedMachineId ? { ...m, operador_atual_id: opData.id } : m
       ));
 
       setCurrentMachine(prev => prev ? { ...prev, operador_atual_id: opData.id } : prev);
 
+      // Atualiza a atribuição do operador ativo
       setOperatorAssignment({
         id: opData.id,
         name: opData.nome || activeOperatorName
       });
 
+      // Atualiza o turno se fornecido
       const resolvedShift = shiftOptions.find(s => s.id === shiftId);
       const newShiftLabel = resolvedShift?.nome || (opData as any).turnos?.nome || operatorTurno;
       setOperatorTurno(newShiftLabel);
 
+      // Busca a sessão recém-criada para garantir sincronização
+      await fetchActiveSession(opIdForSession);
+
+      // Broadcast da atualização para outros clientes
       await realtimeManager.broadcastMachineUpdate(
         createMachineUpdate(
           selectedMachineId,
@@ -648,6 +677,13 @@ const App: React.FC = () => {
           }
         )
       );
+
+      logger.log('[OperatorSwitch] ✅ Troca realizada com sucesso:', {
+        newOperatorId: opData.id,
+        newOperatorName: opData.nome,
+        sessionId,
+        shiftId
+      });
 
       setIsSwitchModalOpen(false);
     } catch (error: any) {
