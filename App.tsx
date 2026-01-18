@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { MachineStatus, AppUser, Permission, MachineData, ProductionOrder, OPState, ShiftOption } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -496,6 +496,15 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
+  // Se o operador tentar entrar em máquina ocupada, abrir modal de troca em vez de redirecionar
+  useEffect(() => {
+    if (currentUser?.role !== 'OPERATOR') return;
+    if (currentMachine?.operador_atual_id && currentMachine.operador_atual_id !== currentUser.id) {
+      setSwitchError('Máquina ocupada. Digite a matrícula para assumir este posto.');
+      setIsSwitchModalOpen(true);
+    }
+  }, [currentMachine?.operador_atual_id, currentUser?.id, currentUser?.role]);
+
   useEffect(() => {
     if (!currentUser) {
       setOperatorAssignment(null);
@@ -608,8 +617,8 @@ const App: React.FC = () => {
     if (currentUser?.role === 'OPERATOR') {
       // 1. Prevent selecting a machine preoccupied by ANOTHER operator
       if (machine.operador_atual_id && machine.operador_atual_id !== currentUser.id) {
-        alert(`⛔ Máquina Ocupada!\n\nEsta máquina já está sendo operada por outro usuário. Não é possível acessá-la no momento.`);
-        return;
+        setSwitchError('Máquina ocupada. Digite a matrícula para assumir este posto.');
+        setIsSwitchModalOpen(true);
       }
 
       // 2. Warn if operator is leaving a machine active (Optional: Logic exists below to clear it)
@@ -1449,5 +1458,6 @@ const App: React.FC = () => {
 };
 
 export default App;
+
 
 
