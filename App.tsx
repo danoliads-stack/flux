@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MachineStatus, AppUser, Permission, MachineData, ProductionOrder, OPState } from './types';
+import { MachineStatus, AppUser, Permission, MachineData, ProductionOrder, OPState, ShiftOption } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import OperatorDashboard from './components/OperatorDashboard';
@@ -14,6 +14,7 @@ import SetupModal from './components/modals/SetupModal';
 import StopModal from './components/modals/StopModal';
 import FinalizeModal from './components/modals/FinalizeModal';
 import LabelModal from './components/modals/LabelModal';
+import OperatorSwitchModal from './components/modals/OperatorSwitchModal';
 import LabelHistoryPage from './components/LabelHistoryPage';
 import MaintenanceDashboard from './components/MaintenanceDashboard';
 import TraceabilityPage from './components/TraceabilityPage';
@@ -96,7 +97,16 @@ const App: React.FC = () => {
   } = useAppStore();
 
   const [operatorTurno, setOperatorTurno] = useState<string>('Turno Atual');
+  const [operatorAssignment, setOperatorAssignment] = useState<{ id: string; name: string } | null>(null);
+  const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
+  const [shiftOptions, setShiftOptions] = useState<ShiftOption[]>([]);
+  const [isFetchingSwitchData, setIsFetchingSwitchData] = useState(false);
+  const [isSubmittingSwitch, setIsSubmittingSwitch] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
   const [currentLoteId, setCurrentLoteId] = useState<string | null>(null);
+  const activeOperatorId = operatorAssignment?.id || currentMachine?.operador_atual_id || currentUser?.id || null;
+  const activeOperatorName = operatorAssignment?.name || currentUser?.name || 'Operador';
+  const currentShiftOptionId = shiftOptions.find(s => s.nome === operatorTurno)?.id || null;
 
   // Last phase start time (synced with store statusChangeAt for relative calc)
   const lastPhaseStartTime = localStatusChangeAt;
@@ -486,6 +496,111 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+    if (!currentUser) {
+      setOperatorAssignment(null);
+      return;
+    }
+    if (!operatorAssignment || operatorAssignment.id === currentUser.id) {
+      setOperatorAssignment({ id: currentUser.id, name: currentUser.name });
+    }
+  }, [currentUser]);
+
+  const fetchOperatorSwitchData = async () => {
+    setSwitchError(null);
+    setIsFetchingSwitchData(true);
+    try {
+      const { data, error } = await supabase.from('turnos').select('id, nome, hora_inicio, hora_fim').order('hora_inicio', { ascending: true });
+      if (error) throw error;
+      setShiftOptions(data || []);
+    } catch (error: any) {
+      setSwitchError(error?.message || 'Erro ao carregar operadores e turnos.');
+    } finally {
+      setIsFetchingSwitchData(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSwitchModalOpen) return;
+    fetchOperatorSwitchData();
+  }, [isSwitchModalOpen]);
+
+  const handleOperatorSwitchConfirm = async (matricula: string, shiftId?: string | null) => {
+    if (!selectedMachineId || !currentMachine) {
+      setSwitchError('Selecione uma máquina antes de trocar o operador.');
+      return;
+    }
+
+    setIsSubmittingSwitch(true);
+    setSwitchError(null);
+
+    try {
+      const { data: opData, error: opError } = await supabase
+        .from('operadores')
+        .select('id, nome, matricula, setor_id, turno_id, turnos(nome)')
+        .eq('matricula', matricula)
+        .eq('ativo', true)
+        .maybeSingle();
+
+      if (opError) throw opError;
+      if (!opData) {
+        setSwitchError('Matrícula não encontrada ou operador inativo.');
+        setIsSubmittingSwitch(false);
+        return;
+      }
+
+      if (opData.setor_id !== currentMachine.setor_id) {
+        setSwitchError('Operador não pertence ao setor desta máquina.');
+        setIsSubmittingSwitch(false);
+        return;
+      }
+
+      const now = new Date().toISOString();
+      await supabase.from('op_operadores').update({ fim: now }).eq('maquina_id', selectedMachineId).is('fim', null);
+      await supabase.from('op_operadores').insert({
+        op_id: currentMachine.op_atual_id,
+        operador_id: opData.id,
+        maquina_id: selectedMachineId,
+        inicio: now
+      });
+      await supabase.from('maquinas').update({
+        operador_atual_id: opData.id
+      }).eq('id', selectedMachineId);
+
+      setLiveMachines(prev => prev.map(m =>
+        m.id === selectedMachineId ? { ...m, operador_atual_id: opData.id } : m
+      ));
+
+      setCurrentMachine(prev => prev ? { ...prev, operador_atual_id: opData.id } : prev);
+
+      setOperatorAssignment({
+        id: opData.id,
+        name: opData.nome || activeOperatorName
+      });
+
+      const resolvedShift = shiftOptions.find(s => s.id === shiftId);
+      const newShiftLabel = resolvedShift?.nome || (opData as any).turnos?.nome || operatorTurno;
+      setOperatorTurno(newShiftLabel);
+
+      await realtimeManager.broadcastMachineUpdate(
+        createMachineUpdate(
+          selectedMachineId,
+          currentMachine.status_atual || MachineStatus.AVAILABLE,
+          {
+            operatorId: opData.id,
+            opId: currentMachine.op_atual_id || null
+          }
+        )
+      );
+
+      setIsSwitchModalOpen(false);
+    } catch (error: any) {
+      setSwitchError(error?.message || 'Erro ao trocar o operador.');
+    } finally {
+      setIsSubmittingSwitch(false);
+    }
+  };
+
   const handleMachineSelect = async (machine: MachineData) => {
     logger.log('Selecting machine:', machine.nome, 'Current status:', machine.status_atual);
 
@@ -679,13 +794,13 @@ const App: React.FC = () => {
               <Route path="/maquinas/:id" element={
                 <ProtectedRoute user={currentUser} permission={Permission.VIEW_OPERATOR_DASHBOARD} userPermissions={userPermissions}>
                   {currentMachine ? (
-                    <OperatorDashboard
-                      opState={opState}
-                      statusChangeAt={localStatusChangeAt}
-                      realized={totalProduced}
-                      oee={95} // TODO: Calculate OEE
-                      opId={activeOP}
-                      opCodigo={activeOPCodigo}
+                      <OperatorDashboard
+                        opState={opState}
+                        statusChangeAt={localStatusChangeAt}
+                        realized={totalProduced}
+                        oee={95} // TODO: Calculate OEE
+                        opId={activeOP}
+                        opCodigo={activeOPCodigo}
                       onOpenSetup={() => setActiveModal('setup')}
                       onOpenStop={() => setActiveModal('stop')}
                       onOpenFinalize={() => {
@@ -711,9 +826,7 @@ const App: React.FC = () => {
                           const nextStatus = lastState === 'SETUP' ? MachineStatus.SETUP : MachineStatus.RUNNING;
                           const nextOpState = lastState === 'SETUP' ? 'SETUP' : 'PRODUCAO';
 
-                          const operatorId = currentUser?.role === 'OPERATOR'
-                            ? currentUser.id
-                            : (currentMachine.operador_atual_id || null);
+                          const operatorId = activeOperatorId;
                           const { error: resumeError } = await supabase.rpc('mes_resume_machine', {
                             p_machine_id: currentMachine.id,
                             p_next_status: nextStatus,
@@ -732,7 +845,7 @@ const App: React.FC = () => {
                           });
 
                           await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, nextStatus, {
-                            operatorId: currentUser!.id,
+                            operatorId: activeOperatorId,
                             opId: activeOP
                           }));
 
@@ -754,9 +867,7 @@ const App: React.FC = () => {
                             newAccSetup += elapsed;
                           }
 
-                          const operatorId = currentUser?.role === 'OPERATOR'
-                            ? currentUser.id
-                            : (currentMachine.operador_atual_id || null);
+                          const operatorId = activeOperatorId;
                           const { error: prodStartError } = await supabase.rpc('mes_start_production', {
                             p_machine_id: currentMachine.id,
                             p_op_id: activeOP,
@@ -774,7 +885,7 @@ const App: React.FC = () => {
                           });
 
                           await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
-                            operatorId: currentUser!.id,
+                            operatorId: activeOperatorId,
                             opId: activeOP
                           }));
 
@@ -784,8 +895,9 @@ const App: React.FC = () => {
                       machineId={currentMachine.id}
                       machineName={currentMachine.nome || 'Máquina'}
                       sectorName={currentUser?.sector || 'Produção'}
-                      operatorName={currentUser?.name || 'Operador'}
+                      operatorName={activeOperatorName}
                       shiftName={operatorTurno}
+                      onSwitchOperator={() => setIsSwitchModalOpen(true)}
                       meta={activeOPData?.quantidade_meta || 0}
                       operatorId={currentUser!.id}
                       sectorId={currentMachine.setor_id}
@@ -799,7 +911,7 @@ const App: React.FC = () => {
                         const { data: opData } = await supabase.from('ordens_producao').select('id').eq('codigo', activeOP).single();
                         await supabase.from('checklist_eventos').insert({
                           op_id: opData?.id,
-                          operador_id: currentUser!.id,
+                          operador_id: activeOperatorId,
                           maquina_id: currentMachine.id,
                           setor_id: currentMachine.setor_id,
                           tipo_acionamento: 'tempo',
@@ -825,7 +937,7 @@ const App: React.FC = () => {
                           // 1. Criar chamado de manutenção na tabela separada
                           const { error } = await supabase.from('chamados_manutencao').insert({
                             maquina_id: currentMachine.id,
-                            operador_id: currentUser.id,
+                            operador_id: activeOperatorId,
                             op_id: currentMachine.op_atual_id,
                             descricao: description,
                             prioridade: 'NORMAL',
@@ -866,7 +978,7 @@ const App: React.FC = () => {
 
                           await realtimeManager.broadcastMachineUpdate(
                             createMachineUpdate(currentMachine.id, MachineStatus.MAINTENANCE, {
-                              operatorId: currentUser.id,
+                              operatorId: activeOperatorId,
                               opId: currentMachine.op_atual_id
                             })
                           );
@@ -938,14 +1050,12 @@ const App: React.FC = () => {
                   await supabase.from('op_operadores').update({ fim: new Date().toISOString() }).eq('maquina_id', selectedMachineId).is('fim', null);
                   await supabase.from('op_operadores').insert({
                     op_id: op.id,
-                    operador_id: currentUser.id,
+                    operador_id: activeOperatorId,
                     maquina_id: selectedMachineId,
                     inicio: new Date().toISOString()
                   });
                   const now = new Date().toISOString();
-                  const operatorId = currentUser.role === 'OPERATOR'
-                    ? currentUser.id
-                    : (currentMachine?.operador_atual_id || null);
+                  const operatorId = activeOperatorId;
                   const { error: setupError } = await supabase.rpc('mes_start_setup', {
                     p_machine_id: selectedMachineId,
                     p_op_id: op.id,
@@ -966,7 +1076,7 @@ const App: React.FC = () => {
                   });
 
                   await realtimeManager.broadcastMachineUpdate(createMachineUpdate(selectedMachineId, MachineStatus.SETUP, {
-                    operatorId: currentUser.id,
+                    operatorId: activeOperatorId,
                     opId: op.id
                   }));
 
@@ -987,15 +1097,13 @@ const App: React.FC = () => {
               if (currentMachine && currentUser) {
                 logger.log('Salvando parada:', {
                   maquina_id: currentMachine.id,
-                  operador_id: currentUser.id,
+                  operador_id: activeOperatorId,
                   op_id: currentMachine.op_atual_id,
                   motivo: reason,
                   notas: notes
                 });
 
-                const operatorId = currentUser.role === 'OPERATOR'
-                  ? currentUser.id
-                  : (currentMachine.operador_atual_id || null);
+                const operatorId = activeOperatorId;
                 const { error: stopError } = await supabase.rpc('mes_stop_machine', {
                   p_machine_id: currentMachine.id,
                   p_reason: reason,
@@ -1044,7 +1152,7 @@ const App: React.FC = () => {
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.STOPPED, {
-                    operatorId: currentUser.id,
+                  operatorId: activeOperatorId,
                     opId: currentMachine.op_atual_id
                   })
                 );
@@ -1067,9 +1175,7 @@ const App: React.FC = () => {
               if (currentMachine && activeOP) {
                 const delta = Math.max(0, produced - totalProduced);
 
-                const operatorId = currentUser?.role === 'OPERATOR'
-                  ? currentUser.id
-                  : (currentMachine.operador_atual_id || null);
+                const operatorId = activeOperatorId;
                 const { error: recordError } = await supabase.rpc('mes_record_production', {
                   p_op_id: activeOP,
                   p_machine_id: currentMachine.id,
@@ -1107,7 +1213,7 @@ const App: React.FC = () => {
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
-                    operatorId: currentUser?.id, // ✅ Operator remains on machine
+                    operatorId: activeOperatorId, // ✅ Operator remains on machine
                     opId: null
                   })
                 );
@@ -1146,9 +1252,7 @@ const App: React.FC = () => {
 
                 console.log('[App] 💾 Salvando registro de produção...');
                 // Save production log (historical record)
-                const operatorId = currentUser.role === 'OPERATOR'
-                  ? currentUser.id
-                  : (currentMachine.operador_atual_id || null);
+                const operatorId = activeOperatorId;
                 const { error: recordError } = await supabase.rpc('mes_record_production', {
                   p_op_id: activeOP,
                   p_machine_id: currentMachine.id,
@@ -1193,7 +1297,7 @@ const App: React.FC = () => {
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
-                    operatorId: currentUser.id, // ✅ Operator remains on machine
+                    operatorId: activeOperatorId, // ✅ Operator remains on machine
                     opId: null
                   })
                 );
@@ -1245,9 +1349,7 @@ const App: React.FC = () => {
                 const delta = Math.max(0, produced - totalProduced);
 
                 // Save partial production record (the delta)
-                const operatorId = currentUser?.role === 'OPERATOR'
-                  ? currentUser.id
-                  : (currentMachine.operador_atual_id || null);
+                const operatorId = activeOperatorId;
                 const { error: prodError } = await supabase.rpc('mes_record_production', {
                   p_op_id: activeOP,
                   p_machine_id: currentMachine.id,
@@ -1324,13 +1426,23 @@ const App: React.FC = () => {
             realized={totalProduced}
             loteId={currentLoteId || ''}
             machine={currentMachine?.nome || 'Máquina'}
-            operator={currentUser?.name || 'Operador'}
+            operator={activeOperatorName}
             unit="PÇS"
             productName={activeOPData?.nome_produto || 'Produto Indefinido'}
             productDescription={activeOPData?.codigo || ''}
             shift={operatorTurno || 'N/A'}
           />
         )}
+        <OperatorSwitchModal
+          isOpen={isSwitchModalOpen}
+          onClose={() => setIsSwitchModalOpen(false)}
+          onConfirm={handleOperatorSwitchConfirm}
+          shifts={shiftOptions}
+          isLoading={isFetchingSwitchData}
+          isSubmitting={isSubmittingSwitch}
+          error={switchError}
+          currentShiftId={currentShiftOptionId}
+        />
       </main>
     </div>
   );

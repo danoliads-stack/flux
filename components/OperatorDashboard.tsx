@@ -24,6 +24,7 @@ interface OperatorDashboardProps {
   onRegisterLogbook: (description: string) => void;
   onGenerateLabel?: () => void; // New: Generate label at any time
   onRequestMaintenance?: (description: string) => void; // New: Maintenance call
+  onSwitchOperator?: () => void;
   machineId: string;
   opCodigo?: string | null;
   machineName?: string;
@@ -79,6 +80,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   onOpenSetup, onOpenStop, onOpenFinalize, machineId,
   onRegisterChecklist, onRegisterLogbook, onStartProduction, onRetomar,
   onGenerateLabel, onRequestMaintenance,
+  onSwitchOperator,
   machineName = 'Máquina', sectorName = 'Produção', operatorName = 'Operador', shiftName = 'Turno', meta: propMeta,
   operatorId = '', sectorId = '', loteId = 'LOTE-001',
   onChangeMachine,
@@ -1153,9 +1155,20 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               <span className="material-icons-outlined text-lg">schedule</span>
               <span>Turno: <strong className="text-text-main-dark">{shiftName}</strong></span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="material-icons-outlined text-lg">person</span>
-              <span>Operador: <strong className="text-text-main-dark">{operatorName}</strong></span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>Operador: <strong className="text-text-main-dark">{operatorName}</strong></span>
+                {onSwitchOperator && (
+                  <button
+                    type="button"
+                    onClick={onSwitchOperator}
+                    className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border border-border-dark text-primary hover:border-primary hover:bg-primary/10 transition-colors"
+                  >
+                    Trocar
+                  </button>
+                )}
+              </div>
             </div>
             {productInfo?.nome && (
               <div className="flex items-center gap-2">

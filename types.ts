@@ -205,3 +205,10 @@ export interface Etiqueta {
   operadores?: { nome: string; matricula: string } | null;
   setores?: { nome: string } | null;
 }
+
+export interface ShiftOption {
+  id: string;
+  nome: string;
+  hora_inicio: string;
+  hora_fim: string;
+}
