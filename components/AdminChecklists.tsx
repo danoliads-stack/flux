@@ -129,10 +129,23 @@ const AdminChecklists: React.FC = () => {
     };
 
     const handleDeleteChecklist = async (id: string, nome: string) => {
-        if (confirm(`Deseja realmente excluir o checklist "${nome}"?`)) {
-            await supabase.from('checklists').delete().eq('id', id);
-            fetchData();
+        console.log('Tentando excluir checklist:', { id, nome });
+
+        if (!confirm(`Deseja realmente excluir o checklist "${nome}"?`)) return;
+
+        const { error } = await supabase
+            .from('checklists')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Erro ao excluir checklist:', error);
+            alert(error.message);
+            return;
         }
+
+        console.log('Checklist excluído com sucesso');
+        fetchData();
     };
 
     const openEditModal = (ck: ChecklistTemplate) => {
