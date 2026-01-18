@@ -575,7 +575,8 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!currentMachine?.op_atual_id) {
+    const opIdForSession = currentMachine.op_atual_id || activeOP || activeOPCodigo || null;
+    if (!opIdForSession) {
       setSwitchError('Nenhuma OP ativa encontrada para esta maquina.');
       return;
     }
@@ -610,13 +611,13 @@ const App: React.FC = () => {
       }
 
       logger.log('[OperatorSwitch] Chamando mes_switch_operator', {
-        op_id: currentMachine.op_atual_id,
+        op_id: opIdForSession,
         operator_id: opData.id,
         maquina_id: currentMachine.id
       });
 
       const { data: sessionResult, error: sessionError } = await supabase.rpc('mes_switch_operator', {
-        p_op_id: currentMachine.op_atual_id,
+        p_op_id: opIdForSession,
         p_operator_id: opData.id,
         p_shift_id: currentMachine.id // usa id da m quina conforme orientaÇõÇœo
       });
@@ -1001,7 +1002,7 @@ const App: React.FC = () => {
                           const { error } = await supabase.from('chamados_manutencao').insert({
                             maquina_id: currentMachine.id,
                             operador_id: activeOperatorId,
-                            op_id: currentMachine.op_atual_id,
+                            op_id: opIdForSession,
                             descricao: description,
                             prioridade: 'NORMAL',
                             status: 'ABERTO',
@@ -1161,7 +1162,7 @@ const App: React.FC = () => {
                 logger.log('Salvando parada:', {
                   maquina_id: currentMachine.id,
                   operador_id: activeOperatorId,
-                  op_id: currentMachine.op_atual_id,
+                  op_id: opIdForSession,
                   motivo: reason,
                   notas: notes
                 });
@@ -1172,7 +1173,7 @@ const App: React.FC = () => {
                   p_reason: reason,
                   p_notes: notes,
                   p_operator_id: operatorId,
-                  p_op_id: currentMachine.op_atual_id || null
+                  p_op_id: opIdForSession || null
                 });
                 if (stopError) {
                   logger.error('Erro ao salvar parada:', stopError);
@@ -1512,6 +1513,9 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
 
 
 
