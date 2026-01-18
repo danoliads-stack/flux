@@ -269,7 +269,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       ...(prodData || []).map(p => ({
         timestamp: p.created_at,
         data: {
-          time: new Date(p.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(p.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Producao',
           detail: `Meta: ${p.quantidade_meta || 0} | Bom: ${p.quantidade_boa}`,
           user: operatorName, // TODO: Fetch actual user name
@@ -279,7 +279,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       ...(stopData || []).map(s => ({
         timestamp: s.created_at,
         data: {
-          time: new Date(s.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(s.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Parada',
           detail: tiposMap.get(s.motivo) || s.notas || 'Parada registrada',
           user: operatorName,
@@ -289,7 +289,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       ...(checklistData || []).map(c => ({
         timestamp: c.created_at,
         data: {
-          time: new Date(c.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(c.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Checklist',
           detail: c.checklists?.nome || 'Checklist',
           user: operatorName,
@@ -299,7 +299,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       ...(diaryData || []).map(d => ({
         timestamp: d.created_at,
         data: {
-          time: new Date(d.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(d.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Diario',
           detail: d.descricao,
           user: d.autor || 'Operador',

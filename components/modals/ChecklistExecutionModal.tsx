@@ -11,6 +11,7 @@ interface ChecklistExecutionModalProps {
     operadorId: string;
     maquinaId: string;
     setorId: string;
+    sessionId?: string | null;
     onSuccess?: () => void;
 }
 
@@ -22,6 +23,7 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
     operadorId,
     maquinaId,
     setorId,
+    sessionId,
     onSuccess
 }) => {
     const [loading, setLoading] = useState(true);
@@ -110,23 +112,16 @@ const ChecklistExecutionModal: React.FC<ChecklistExecutionModalProps> = ({
         try {
             const isUUID = (v?: string) => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
-            // PASSO 1 — Criar evento
-            const { data: eventData, error: eventError } = await supabase
-                .from('checklist_eventos')
-                .insert({
-                    checklist_id: checklistId,
-                    op_id: isUUID(opId) ? opId : null,
-                    operador_id: isUUID(operadorId) ? operadorId : null,
-                    maquina_id: isUUID(maquinaId) ? maquinaId : null,
-                    setor_id: isUUID(setorId) ? setorId : null,
-                    tipo_acionamento: 'tempo',
-                    referencia_acionamento: 'MANUAL',
-                    status: Object.values(answers).some(v => v === false || v === 'NAO') ? 'problema' : 'ok',
-                    observacao: globalComment || null,
-                    created_at: new Date().toISOString()
-                })
-                .select()
-                .single();
+            // PASSO 1 - Criar evento via RPC (created_at e operador/session imutáveis no banco)
+            const { data: eventData, error: eventError } = await supabase.rpc('mes_insert_checklist', {
+                p_checklist_id: checklistId,
+                p_op_id: isUUID(opId) ? opId : null,
+                p_maquina_id: isUUID(maquinaId) ? maquinaId : null,
+                p_setor_id: isUUID(setorId) ? setorId : null,
+                p_status: Object.values(answers).some(v => v === false || v === 'NAO') ? 'problema' : 'ok',
+                p_observacao: globalComment || null,
+                p_session_id: sessionId || null
+            });
 
             if (eventError) throw eventError;
             eventId = eventData.id;
