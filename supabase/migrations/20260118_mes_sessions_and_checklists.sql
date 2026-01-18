@@ -22,10 +22,11 @@ ALTER TABLE public.checklist_eventos
     ADD COLUMN IF NOT EXISTS session_id UUID NULL REFERENCES public.op_operator_sessions(id);
 
 ALTER TABLE public.checklist_eventos
-    ALTER COLUMN operator_id SET NOT NULL,
+    ALTER COLUMN operador_id SET NOT NULL,
     ALTER COLUMN op_id SET NOT NULL;
 
 -- RPC: mes_switch_operator
+DROP FUNCTION IF EXISTS public.mes_switch_operator(UUID, UUID, UUID);
 CREATE OR REPLACE FUNCTION public.mes_switch_operator(
     p_op_id UUID,
     p_operator_id UUID,
