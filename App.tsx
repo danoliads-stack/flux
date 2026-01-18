@@ -104,6 +104,7 @@ const App: React.FC = () => {
   const [isSubmittingSwitch, setIsSubmittingSwitch] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [currentLoteId, setCurrentLoteId] = useState<string | null>(null);
+  const [activeOperatorSessionId, setActiveOperatorSessionId] = useState<string | null>(null);
   const activeOperatorId = operatorAssignment?.id || currentMachine?.operador_atual_id || currentUser?.id || null;
   const activeOperatorName = operatorAssignment?.name || currentUser?.name || 'Operador';
   const currentShiftOptionId = shiftOptions.find(s => s.nome === operatorTurno)?.id || null;
@@ -295,6 +296,10 @@ const App: React.FC = () => {
     const config = ROLE_CONFIGS.find(c => c.role === currentUser.role);
     return config?.permissions || [];
   }, [currentUser]);
+
+  useEffect(() => {
+    fetchActiveSession(currentMachine?.op_atual_id || null);
+  }, [currentMachine?.op_atual_id]);
 
   const hasPermission = (permission: Permission) => userPermissions.includes(permission);
 
@@ -515,6 +520,31 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
+  const fetchActiveSession = async (opId: string | null) => {
+    if (!opId) {
+      setActiveOperatorSessionId(null);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('op_operator_sessions')
+      .select('id, operator_id, operadores(nome)')
+      .eq('op_id', opId)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .maybeSingle();
+    if (!error && data) {
+      setActiveOperatorSessionId(data.id);
+      if (!operatorAssignment || operatorAssignment.id !== data.operator_id) {
+        setOperatorAssignment({
+          id: data.operator_id,
+          name: (data as any).operadores?.nome || activeOperatorName
+        });
+      }
+    } else {
+      setActiveOperatorSessionId(null);
+    }
+  };
+
   const fetchOperatorSwitchData = async () => {
     setSwitchError(null);
     setIsFetchingSwitchData(true);
@@ -564,14 +594,16 @@ const App: React.FC = () => {
         return;
       }
 
-      const now = new Date().toISOString();
-      await supabase.from('op_operadores').update({ fim: now }).eq('maquina_id', selectedMachineId).is('fim', null);
-      await supabase.from('op_operadores').insert({
-        op_id: currentMachine.op_atual_id,
-        operador_id: opData.id,
-        maquina_id: selectedMachineId,
-        inicio: now
+      const { data: sessionResult, error: sessionError } = await supabase.rpc('mes_switch_operator', {
+        p_op_id: currentMachine.op_atual_id,
+        p_operator_id: opData.id,
+        p_shift_id: shiftId || null
       });
+      if (sessionError) throw sessionError;
+      const sessionId = Array.isArray(sessionResult) ? sessionResult[0] : sessionResult;
+      setActiveOperatorSessionId(sessionId || null);
+
+      // Atualiza operador atual da máquina para UI
       await supabase.from('maquinas').update({
         operador_atual_id: opData.id
       }).eq('id', selectedMachineId);
@@ -817,6 +849,7 @@ const App: React.FC = () => {
                         setActiveModal('finalize');
                       }}
                       onGenerateLabel={() => setActiveModal('label')}
+                      sessionId={activeOperatorSessionId}
                       onStop={async () => {
                         setActiveModal('stop');
                       }}

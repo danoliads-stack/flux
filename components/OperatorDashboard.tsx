@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { RecentRecord, OPState, Permission, TipoEtiqueta } from '../types';
 import { supabase } from '../src/lib/supabase-client';
 import ChecklistExecutionModal from './modals/ChecklistExecutionModal';
@@ -25,6 +25,7 @@ interface OperatorDashboardProps {
   onGenerateLabel?: () => void; // New: Generate label at any time
   onRequestMaintenance?: (description: string) => void; // New: Maintenance call
   onSwitchOperator?: () => void;
+  sessionId?: string | null;
   machineId: string;
   opCodigo?: string | null;
   machineName?: string;
@@ -81,6 +82,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   onRegisterChecklist, onRegisterLogbook, onStartProduction, onRetomar,
   onGenerateLabel, onRequestMaintenance,
   onSwitchOperator,
+  sessionId,
   machineName = 'Máquina', sectorName = 'Produção', operatorName = 'Operador', shiftName = 'Turno', meta: propMeta,
   operatorId = '', sectorId = '', loteId = 'LOTE-001',
   onChangeMachine,
@@ -589,16 +591,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // Auto-register missed checklist
   const handleAutoChecklistMissed = async (checklistId: string) => {
     if (!opId) return;
-    const { error } = await supabase.from('checklist_eventos').insert({
-      checklist_id: checklistId,
-      op_id: opId,
-      operador_id: operatorId || null,
-      maquina_id: machineId,
-      setor_id: sectorId || null,
-      tipo_acionamento: 'tempo',
-      referencia_acionamento: 'SISTEMA',
-      status: 'NAO_REALIZADO',
-      observacao: 'Checklist não realizado no tempo'
+    const { error } = await supabase.rpc('mes_insert_checklist', {
+      p_checklist_id: checklistId,
+      p_op_id: opId,
+      p_maquina_id: machineId,
+      p_setor_id: sectorId || null,
+      p_status: 'NAO_REALIZADO',
+      p_observacao: 'Checklist nao realizado no tempo',
+      p_session_id: sessionId || null
     });
 
     if (!error) {
@@ -1729,6 +1729,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 };
 
 export default OperatorDashboard;
+
+
 
 
 
