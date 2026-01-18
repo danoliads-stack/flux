@@ -13,6 +13,7 @@ interface OperatorLog {
     login_time: string;
     logout_time?: string;
     shift?: string;
+    operator_id?: string;
 }
 
 interface ChecklistEvent {
@@ -150,8 +151,10 @@ const Reports: React.FC = () => {
                 ? (totalProduction / totalProduced) * 100
                 : 100;
 
-            // Simplified performance calculation (can be enhanced with cycle time data)
-            const performance = 92; // Placeholder - would need cycle time data
+            // Performance: aproximaÇõÇœ simples usando throughput por minuto (base 1 un/min se nÄo houver meta)
+            const operatingMinutes = Math.max(0, periodMinutes - totalStopTime);
+            const throughputPerMinute = operatingMinutes > 0 ? totalProduction / operatingMinutes : 0;
+            const performance = Math.min(100, throughputPerMinute * 100);
 
             const oee = (availability / 100) * (quality / 100) * (performance / 100) * 100;
 
@@ -170,35 +173,23 @@ const Reports: React.FC = () => {
                 .slice(0, 5);
             setTopStops(sortedStops);
 
-            // 4. Fetch Operators (using production records to identify active operators)
-            const { data: productionWithOperators } = await supabase
-                .from('registros_producao')
-                .select('operador_id, operadores(nome, turno)')
+            // 4. Sessões de operadores no período (usa op_operadores para rastreabilidade real)
+            const { data: sessionLogs } = await supabase
+                .from('op_operadores')
+                .select('operador_id, inicio, fim, operadores(nome, turno)')
                 .eq('maquina_id', selectedMachine)
-                .gte('created_at', startISO)
-                .lte('created_at', endISO);
+                .gte('inicio', startISO)
+                .lte('inicio', endISO);
 
-            const operatorMap = new Map<string, any>();
-            if (productionWithOperators) {
-                productionWithOperators.forEach((p: any) => {
-                    if (p.operador_id && p.operadores) {
-                        if (!operatorMap.has(p.operador_id)) {
-                            operatorMap.set(p.operador_id, {
-                                id: p.operador_id,
-                                name: p.operadores.nome,
-                                shift: p.operadores.turno || 'N/A'
-                            });
-                        }
-                    }
-                });
-            }
+            const mappedSessions: OperatorLog[] = (sessionLogs || []).map((s: any) => ({
+                operator_id: s.operador_id,
+                operator_name: s.operadores?.nome || 'Operador',
+                shift: s.operadores?.turno || 'N/A',
+                login_time: s.inicio,
+                logout_time: s.fim || undefined
+            }));
 
-            setOperatorLogs(Array.from(operatorMap.values()).map(op => ({
-                operator_name: op.name,
-                shift: op.shift,
-                login_time: startISO,  // Simplified - would need login tracking
-                logout_time: endISO
-            })));
+            setOperatorLogs(mappedSessions);
 
         } catch (error) {
             console.error('[Reports] Error fetching data:', error);
@@ -414,6 +405,10 @@ const Reports: React.FC = () => {
                                         <div>
                                             <div className="font-bold text-white text-sm">{op.operator_name}</div>
                                             <div className="text-xs text-gray-500">{op.shift ? `Turno ${op.shift}` : 'Turno N/A'}</div>
+                                            <div className="text-[10px] text-gray-600 font-mono">
+                                                {new Date(op.login_time).toLocaleString('pt-BR')} {' '}
+                                                {op.logout_time ? `– ${new Date(op.logout_time).toLocaleString('pt-BR')}` : '(aberta)'}
+                                            </div>
                                         </div>
                                     </div>
                                 ))
