@@ -74,9 +74,26 @@ AS $$
 DECLARE
     v_session public.op_operator_sessions%ROWTYPE;
     v_event public.checklist_eventos%ROWTYPE;
+    v_dummy INTEGER;
 BEGIN
     IF p_op_id IS NULL THEN
         RAISE EXCEPTION 'MES: checklist_missing_op';
+    END IF;
+
+    -- Validate machine (when provided)
+    IF p_maquina_id IS NOT NULL THEN
+        SELECT 1 INTO v_dummy FROM public.maquinas WHERE id = p_maquina_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'MES: machine_not_found';
+        END IF;
+    END IF;
+
+    -- Validate sector (when provided)
+    IF p_setor_id IS NOT NULL THEN
+        SELECT 1 INTO v_dummy FROM public.setores WHERE id = p_setor_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'MES: setor_not_found';
+        END IF;
     END IF;
 
     -- Resolve session
@@ -95,7 +112,26 @@ BEGIN
         WHERE op_id = p_op_id AND ended_at IS NULL
         ORDER BY started_at DESC
         LIMIT 1;
-        IF NOT FOUND THEN
+
+        -- Auto-open session using machine current operator when missing
+        IF NOT FOUND AND p_maquina_id IS NOT NULL THEN
+            PERFORM 1 FROM public.maquinas m
+            WHERE m.id = p_maquina_id
+              AND m.op_atual_id = p_op_id
+              AND m.operador_atual_id IS NOT NULL
+            LIMIT 1;
+
+            IF FOUND THEN
+                INSERT INTO public.op_operator_sessions (op_id, operator_id, shift_id, started_at)
+                SELECT p_op_id, m.operador_atual_id, NULL, NOW()
+                FROM public.maquinas m
+                WHERE m.id = p_maquina_id
+                LIMIT 1
+                RETURNING * INTO v_session;
+            END IF;
+        END IF;
+
+        IF NOT FOUND AND v_session.id IS NULL THEN
             RAISE EXCEPTION 'MES: no_active_session';
         END IF;
     END IF;
