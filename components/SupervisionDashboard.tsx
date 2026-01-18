@@ -47,6 +47,14 @@ interface MachineScrapData {
   goodQty: number;
 }
 
+interface ProductionHistoryItem {
+  created_at: string;
+  turno: string | null;
+  quantidade_boa: number | null;
+  quantidade_refugo: number | null;
+  operadores?: { nome?: string | null } | null;
+}
+
 // Tipo para filtros de status
 type StatusFilterType = 'RUNNING' | 'STOPPED' | 'MAINTENANCE' | 'SETUP' | null;
 
@@ -184,6 +192,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [previousAlertCount, setPreviousAlertCount] = useState(0);
   const [hasNewAlerts, setHasNewAlerts] = useState(false);
+  const [historyModalMachine, setHistoryModalMachine] = useState<MachineData | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<ProductionHistoryItem[]>([]);
 
   // Configurações
   const OEE_GOAL = 80; // Meta OEE
@@ -523,6 +534,22 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     window.open(`/maquinas/${slug}`, '_blank');
   };
 
+  // Carregar histórico de produção (3 dias) para modal
+  const openHistoryModal = async (machine: MachineData) => {
+    setHistoryModalMachine(machine);
+    setHistoryLoading(true);
+    setHistoryRecords([]);
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('registros_producao')
+      .select('created_at, turno, quantidade_boa, quantidade_refugo, operadores(nome)')
+      .eq('maquina_id', machine.id)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+    if (!error && data) setHistoryRecords(data as ProductionHistoryItem[]);
+    setHistoryLoading(false);
+  };
+
   // FASE 2: Labels para ordenação
   const sortLabels: Record<SortType, string> = {
     status: 'Por Status',
@@ -760,7 +787,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 return (
                   <div
                     key={m.id}
-                    onDoubleClick={() => openOperatorPanel(m)}
+                    onDoubleClick={() => openHistoryModal(m)}
                     className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full relative ${getBorderColorClass()}`}
                   >
                     {/* Ícone de manutenção ou alerta */}
@@ -853,7 +880,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
 
                     {/* NOVO: Botão Ver Detalhes (aparece no hover) */}
                     <button
-                      onClick={(e) => { e.stopPropagation(); openOperatorPanel(m); }}
+                      onClick={(e) => { e.stopPropagation(); openHistoryModal(m); }}
                       className="w-full py-2 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2"
                     >
                       <span className="material-icons-outlined text-sm">visibility</span>
@@ -1030,8 +1057,68 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
           </div>
         )
       }
+
+      {/* Modal de histórico (3 dias) */}
+      {historyModalMachine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setHistoryModalMachine(null)}></div>
+          <div className="relative w-full max-w-3xl bg-surface-dark border border-border-dark rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border-dark flex items-center justify-between bg-[#0f1117]">
+              <div>
+                <div className="text-xs uppercase tracking-widest text-text-sub-dark">Histórico (3 dias)</div>
+                <div className="text-white text-lg font-bold">{historyModalMachine.nome}</div>
+              </div>
+              <button onClick={() => setHistoryModalMachine(null)} className="text-text-sub-dark hover:text-white">
+                <span className="material-icons-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {historyLoading && (
+                <div className="text-text-sub-dark text-sm">Carregando histórico...</div>
+              )}
+              {!historyLoading && historyRecords.length === 0 && (
+                <div className="text-text-sub-dark text-sm">Sem registros nos últimos 3 dias.</div>
+              )}
+              {!historyLoading && historyRecords.length > 0 && (
+                <div className="space-y-3">
+                  {Object.entries(historyRecords.reduce((acc, rec) => {
+                    const dateStr = new Date(rec.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+                    const key = `${dateStr}-${rec.turno || 'Turno'}`;
+                    if (!acc[key]) {
+                      acc[key] = { dateStr, turno: rec.turno || 'Turno', boa: 0, refugo: 0, rows: [] as ProductionHistoryItem[] };
+                    }
+                    acc[key].boa += rec.quantidade_boa || 0;
+                    acc[key].refugo += rec.quantidade_refugo || 0;
+                    acc[key].rows.push(rec);
+                    return acc;
+                  }, {} as Record<string, { dateStr: string; turno: string; boa: number; refugo: number; rows: ProductionHistoryItem[] }>))
+                    .map(([key, group]) => (
+                      <div key={key} className="border border-border-dark rounded-xl p-4 bg-surface-dark/50">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="text-sm font-bold text-white">{group.dateStr} · {group.turno}</div>
+                          <div className="text-xs text-text-sub-dark font-mono">Bom: {group.boa} · Refugo: {group.refugo}</div>
+                        </div>
+                        <div className="space-y-1">
+                          {group.rows.map((r, idx) => (
+                            <div key={idx} className="flex justify-between text-xs text-text-sub-dark">
+                              <span>{new Date(r.created_at).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}</span>
+                              <span>{(r.operadores as any)?.nome || 'Operador'}</span>
+                              <span className="font-mono text-white">+{r.quantidade_boa || 0} / Refugo {r.quantidade_refugo || 0}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };
 
 export default SupervisionDashboard;
+
