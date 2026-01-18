@@ -309,7 +309,11 @@ const Reports: React.FC = () => {
                         <span className="material-icons-outlined text-red-500 opacity-50 group-hover:opacity-100 transition-opacity">delete_forever</span>
                     </div>
                     <div className="text-3xl font-bold text-white">{stats.totalScrap.toLocaleString()} un</div>
-                    <div className="text-xs text-red-400 mt-2 font-mono">{(stats.totalScrap / stats.totalProduction * 100).toFixed(2)}% de perda</div>
+                    <div className="text-xs text-red-400 mt-2 font-mono">
+                        {stats.totalProduction > 0
+                            ? `${((stats.totalScrap / stats.totalProduction) * 100).toFixed(2)}% de perda`
+                            : '0.00% de perda'}
+                    </div>
                 </div>
             </div>
 
