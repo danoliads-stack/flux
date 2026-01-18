@@ -228,7 +228,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     // 1. Logs de Produção
     const { data: prodData } = await supabase
       .from('registros_producao')
-      .select('*')
+      .select('*, operadores(nome)')
       .eq('maquina_id', machineId)
       .order('created_at', { ascending: false })
       .limit(10);
@@ -236,7 +236,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     // 2. Paradas
     const { data: stopData } = await supabase
       .from('paradas')
-      .select('*')
+      .select('*, operadores(nome)')
       .eq('maquina_id', machineId)
       .order('created_at', { ascending: false })
       .limit(10);
@@ -252,7 +252,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         // 3. Buscar checklists para nome
     const { data: checklistData } = await supabase
       .from('checklist_eventos')
-      .select('*, checklists(nome)')
+      .select('*, checklists(nome), operadores(nome)')
       .eq('maquina_id', machineId)
       .order('created_at', { ascending: false })
       .limit(10);
@@ -269,37 +269,37 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       ...(prodData || []).map(p => ({
         timestamp: p.created_at,
         data: {
-          time: new Date(p.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(p.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Producao',
           detail: `Meta: ${p.quantidade_meta || 0} | Bom: ${p.quantidade_boa}`,
-          user: operatorName, // TODO: Fetch actual user name
+          user: (p as any).operadores?.nome || operatorName,
           status: 'Finalizado'
         }
       })),
       ...(stopData || []).map(s => ({
         timestamp: s.created_at,
         data: {
-          time: new Date(s.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(s.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Parada',
           detail: tiposMap.get(s.motivo) || s.notas || 'Parada registrada',
-          user: operatorName,
+          user: (s as any).operadores?.nome || operatorName,
           status: 'Justificado'
         }
       })),
       ...(checklistData || []).map(c => ({
         timestamp: c.created_at,
         data: {
-          time: new Date(c.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(c.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Checklist',
           detail: c.checklists?.nome || 'Checklist',
-          user: operatorName,
+          user: (c as any).operadores?.nome || operatorName,
           status: c.status === 'ok' ? 'OK' : c.status === 'NAO_REALIZADO' ? 'Nao Realizado' : c.status
         }
       })),
       ...(diaryData || []).map(d => ({
         timestamp: d.created_at,
         data: {
-          time: new Date(d.created_at).toLocaleTimeString('pt-BR'),
+          time: new Date(d.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
           event: 'Diario',
           detail: d.descricao,
           user: d.autor || 'Operador',
@@ -1460,6 +1460,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         operadorId={operatorId}
         maquinaId={machineId}
         setorId={sectorId}
+        sessionId={sessionId}
         onSuccess={() => {
           setShowChecklistModal(false);
           fetchLogs();
