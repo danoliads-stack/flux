@@ -57,13 +57,17 @@ BEGIN
 END;
 $$;
 
+-- Ensure single signature (drop old text-version overloads)
+DROP FUNCTION IF EXISTS public.mes_insert_checklist(UUID, UUID, UUID, UUID, TEXT, TEXT, UUID);
+DROP FUNCTION IF EXISTS public.mes_insert_checklist(UUID, UUID, UUID, UUID, public.checklist_status, TEXT, UUID);
+
 -- RPC: mes_insert_checklist
 CREATE OR REPLACE FUNCTION public.mes_insert_checklist(
     p_op_id UUID,
     p_maquina_id UUID,
     p_setor_id UUID,
     p_checklist_id UUID,
-    p_status TEXT,
+    p_status public.checklist_status,
     p_observacao TEXT DEFAULT NULL,
     p_session_id UUID DEFAULT NULL
 ) RETURNS public.checklist_eventos
@@ -142,6 +146,8 @@ BEGIN
         operador_id,
         maquina_id,
         setor_id,
+        tipo_acionamento,
+        referencia_acionamento,
         status,
         observacao,
         created_at,
@@ -152,6 +158,8 @@ BEGIN
         v_session.operator_id,
         p_maquina_id,
         p_setor_id,
+        'tempo',
+        p_checklist_id,
         p_status,
         p_observacao,
         NOW(),
