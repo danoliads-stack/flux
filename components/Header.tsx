@@ -43,19 +43,6 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme }) => {
           <span className="text-xs font-semibold text-green-500 uppercase tracking-tighter">SISTEMA ONLINE</span>
         </div>
 
-        <button
-          onClick={onToggleTheme}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border-dark bg-background-dark/60 text-text-sub-dark hover:text-text-main-dark hover:bg-surface-dark-highlight transition-colors"
-          title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
-        >
-          <span className="material-icons-outlined text-base">
-            {theme === 'dark' ? 'light_mode' : 'dark_mode'}
-          </span>
-          <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider">
-            {theme === 'dark' ? 'Claro' : 'Escuro'}
-          </span>
-        </button>
-
         <div className="flex items-center gap-3 border-l border-border-dark pl-6">
           <div className="text-right hidden sm:block">
             <div className="text-sm font-bold leading-tight uppercase text-white">{user?.name || 'Usuário'}</div>

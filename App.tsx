@@ -63,12 +63,7 @@ const App: React.FC = () => {
   const location = useLocation();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') return 'dark';
-    const saved = localStorage.getItem('flux_theme');
-    if (saved === 'dark' || saved === 'light') return saved;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  const [theme, setTheme] = useState<ThemeMode>('dark'); // força tema escuro
 
   useEffect(() => {
     const root = document.documentElement;
@@ -77,9 +72,7 @@ const App: React.FC = () => {
     localStorage.setItem('flux_theme', theme);
   }, [theme]);
 
-  const handleToggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  const handleToggleTheme = () => setTheme('dark'); // desabilita modo claro
 
   // --- ZUSTAND STORE ---
   const {
