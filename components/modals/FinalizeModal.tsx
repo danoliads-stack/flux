@@ -9,11 +9,12 @@ interface FinalizeModalProps {
   sectorName?: string; // Current sector name
   onConfirm: (good: number, scrap: number) => void;
   onSuspend: (produced: number, pending: number) => void;
+  onShiftChange?: (produced: number, pending: number) => void;
   onTransfer?: (produced: number, pending: number) => void; // Transfer to next sector
 }
 
 const FinalizeModal: React.FC<FinalizeModalProps> = ({
-  onClose, opId, realized, meta, sectorName, onConfirm, onSuspend, onTransfer
+  onClose, opId, realized, meta, sectorName, onConfirm, onSuspend, onShiftChange, onTransfer
 }) => {
   const [additionalCount, setAdditionalCount] = useState(0);
   const [scrap, setScrap] = useState(0);
@@ -188,12 +189,32 @@ const FinalizeModal: React.FC<FinalizeModalProps> = ({
                 console.log('Botão Encerrar Produção clicado', { totalProduced, scrap });
                 onConfirm(totalProduced, scrap);
               }}
-              className="flex items-center justify-center gap-2 h-14 px-8 rounded-xl bg-primary text-black font-extrabold text-lg hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 flex-[1.5]"
+              disabled={finalPending > 0}
+              className={`flex items-center justify-center gap-2 h-14 px-8 rounded-xl font-extrabold text-lg shadow-lg flex-[1.5] transition-all hover:-translate-y-0.5 ${
+                finalPending > 0
+                  ? 'bg-border-dark text-text-sub-dark cursor-not-allowed'
+                  : 'bg-primary text-black hover:bg-primary-hover shadow-primary/20'
+              }`}
             >
               <span className="material-icons-outlined">check_circle</span>
-              ENCERRAR PRODUÇÃO
+              {finalPending > 0 ? 'PRODUZA O SALDO' : 'ENCERRAR PRODUÇÃO'}
             </button>
           </div>
+
+          {onShiftChange && (
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+              <button
+                onClick={() => onShiftChange(totalProduced, finalPending)}
+                className="flex items-center justify-center gap-2 h-12 px-4 rounded-lg border border-white/10 text-white hover:border-primary hover:text-primary transition-all flex-1"
+              >
+                <span className="material-icons-outlined">swap_horiz</span>
+                Registrar troca de turno
+              </button>
+              <p className="text-[11px] text-text-sub-dark sm:max-w-md">
+                Registra a produção acumulada e libera a máquina para o próximo operador, mantendo a OP em aberto.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1263,6 +1263,54 @@ const App: React.FC = () => {
             realized={totalProduced}
             // Fix: Pass machine sector name if available to handle specific sector logic (like Colagem)
             sectorName={currentMachine?.setores?.nome || currentUser?.sector || 'Produção'}
+            onShiftChange={async (produced, pending) => {
+              if (!currentMachine || !activeOP) return;
+              const delta = Math.max(0, produced - totalProduced);
+
+              const operatorId = activeOperatorId;
+              const { error: prodError } = await supabase.rpc('mes_record_production', {
+                p_op_id: activeOP,
+                p_machine_id: currentMachine.id,
+                p_operator_id: operatorId,
+                p_good_qty: delta,
+                p_scrap_qty: 0,
+                p_data_inicio: localStatusChangeAt || new Date().toISOString(),
+                p_data_fim: new Date().toISOString(),
+                p_turno: 'TrocaTurno'
+              });
+
+              if (prodError) {
+                console.error('Erro ao salvar producao na troca de turno:', prodError);
+                alert(`Erro ao registrar producao: ${prodError.message}`);
+                return;
+              }
+
+              setProductionData({ totalProduced: totalProduced + delta });
+
+              await supabase
+                .from('op_operator_sessions')
+                .update({ ended_at: new Date().toISOString() })
+                .eq('op_id', activeOP)
+                .is('ended_at', null);
+
+              await supabase.from('maquinas').update({
+                status_atual: MachineStatus.RUNNING,
+                status_change_at: new Date().toISOString(),
+                op_atual_id: activeOP,
+                operador_atual_id: null
+              }).eq('id', currentMachine.id);
+
+              await realtimeManager.broadcastMachineUpdate(
+                createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
+                  operatorId: null,
+                  opId: activeOP
+                })
+              );
+
+              setActiveOperatorSessionId(null);
+              setOpState('IDLE');
+              closeModals();
+            }}
             onTransfer={async (produced, pending) => {
               // Transfer to next sector (mark as ready for transfer)
               if (currentMachine && activeOP) {
@@ -1337,6 +1385,13 @@ const App: React.FC = () => {
               }
 
               try {
+                const target = activeOPData?.quantidade_meta || 0;
+                if (good < target) {
+                  const saldo = Math.max(0, target - good);
+                  alert(`Ainda faltam ${saldo} un para atingir a meta. Registre o saldo antes de encerrar.`);
+                  return;
+                }
+
                 // Determine shift (simplified logic for now)
                 const currentHour = new Date().getHours();
                 const turno = (currentHour >= 6 && currentHour < 14) ? 'Manhã' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
