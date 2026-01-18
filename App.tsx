@@ -597,7 +597,7 @@ const App: React.FC = () => {
       const { data: sessionResult, error: sessionError } = await supabase.rpc('mes_switch_operator', {
         p_op_id: currentMachine.op_atual_id,
         p_operator_id: opData.id,
-        p_shift_id: shiftId || null
+        p_shift_id: currentMachine.id // usa id da m quina conforme orientaÇõÇœo
       });
       if (sessionError) throw sessionError;
       const sessionId = Array.isArray(sessionResult) ? sessionResult[0] : sessionResult;
