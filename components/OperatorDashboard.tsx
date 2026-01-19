@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RecentRecord, OPState, Permission, TipoEtiqueta } from '../types';
 import { supabase } from '../src/lib/supabase-client';
 import ChecklistExecutionModal from './modals/ChecklistExecutionModal';
@@ -198,6 +198,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [newDiaryText, setNewDiaryText] = useState('');
   const [showDiaryInput, setShowDiaryInput] = useState(false);
   const [pendingAlert, setPendingAlert] = useState<PendingAlert | null>(null);
+  const [showRecordsModal, setShowRecordsModal] = useState(false);
+  const [allRecentRecords, setAllRecentRecords] = useState<RecentRecord[]>([]);
 
   // Diary editing state
   const [editingDiaryId, setEditingDiaryId] = useState<string | null>(null);
@@ -316,6 +318,91 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     // Update state with top 5 records
     setRecords(allRecords.slice(0, 5).map(x => x.data));
+  };
+
+  const fetchRecentRecords = async (days = 3) => {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: prodData } = await supabase
+      .from('registros_producao')
+      .select('*, operadores(nome)')
+      .eq('maquina_id', machineId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    const { data: stopData } = await supabase
+      .from('paradas')
+      .select('*, operadores(nome)')
+      .eq('maquina_id', machineId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    const { data: checklistData } = await supabase
+      .from('checklist_eventos')
+      .select('*, checklists(nome), operadores(nome)')
+      .eq('maquina_id', machineId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    const { data: diaryData } = await supabase
+      .from('diario_bordo_eventos')
+      .select('*')
+      .eq('maquina_id', machineId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    const { data: tiposParada } = await supabase
+      .from('tipos_parada')
+      .select('id, nome');
+
+    const tiposMap = new Map<string, string>();
+    tiposParada?.forEach((t: any) => tiposMap.set(t.id, t.nome));
+
+    const allRecords = [
+      ...(prodData || []).map(p => ({
+        timestamp: p.created_at,
+        data: {
+          time: new Date(p.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
+          event: 'Producao',
+          detail: `Meta: ${p.quantidade_meta || 0} | Bom: ${p.quantidade_boa}`,
+          user: (p as any).operadores?.nome || operatorName,
+          status: 'Finalizado'
+        }
+      })),
+      ...(stopData || []).map(s => ({
+        timestamp: s.created_at,
+        data: {
+          time: new Date(s.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
+          event: 'Parada',
+          detail: tiposMap.get(s.motivo) || s.notas || 'Parada registrada',
+          user: (s as any).operadores?.nome || operatorName,
+          status: 'Justificado'
+        }
+      })),
+      ...(checklistData || []).map(c => ({
+        timestamp: c.created_at,
+        data: {
+          time: new Date(c.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
+          event: 'Checklist',
+          detail: c.checklists?.nome || 'Checklist',
+          user: (c as any).operadores?.nome || operatorName,
+          status: c.status === 'ok' ? 'OK' : c.status === 'NAO_REALIZADO' ? 'Nao Realizado' : c.status
+        }
+      })),
+      ...(diaryData || []).map(d => ({
+        timestamp: d.created_at,
+        data: {
+          time: new Date(d.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }),
+          event: 'Diario',
+          detail: d.descricao,
+          user: d.autor || 'Operador',
+          status: 'Nota'
+        }
+      }))
+    ];
+
+    allRecords.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    setAllRecentRecords(allRecords.map(x => x.data));
   };
 
   // Fetch checklists - Filtered by SECTOR
@@ -479,7 +566,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         p_data_inicio: new Date().toISOString(),
         p_data_fim: new Date().toISOString(),
         p_turno: null,
-        p_client_event_id: clientEventId
+        p_client_event_id: clientEventId,
+        p_tipo_refugo_id: null
       });
 
       if (logError) throw logError;
@@ -520,7 +608,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         p_data_inicio: new Date().toISOString(),
         p_data_fim: new Date().toISOString(),
         p_turno: null,
-        p_client_event_id: clientEventId
+        p_client_event_id: clientEventId,
+        p_tipo_refugo_id: null
       });
 
       if (recordError) throw recordError;
@@ -733,13 +822,17 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   // Open checklist modal
   const openChecklist = (checklistId: string) => {
+    if (!opId) {
+      alert('Selecione uma OP ativa antes de registrar o checklist.');
+      return;
+    }
     setSelectedChecklistId(checklistId);
     setShowChecklistModal(true);
   };
 
   // --- NEW SERVER-SIDE AUTOMATION ENGINE ---
   useEffect(() => {
-    if (!opId || opState !== 'PRODUCAO') return;
+    if (!opId || opState === 'IDLE') return;
 
     const checkTimers = async () => {
       console.log(`[${new Date().toLocaleTimeString()}] DEBUG: Checking Server-Side Timers...`, { opId, opState, checklistsCount: checklists.length });
@@ -798,7 +891,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     const timerLoop = setInterval(checkTimers, 30000); // Check every 30s
 
     return () => clearInterval(timerLoop);
-  }, [opId, opState, checklists, machineId]); // Re-run if these change
+  }, [opId, opState, checklists, machineId, statusChangeAt]); // Re-run if these change
 
   // Initial fetch
   useEffect(() => {
@@ -893,7 +986,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         () => {
           console.log('Realtime OP update detected');
           fetchOPSequence();
-          fetchProductionStats(); // ✅ Also update production stats when OP changes
+          fetchProductionStats(); // ? Also update production stats when OP changes
         }
       )
       .subscribe();
@@ -914,7 +1007,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-fade-in">
-      {/* ⚠️ INCONSISTENCY ALERT */}
+      {/* ?? INCONSISTENCY ALERT */}
       {(opState === 'PRODUCAO' || opState === 'SETUP' || opState === 'PARADA') && !opId && (
         <div className="bg-red-900/20 border-2 border-red-500 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6 animate-pulse-border">
           <div className="bg-red-500/20 p-4 rounded-full">
@@ -1007,6 +1100,44 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 <div className="text-sm font-bold text-white">{sequencedOPs.length}</div>
               </div>
             </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="rounded-2xl border border-white/10 bg-[#14171d] p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-icons-outlined text-orange-400 text-sm">build</span>
+              <span className="text-white text-xs font-bold uppercase tracking-wider">Acoes rapidas</span>
+            </div>
+            <button
+              onClick={() => opState !== 'MANUTENCAO' && setShowMaintenanceModal(true)}
+              disabled={opState === 'MANUTENCAO'}
+              className={`w-full rounded-xl p-3 text-left border transition-all duration-200 ${opState === 'MANUTENCAO'
+                ? 'border-orange-500/50 bg-orange-500/10 text-orange-400 cursor-default'
+                : 'border-border-dark bg-surface-dark hover:border-orange-500/60 hover:bg-orange-500/10 text-white'
+                }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="material-icons-outlined text-orange-400">
+                    {opState === 'MANUTENCAO' ? 'engineering' : 'build'}
+                  </span>
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider">
+                      {opState === 'MANUTENCAO' ? 'Manutencao em andamento' : 'Chamar manutencao'}
+                    </div>
+                    <div className="text-[10px] text-text-sub-dark">
+                      {opState === 'MANUTENCAO' ? 'Aguardando tecnico' : 'Solicitar tecnico e parar maquina'}
+                    </div>
+                  </div>
+                </div>
+                {opState === 'MANUTENCAO' && (
+                  <div className="text-right">
+                    <div className="text-[10px] text-orange-400 font-bold">MANUTENCAO</div>
+                    <div className="text-sm font-mono font-bold text-orange-400">{displayTimer}</div>
+                  </div>
+                )}
+              </div>
+            </button>
           </div>
           {/* OP Sequence Section */}
           <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
@@ -1317,7 +1448,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {/* 1. Setup Button - Only show if user has permission */}
           {hasPermission(Permission.MANAGE_MACHINE_SETUP) && (
             <button
@@ -1349,7 +1480,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             onClick={() => {
               console.log('Production button clicked, opState:', opState);
               if (!opId && (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO')) {
-                alert('⚠️ Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
+                alert('?? Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
                 return;
               }
               if (opState === 'SETUP') onStartProduction();
@@ -1416,42 +1547,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
           </button>
 
-          {/* 4. Maintenance Call Button */}
-          <button
-            onClick={() => opState !== 'MANUTENCAO' && setShowMaintenanceModal(true)}
-            disabled={opState === 'MANUTENCAO'}
-            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opState === 'MANUTENCAO'
-              ? 'border-2 border-orange-500 shadow-lg shadow-orange-500/20 cursor-default animate-pulse-border'
-              : 'border border-border-dark group hover:border-orange-500 hover:bg-orange-500/5 cursor-pointer'
-              }`}
-          >
-            <div className="flex items-start justify-between">
-              <div className={`p-3 rounded-lg transition-colors ${opState === 'MANUTENCAO' ? 'bg-orange-500/30' : 'bg-orange-500/10 group-hover:bg-orange-500/20'}`}>
-                <span className={`material-icons-outlined text-3xl text-orange-500`}>
-                  {opState === 'MANUTENCAO' ? 'engineering' : 'build'}
-                </span>
-              </div>
-              {opState === 'MANUTENCAO' && (
-                <div className="text-right">
-                  <div className="text-xs text-orange-500 font-bold">MANUTENÇÃO</div>
-                  <div className="text-2xl font-mono font-bold text-orange-500">{displayTimer}</div>
-                </div>
-              )}
-            </div>
-            <div>
-              <div className={`font-display font-bold text-lg uppercase mb-1 ${opState === 'MANUTENCAO' ? 'text-orange-500' : 'text-white group-hover:text-orange-500'} transition-colors`}>
-                {opState === 'MANUTENCAO' ? 'Aguardando Técnico' : 'Chamar Manutenção'}
-              </div>
-              <div className="text-xs text-text-sub-dark leading-snug">
-                {opState === 'MANUTENCAO' ? 'Manutenção em andamento' : 'Solicitar técnico e parar máquina'}
-              </div>
-            </div>
-          </button>
-
-          {/* 4. Finalize Button - Active when there's an OP */}
+          {/* 4. Apontamento de OP */}
           <button
             onClick={() => {
-              console.log('Finalize button clicked', { opId, machineId });
+              console.log('Apontamento button clicked', { opId, machineId });
               onOpenFinalize();
             }}
             disabled={!opId}
@@ -1462,79 +1561,11 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           >
             <span className={`material-symbols-outlined text-3xl ${opId ? 'text-blue-500' : 'text-gray-500'}`}>check_circle</span>
             <div>
-              <div className="font-display font-bold text-lg uppercase mb-1 text-white">Finalizar OP</div>
-              <div className="text-xs text-text-sub-dark leading-snug">Encerrar ou suspender ordem</div>
+              <div className="font-display font-bold text-lg uppercase mb-1 text-white">Apontamento de OP</div>
+              <div className="text-xs text-text-sub-dark leading-snug">Finalizar, suspender ou apontar parcial</div>
             </div>
           </button>
         </div>
-
-        {/* Partial production without stopping */}
-        {opId && (
-          <div className="mt-4 p-4 bg-surface-dark/60 rounded-lg border border-border-dark space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Apontar produção parcial</div>
-                <div className="text-sm text-text-sub-dark">Lance produção/refugo sem suspender ou finalizar a OP.</div>
-              </div>
-              <span className="material-icons-outlined text-primary text-2xl">playlist_add</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-text-sub-dark uppercase tracking-wider">Produzida (un)</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={partialProduced}
-                  onChange={(e) => setPartialProduced(e.target.value)}
-                  className="w-full rounded-lg border border-border-dark bg-surface-dark px-3 py-2 text-white focus:outline-none focus:border-primary/60"
-                  placeholder="0"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-text-sub-dark uppercase tracking-wider">Refugo (un)</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={partialScrap}
-                  onChange={(e) => setPartialScrap(e.target.value)}
-                  className="w-full rounded-lg border border-border-dark bg-surface-dark px-3 py-2 text-white focus:outline-none focus:border-danger/60"
-                  placeholder="0"
-                />
-              </label>
-              <div className="flex items-end justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setPartialProduced('');
-                    setPartialScrap('');
-                  }}
-                  className="px-3 py-2 rounded-lg border border-border-dark text-text-sub-dark hover:text-white hover:border-white/40 transition-colors"
-                >
-                  Limpar
-                </button>
-                <button
-                  onClick={handlePartialProduction}
-                  disabled={isSavingPartial || (!partialProduced && !partialScrap)}
-                  className={`px-4 py-2 rounded-lg text-white font-bold flex items-center gap-2 transition-colors ${isSavingPartial || (!partialProduced && !partialScrap)
-                    ? 'bg-primary/20 border border-primary/20 cursor-not-allowed opacity-60'
-                    : 'bg-primary/20 border border-primary/40 hover:bg-primary/30'
-                    }`}
-                >
-                  {isSavingPartial ? (
-                    <>
-                      <span className="material-icons-outlined text-sm animate-spin">refresh</span>
-                      Registrando...
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-icons-outlined text-sm">add_task</span>
-                      Registrar parcial
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Time Summary and Quick Actions */}
         <div className="flex flex-wrap gap-4 items-center justify-between mt-4 p-4 bg-surface-dark/50 rounded-lg border border-border-dark">
@@ -1656,7 +1687,15 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             <span className="material-icons-outlined text-text-sub-dark text-lg">history</span>
             <h3 className="font-bold text-text-main-dark">Registros Recentes</h3>
           </div>
-          <button className="text-xs font-bold text-primary hover:text-blue-400 uppercase">Ver Todos</button>
+          <button
+            className="text-xs font-bold text-primary hover:text-blue-400 uppercase"
+            onClick={async () => {
+              await fetchRecentRecords(3);
+              setShowRecordsModal(true);
+            }}
+          >
+            Ver Todos
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -1740,6 +1779,70 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
         )
       }
+
+      {/* Recent Records Full View Modal */}
+      {showRecordsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowRecordsModal(false)}></div>
+          <div className="relative w-full max-w-5xl bg-surface-dark rounded-xl shadow-2xl border border-border-dark overflow-hidden animate-fade-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border-dark bg-[#1a1c23]">
+              <div className="flex items-center gap-3">
+                <span className="material-icons-outlined text-primary text-2xl">history</span>
+                <div>
+                  <h2 className="text-white text-lg font-bold">Registros Recentes</h2>
+                  <p className="text-text-sub-dark text-xs">Ultimos 3 dias</p>
+                </div>
+              </div>
+              <button onClick={() => setShowRecordsModal(false)} className="text-text-sub-dark hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <span className="material-icons-outlined text-2xl">close</span>
+              </button>
+            </div>
+            <div className="p-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-[#111217] text-text-sub-dark text-xs uppercase font-semibold">
+                    <tr>
+                      <th className="px-6 py-3 font-medium">Hora</th>
+                      <th className="px-6 py-3 font-medium">Evento</th>
+                      <th className="px-6 py-3 font-medium">Detalhe</th>
+                      <th className="px-6 py-3 font-medium">Usuario</th>
+                      <th className="px-6 py-3 font-medium text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-dark">
+                    {allRecentRecords.map((rec, i) => (
+                      <tr key={i} className="hover:bg-surface-dark-highlight transition-colors">
+                        <td className="px-6 py-4 text-text-main-dark">{rec.time}</td>
+                        <td className="px-6 py-4 font-bold text-primary">{rec.event}</td>
+                        <td className="px-6 py-4 text-text-sub-dark">{rec.detail}</td>
+                        <td className="px-6 py-4 text-text-main-dark">{rec.user}</td>
+                        <td className="px-6 py-4 text-right">
+                          <span className="px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase border border-secondary/20">
+                            {rec.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {allRecentRecords.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-text-sub-dark italic">Nenhum registro encontrado.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="p-4 bg-background-dark border-t border-border-dark flex justify-end">
+              <button
+                onClick={() => setShowRecordsModal(false)}
+                className="px-6 py-2 bg-primary hover:bg-primary/80 text-white font-bold rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NEW: Large Diary Input Modal */}
       {showDiaryInputModal && (

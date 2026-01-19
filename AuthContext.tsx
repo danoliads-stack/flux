@@ -13,6 +13,7 @@ interface AuthContextType {
     loading: boolean;
     loginAsAdmin: (email: string, pass: string) => Promise<{ error: any }>;
     loginAsOperator: (matricula: string, pin: string) => Promise<{ error: string | null }>;
+    setOperatorSession: (operator: AppUser) => void;
     logout: () => Promise<void>;
     clearAllSessions: () => void;
 }
@@ -307,6 +308,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: null };
     }, []);
 
+    const setOperatorSession = useCallback((operator: AppUser) => {
+        SessionStorage.setOperator(operator);
+        lastUserIdRef.current = operator.id;
+        setUser(operator);
+        logger.log('[AUTH] Operator session updated:', operator.name);
+    }, []);
+
 
     // 🚪 Logout - Apenas desta aba
     const logout = useCallback(async () => {
@@ -353,7 +361,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, loading, loginAsAdmin, loginAsOperator, logout, clearAllSessions }}>
+        <AuthContext.Provider value={{ user, loading, loginAsAdmin, loginAsOperator, setOperatorSession, logout, clearAllSessions }}>
             {children}
         </AuthContext.Provider>
     );

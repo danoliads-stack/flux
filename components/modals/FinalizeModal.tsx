@@ -8,13 +8,14 @@ interface FinalizeModalProps {
   meta: number;
   sectorName?: string; // Current sector name
   onConfirm: (good: number, scrap: number) => void;
+  onPartial: (goodDelta: number, scrapDelta: number) => void;
   onSuspend: (produced: number, pending: number) => void;
   onShiftChange?: (produced: number, pending: number) => void;
   onTransfer?: (produced: number, pending: number) => void; // Transfer to next sector
 }
 
 const FinalizeModal: React.FC<FinalizeModalProps> = ({
-  onClose, opId, realized, meta, sectorName, onConfirm, onSuspend, onShiftChange, onTransfer
+  onClose, opId, realized, meta, sectorName, onConfirm, onPartial, onSuspend, onShiftChange, onTransfer
 }) => {
   const [additionalCount, setAdditionalCount] = useState(0);
   const [scrap, setScrap] = useState(0);
@@ -83,12 +84,6 @@ const FinalizeModal: React.FC<FinalizeModalProps> = ({
               </div>
 
               <div className="relative flex items-center group">
-                <button
-                  onClick={() => setAdditionalCount(Math.max(0, additionalCount - 1))}
-                  className="absolute left-1 w-12 h-12 flex items-center justify-center text-text-sub-dark hover:text-white hover:bg-surface-dark-highlight rounded-lg transition-colors z-10"
-                >
-                  <span className="material-icons">remove</span>
-                </button>
                 <input
                   className="w-full rounded-xl text-white text-center font-bold text-2xl focus:ring-2 focus:ring-primary border border-border-dark bg-background-dark h-16 group-hover:border-primary/50 transition-all placeholder-white/20"
                   type="number"
@@ -97,12 +92,6 @@ const FinalizeModal: React.FC<FinalizeModalProps> = ({
                   value={additionalCount || ''}
                   onChange={(e) => setAdditionalCount(parseInt(e.target.value) || 0)}
                 />
-                <button
-                  onClick={() => setAdditionalCount(additionalCount + 1)}
-                  className="absolute right-1 w-12 h-12 flex items-center justify-center text-text-sub-dark hover:text-white hover:bg-surface-dark-highlight rounded-lg transition-colors z-10"
-                >
-                  <span className="material-icons">add</span>
-                </button>
               </div>
               <div className="flex justify-between items-center text-[10px]">
                 <span className="text-text-sub-dark italic">Já produzido: {realized} un</span>
@@ -165,22 +154,32 @@ const FinalizeModal: React.FC<FinalizeModalProps> = ({
         </div>
 
         <div className="p-6 bg-background-dark/30 border-t border-border-dark flex flex-col gap-4">
-          <div className="flex flex-col-reverse sm:flex-row justify-between gap-4">
+          <div className="flex flex-col-reverse sm:flex-row justify-between gap-3">
+            <button
+              onClick={() => onPartial(additionalCount, scrap)}
+              disabled={additionalCount === 0 && scrap === 0}
+              className={`flex items-center justify-center gap-2 h-12 px-4 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 transition-all font-bold group flex-1 ${
+                additionalCount === 0 && scrap === 0 ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              <span className="material-icons-outlined text-base group-hover:scale-110 transition-transform">playlist_add</span>
+              <span className="text-xs sm:text-sm whitespace-nowrap">Apontar Parcial</span>
+            </button>
             <button
               onClick={() => onSuspend(totalProduced, finalPending)}
-              className="flex items-center justify-center gap-2 h-14 px-6 rounded-xl border-2 border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-all font-bold group flex-1"
+              className="flex items-center justify-center gap-2 h-12 px-4 rounded-lg border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-all font-bold group flex-1"
             >
-              <span className="material-icons-outlined group-hover:scale-110 transition-transform">pause_circle</span>
-              <span>SUSPENDER OP</span>
+              <span className="material-icons-outlined text-base group-hover:scale-110 transition-transform">pause_circle</span>
+              <span className="text-xs sm:text-sm whitespace-nowrap">Suspender OP</span>
             </button>
 
             {onTransfer && !isFinalSector && (
               <button
                 onClick={() => onTransfer(totalProduced, finalPending)}
-                className="flex items-center justify-center gap-2 h-14 px-4 rounded-xl border-2 border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition-all font-bold group flex-1"
+                className="flex items-center justify-center gap-2 h-12 px-4 rounded-lg border border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition-all font-bold group flex-1"
               >
-                <span className="material-icons-outlined group-hover:scale-110 transition-transform">arrow_forward</span>
-                <span className="text-xs leading-tight text-center">TRANSFERIR PARA<br />{sectorName === 'Colagem' ? 'EXPEDIÇÃO' : 'PRÓXIMO SETOR'}</span>
+                <span className="material-icons-outlined text-base group-hover:scale-110 transition-transform">arrow_forward</span>
+                <span className="text-[10px] leading-tight text-center">Transferir para<br />{sectorName === 'Colagem' ? 'Expedição' : 'Próximo Setor'}</span>
               </button>
             )}
 
@@ -190,14 +189,16 @@ const FinalizeModal: React.FC<FinalizeModalProps> = ({
                 onConfirm(totalProduced, scrap);
               }}
               disabled={finalPending > 0}
-              className={`flex items-center justify-center gap-2 h-14 px-8 rounded-xl font-extrabold text-lg shadow-lg flex-[1.5] transition-all hover:-translate-y-0.5 ${
+              className={`flex items-center justify-center gap-2 h-12 px-5 rounded-lg font-extrabold text-sm shadow-lg flex-[1.5] transition-all hover:-translate-y-0.5 ${
                 finalPending > 0
                   ? 'bg-border-dark text-text-sub-dark cursor-not-allowed'
                   : 'bg-primary text-black hover:bg-primary-hover shadow-primary/20'
               }`}
             >
-              <span className="material-icons-outlined">check_circle</span>
-              {finalPending > 0 ? 'PRODUZA O SALDO' : 'ENCERRAR PRODUÇÃO'}
+              <span className="material-icons-outlined text-base">check_circle</span>
+              <span className="text-xs sm:text-sm whitespace-nowrap">
+                {finalPending > 0 ? 'Produza o saldo' : 'Finalizar OP'}
+              </span>
             </button>
           </div>
 

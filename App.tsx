@@ -53,7 +53,7 @@ const App: React.FC = () => {
     return () => logger.log('[DEBUG-APP] ??? App component UNMOUNTED');
   }, []);
 
-  const { user: currentUser, logout: handleLogout, loading: authLoading } = useAuth();
+  const { user: currentUser, logout: handleLogout, loading: authLoading, setOperatorSession } = useAuth();
 
   useEffect(() => {
     logger.log(`[DEBUG-APP] ?? Auth State Tracer -> loading: ${authLoading}, user: ${currentUser?.name || 'GUEST'}`);
@@ -63,7 +63,7 @@ const App: React.FC = () => {
   const location = useLocation();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>('dark'); // força tema escuro
+  const [theme, setTheme] = useState<ThemeMode>('dark'); // forÃ§a tema escuro
 
   useEffect(() => {
     const root = document.documentElement;
@@ -92,13 +92,16 @@ const App: React.FC = () => {
   const [operatorTurno, setOperatorTurno] = useState<string>('Turno Atual');
   const [operatorAssignment, setOperatorAssignment] = useState<{ id: string; name: string } | null>(null);
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
+  const [switchInProgress, setSwitchInProgress] = useState(false);
   const [shiftOptions, setShiftOptions] = useState<ShiftOption[]>([]);
   const [isFetchingSwitchData, setIsFetchingSwitchData] = useState(false);
   const [isSubmittingSwitch, setIsSubmittingSwitch] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [currentLoteId, setCurrentLoteId] = useState<string | null>(null);
   const [activeOperatorSessionId, setActiveOperatorSessionId] = useState<string | null>(null);
+  const [pendingOperatorId, setPendingOperatorId] = useState<string | null>(null);
   const activeOperatorId = operatorAssignment?.id || currentMachine?.operador_atual_id || currentUser?.id || null;
+  const assignedOperatorId = pendingOperatorId || operatorAssignment?.id || currentUser?.id || null;
   const activeOperatorName = operatorAssignment?.name || currentUser?.name || 'Operador';
   const currentShiftOptionId = shiftOptions.find(s => s.nome === operatorTurno)?.id || null;
   const opIdForSession = currentMachine?.op_atual_id || activeOP || null;
@@ -332,7 +335,7 @@ const App: React.FC = () => {
         .select('*, setores(nome), ordens_producao!op_atual_id(codigo), operadores(nome)');
 
       if (data && !error) {
-        // Buscar paradas ativas de todas as máquinas (ordenar pela mais recente)
+        // Buscar paradas ativas de todas as mÃ¡quinas (ordenar pela mais recente)
         const { data: paradas, error: paradasError } = await supabase
           .from('paradas')
           .select('*')
@@ -348,15 +351,15 @@ const App: React.FC = () => {
         const tiposMap = new Map();
         tiposParada?.forEach(t => tiposMap.set(t.id, t.nome));
 
-        // Mapear máquina -> motivo (apenas paradas ATIVAS)
+        // Mapear mÃ¡quina -> motivo (apenas paradas ATIVAS)
         const paradasMap = new Map();
         paradas?.forEach(p => {
-          // Se fim for nulo, é uma parada ativa
+          // Se fim for nulo, Ã© uma parada ativa
           if (!p.fim) {
-            // O campo motivo contém o ID do tipo. Buscar o nome no mapa de tipos
+            // O campo motivo contÃ©m o ID do tipo. Buscar o nome no mapa de tipos
             const tipaNome = tiposMap.get(p.motivo);
             // Prioridade: Nome do Tipo > Motivo (texto/ID) > Notas > Default
-            const razao = tipaNome || p.motivo || p.notas || 'Parada não identificada';
+            const razao = tipaNome || p.motivo || p.notas || 'Parada nÃ£o identificada';
             paradasMap.set(p.maquina_id, razao);
           }
         });
@@ -373,11 +376,11 @@ const App: React.FC = () => {
 
     fetchMachines();
 
-    // ? Subscribe to realtime updates para sincronização instantânea
+    // ? Subscribe to realtime updates para sincronizaÃ§Ã£o instantÃ¢nea
     const unsubscribe = realtimeManager.subscribeMachineUpdates((update) => {
       logger.log('[App] ?? Machine update received:', update);
 
-      // Atualiza apenas a máquina específica na lista
+      // Atualiza apenas a mÃ¡quina especÃ­fica na lista
       setLiveMachines(prev => prev.map(m =>
         m.id === update.machineId
           ? {
@@ -389,7 +392,7 @@ const App: React.FC = () => {
           : m
       ));
 
-      // Se for a máquina selecionada ou update veio do banco, faz refresh completo
+      // Se for a mÃ¡quina selecionada ou update veio do banco, faz refresh completo
       if (update.machineId === selectedMachineId || update.source === 'database') {
         logger.log('[App] ?? Refreshing machines due to update');
         fetchMachines();
@@ -522,14 +525,16 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  // Se o operador tentar entrar em máquina ocupada, abrir modal de troca em vez de redirecionar
+  // Se o operador tentar entrar em mÃ¡quina ocupada, abrir modal de troca em vez de redirecionar
   useEffect(() => {
     if (currentUser?.role !== 'OPERATOR') return;
-    if (currentMachine?.operador_atual_id && currentMachine.operador_atual_id !== currentUser.id) {
-      setSwitchError('Máquina ocupada. Digite a matrícula para assumir este posto.');
+    if (!assignedOperatorId) return;
+    if (switchInProgress || isSwitchModalOpen) return;
+    if (currentMachine?.operador_atual_id && currentMachine.operador_atual_id !== assignedOperatorId) {
+      setSwitchError('MÃ¡quina ocupada. Digite a matrÃ­cula para assumir este posto.');
       setIsSwitchModalOpen(true);
     }
-  }, [currentMachine?.operador_atual_id, currentUser?.id, currentUser?.role]);
+  }, [currentMachine?.operador_atual_id, currentUser?.role, assignedOperatorId, switchInProgress, isSwitchModalOpen]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -540,6 +545,13 @@ const App: React.FC = () => {
       setOperatorAssignment({ id: currentUser.id, name: currentUser.name });
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!pendingOperatorId) return;
+    if (operatorAssignment?.id === pendingOperatorId || currentUser?.id === pendingOperatorId) {
+      setPendingOperatorId(null);
+    }
+  }, [pendingOperatorId, operatorAssignment?.id, currentUser?.id]);
 
   const fetchActiveSession = async (opId: string | null) => {
     if (!opId) {
@@ -585,32 +597,48 @@ const App: React.FC = () => {
     fetchOperatorSwitchData();
   }, [isSwitchModalOpen]);
 
-  const handleOperatorSwitchConfirm = async (matricula: string, shiftId?: string | null) => {
-    // Validações iniciais
+  const handleOperatorSwitchConfirm = async (matricula: string, pin: string, shiftId?: string | null) => {
+    // ValidaÃ§Ãµes iniciais
     if (!selectedMachineId || !currentMachine) {
-      setSwitchError('Selecione uma máquina antes de trocar o operador.');
+      setSwitchError('Selecione uma mÃ¡quina antes de trocar o operador.');
       return;
     }
 
     if (!currentMachine?.id) {
-      setSwitchError('Máquina não encontrada para registrar a sessão.');
+      setSwitchError('MÃ¡quina nÃ£o encontrada para registrar a sessÃ£o.');
       return;
     }
 
     if (!matricula?.trim()) {
-      setSwitchError('Digite uma matrícula válida.');
+      setSwitchError('Digite uma matrÃ­cula vÃ¡lida.');
+      return;
+    }
+
+    if (!pin?.trim()) {
+      setSwitchError('Digite o PIN do operador.');
       return;
     }
 
     if (!opIdForSession) {
-      setSwitchError('Nenhuma OP ativa encontrada para esta máquina.');
+      setSwitchError('Nenhuma OP ativa encontrada para esta mÃ¡quina.');
       return;
     }
 
     setIsSubmittingSwitch(true);
+    setSwitchInProgress(true);
     setSwitchError(null);
 
     try {
+      const { data: pinData, error: pinError } = await supabase.rpc('validate_operator_pin', {
+        p_matricula: matricula.trim(),
+        p_pin: pin
+      });
+
+      if (pinError || !pinData || pinData.length === 0) {
+        setSwitchError('MatrÃ­cula ou PIN invÃ¡lido.');
+        return;
+      }
+
       // Busca dados do operador
       const { data: opData, error: opError } = await supabase
         .from('operadores')
@@ -621,22 +649,22 @@ const App: React.FC = () => {
 
       if (opError) {
         logger.error('[OperatorSwitch] Erro ao buscar operador:', opError);
-        throw new Error('Erro ao validar matrícula do operador.');
+        throw new Error('Erro ao validar matrÃ­cula do operador.');
       }
 
       if (!opData) {
-        setSwitchError('Matrícula não encontrada ou operador inativo.');
+        setSwitchError('MatrÃ­cula nÃ£o encontrada ou operador inativo.');
         return;
       }
 
-      // Validação de setor
+      // ValidaÃ§Ã£o de setor
       if (opData.setor_id !== currentMachine.setor_id) {
-        setSwitchError('Operador não pertence ao setor desta máquina.');
+        setSwitchError('Operador nÃ£o pertence ao setor desta mÃ¡quina.');
         return;
       }
 
       if (!opData.id) {
-        setSwitchError('Operador inválido para troca.');
+        setSwitchError('Operador invÃ¡lido para troca.');
         return;
       }
 
@@ -662,12 +690,13 @@ const App: React.FC = () => {
 
       const sessionId = Array.isArray(sessionResult) ? sessionResult[0] : sessionResult;
       if (!sessionId) {
-        throw new Error('Não foi possível criar a sessão do operador.');
+        throw new Error('NÃ£o foi possÃ­vel criar a sessÃ£o do operador.');
       }
 
       setActiveOperatorSessionId(sessionId);
+      setPendingOperatorId(opData.id);
 
-      // Atualiza operador atual da máquina para UI
+      // Atualiza operador atual da mÃ¡quina para UI
       await supabase.from('maquinas').update({
         operador_atual_id: opData.id
       }).eq('id', selectedMachineId);
@@ -679,10 +708,21 @@ const App: React.FC = () => {
 
       setCurrentMachine(prev => prev ? { ...prev, operador_atual_id: opData.id } : prev);
 
-      // Atualiza a atribuição do operador ativo
+      // Atualiza a atribuiÃ§Ã£o do operador ativo
       setOperatorAssignment({
         id: opData.id,
         name: opData.nome || activeOperatorName
+      });
+
+      setOperatorSession({
+        id: opData.id,
+        name: opData.nome,
+        role: 'OPERATOR',
+        avatar: opData.nome?.charAt(0) || 'O',
+        sector: currentMachine.setores?.nome || currentUser?.sector || 'ProduÃ§Ã£o',
+        setor_id: opData.setor_id,
+        turno: newShiftLabel,
+        matricula: opData.matricula
       });
 
       // Atualiza o turno se fornecido
@@ -690,10 +730,10 @@ const App: React.FC = () => {
       const newShiftLabel = resolvedShift?.nome || (opData as any).turnos?.nome || operatorTurno;
       setOperatorTurno(newShiftLabel);
 
-      // Busca a sessão recém-criada para garantir sincronização
+      // Busca a sessÃ£o recÃ©m-criada para garantir sincronizaÃ§Ã£o
       await fetchActiveSession(opIdForSession);
 
-      // Broadcast da atualização para outros clientes
+      // Broadcast da atualizaÃ§Ã£o para outros clientes
       await realtimeManager.broadcastMachineUpdate(
         createMachineUpdate(
           selectedMachineId,
@@ -713,8 +753,10 @@ const App: React.FC = () => {
       });
 
       setIsSwitchModalOpen(false);
+      setSwitchInProgress(false);
     } catch (error: any) {
       setSwitchError(error?.message || 'Erro ao trocar o operador.');
+      setSwitchInProgress(false);
     } finally {
       setIsSubmittingSwitch(false);
     }
@@ -723,11 +765,11 @@ const App: React.FC = () => {
   const handleMachineSelect = async (machine: MachineData) => {
     logger.log('Selecting machine:', machine.nome, 'Current status:', machine.status_atual);
 
-    // ? VALIDAÇÃO: Verificar se o operador já está em outra máquina
+    // ? VALIDAÃ‡ÃƒO: Verificar se o operador jÃ¡ estÃ¡ em outra mÃ¡quina
     if (currentUser?.role === 'OPERATOR') {
       // 1. Prevent selecting a machine preoccupied by ANOTHER operator
-      if (machine.operador_atual_id && machine.operador_atual_id !== currentUser.id) {
-        setSwitchError('Máquina ocupada. Digite a matrícula para assumir este posto.');
+      if (machine.operador_atual_id && assignedOperatorId && machine.operador_atual_id !== assignedOperatorId) {
+        setSwitchError('MÃ¡quina ocupada. Digite a matrÃ­cula para assumir este posto.');
         setIsSwitchModalOpen(true);
       }
 
@@ -735,7 +777,7 @@ const App: React.FC = () => {
       const { data: occupiedMachine } = await supabase
         .from('maquinas')
         .select('id, nome')
-        .eq('operador_atual_id', currentUser.id)
+        .eq('operador_atual_id', assignedOperatorId || currentUser.id)
         .neq('id', machine.id)
         .maybeSingle();
 
@@ -752,10 +794,10 @@ const App: React.FC = () => {
     setCurrentMachine(machine);
     localStorage.setItem('flux_selected_machine', machine.id);
 
-    // ? Atribuir operador à máquina
+    // ? Atribuir operador Ã  mÃ¡quina
     if (currentUser?.role === 'OPERATOR') {
       await supabase.from('maquinas').update({
-        operador_atual_id: currentUser.id
+        operador_atual_id: assignedOperatorId || currentUser.id
       }).eq('id', machine.id);
     }
 
@@ -788,9 +830,9 @@ const App: React.FC = () => {
         setActiveOP(opData); // Store Action
       }
     } else {
-      // ? FIX: Se a máquina está em status de produção/setup mas SEM OP, reseta ela
+      // ? FIX: Se a mÃ¡quina estÃ¡ em status de produÃ§Ã£o/setup mas SEM OP, reseta ela
       if (initialOPState === 'PRODUCAO' || initialOPState === 'SETUP' || initialOPState === 'PARADA') {
-        logger.warn('[App] ?? Máquina em estado inconsistente (sem OP). Resetando para IDLE.');
+        logger.warn('[App] ?? MÃ¡quina em estado inconsistente (sem OP). Resetando para IDLE.');
         setOpState('IDLE');
         await updateSelectedMachine({
           status_atual: MachineStatus.AVAILABLE,
@@ -835,7 +877,7 @@ const App: React.FC = () => {
 
   // Return to machine selection
   const handleChangeMachine = async () => {
-    // ? Limpar operador da máquina atual no banco
+    // ? Limpar operador da mÃ¡quina atual no banco
     if (selectedMachineId && currentUser?.role === 'OPERATOR') {
       await supabase.from('maquinas').update({
         operador_atual_id: null
@@ -858,12 +900,12 @@ const App: React.FC = () => {
     window.location.href = '/';
   };
 
-  // Wrapper para logout com navegação
+  // Wrapper para logout com navegaÃ§Ã£o
   const handleLogoutWithNav = async () => {
-    // ? FIX: Navega para login PRIMEIRO usando window.location para garantir a navegação
-    // Isso evita tela preta porque a navegação acontece antes do state mudar
+    // ? FIX: Navega para login PRIMEIRO usando window.location para garantir a navegaÃ§Ã£o
+    // Isso evita tela preta porque a navegaÃ§Ã£o acontece antes do state mudar
     await handleLogout();
-    // Força navegação com window.location para garantir que a página recarrega
+    // ForÃ§a navegaÃ§Ã£o com window.location para garantir que a pÃ¡gina recarrega
     window.location.href = '/login';
   };
 
@@ -975,7 +1017,7 @@ const App: React.FC = () => {
                       onStartProduction={async () => {
                         if (currentMachine) {
                           if (!activeOP) {
-                            alert('?? Não é possível iniciar a produção sem uma Ordem de Produção (OP) selecionada. Por favor, realize o SETUP.');
+                            alert('?? NÃ£o Ã© possÃ­vel iniciar a produÃ§Ã£o sem uma Ordem de ProduÃ§Ã£o (OP) selecionada. Por favor, realize o SETUP.');
                             return;
                           }
                           const now = new Date().toISOString();
@@ -1030,11 +1072,14 @@ const App: React.FC = () => {
                         }
                       }}
                       machineId={currentMachine.id}
-                      machineName={currentMachine.nome || 'Máquina'}
-                      sectorName={currentUser?.sector || 'Produção'}
+                      machineName={currentMachine.nome || 'MÃ¡quina'}
+                      sectorName={currentUser?.sector || 'ProduÃ§Ã£o'}
                       operatorName={activeOperatorName}
                       shiftName={operatorTurno}
-                      onSwitchOperator={() => setIsSwitchModalOpen(true)}
+                      onSwitchOperator={() => {
+                        setSwitchInProgress(true);
+                        setIsSwitchModalOpen(true);
+                      }}
                       meta={activeOPData?.quantidade_meta || 0}
                       operatorId={currentUser!.id}
                       sectorId={currentMachine.setor_id}
@@ -1069,9 +1114,9 @@ const App: React.FC = () => {
                       }}
                       onRequestMaintenance={async (description) => {
                         if (currentMachine && currentUser) {
-                          logger.log('Solicitando manutenção:', { machine: currentMachine.id, description });
+                          logger.log('Solicitando manutenÃ§Ã£o:', { machine: currentMachine.id, description });
 
-                          // 1. Criar chamado de manutenção na tabela separada
+                          // 1. Criar chamado de manutenÃ§Ã£o na tabela separada
                           const { error } = await supabase.from('chamados_manutencao').insert({
                             maquina_id: currentMachine.id,
                             operador_id: activeOperatorId,
@@ -1084,12 +1129,12 @@ const App: React.FC = () => {
 
                           if (error) {
                             logger.error('Erro ao abrir chamado:', error);
-                            alert('Erro ao registrar chamado de manutenção.');
+                            alert('Erro ao registrar chamado de manutenÃ§Ã£o.');
                             return;
                           }
 
-                          // 2. Mudar status para MAINTENANCE (mantém OP e operador vinculados)
-                          // NÃO fechamos op_operadores - a manutenção é temporária
+                          // 2. Mudar status para MAINTENANCE (mantÃ©m OP e operador vinculados)
+                          // NÃƒO fechamos op_operadores - a manutenÃ§Ã£o Ã© temporÃ¡ria
                           const now = new Date().toISOString();
                           localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
 
@@ -1103,7 +1148,7 @@ const App: React.FC = () => {
                           }
 
                           await supabase.from('maquinas').update({
-                            status_atual: MachineStatus.MAINTENANCE,  // Status específico de manutenção
+                            status_atual: MachineStatus.MAINTENANCE,  // Status especÃ­fico de manutenÃ§Ã£o
                             status_change_at: now
                           }).eq('id', currentMachine.id);
 
@@ -1120,7 +1165,7 @@ const App: React.FC = () => {
                             })
                           );
                           setOpState('MANUTENCAO');
-                          alert('Chamado de manutenção registrado. A máquina está aguardando atendimento.');
+                          alert('Chamado de manutenÃ§Ã£o registrado. A mÃ¡quina estÃ¡ aguardando atendimento.');
                         }
                       }}
                     />
@@ -1204,7 +1249,20 @@ const App: React.FC = () => {
                     return;
                   }
 
-                  // Update Store
+                  if (activeOperatorId) {
+                    const { data: sessionResult, error: sessionError } = await supabase.rpc('mes_switch_operator', {
+                      p_op_id: op.id,
+                      p_operator_id: activeOperatorId,
+                      p_shift_id: currentShiftOptionId || null
+                    });
+                    if (sessionError) {
+                      logger.error('[App] Erro ao criar sessao do operador:', sessionError);
+                    } else {
+                      const sessionId = Array.isArray(sessionResult) ? sessionResult[0] : sessionResult;
+                      setActiveOperatorSessionId(sessionId || null);
+                    }
+                  }
+
                   syncTimers({
                     accSetup: 0,
                     accProd: 0,
@@ -1232,6 +1290,14 @@ const App: React.FC = () => {
             onClose={closeModals}
             onConfirm={async (reason, notes, producedDelta, scrapDelta) => {
               if (currentMachine && currentUser) {
+                if (!reason) {
+                  alert('Selecione o motivo da parada.');
+                  return;
+                }
+                if (!opIdForSession) {
+                  alert('Nao e possivel registrar parada sem OP ativa.');
+                  return;
+                }
                 logger.log('Salvando parada:', {
                   maquina_id: currentMachine.id,
                   operador_id: activeOperatorId,
@@ -1242,7 +1308,7 @@ const App: React.FC = () => {
                   scrapDelta
                 });
 
-                // Opcional: registrar produção parcial antes de parar
+                // Opcional: registrar producao parcial antes de parar
                 const safeProduced = Math.max(0, producedDelta || 0);
                 const safeScrap = Math.max(0, scrapDelta || 0);
                 if ((safeProduced > 0 || safeScrap > 0) && opIdForSession) {
@@ -1255,7 +1321,8 @@ const App: React.FC = () => {
                     p_data_inicio: localStatusChangeAt || new Date().toISOString(),
                     p_data_fim: new Date().toISOString(),
                     p_turno: operatorTurno || null,
-                    p_client_event_id: generateClientEventId()
+                    p_client_event_id: generateClientEventId(),
+                    p_tipo_refugo_id: null
                   });
                   if (prodError) {
                     logger.error('Erro ao registrar producao parcial na parada:', prodError);
@@ -1277,13 +1344,6 @@ const App: React.FC = () => {
                   alert(`Erro ao salvar parada: ${stopError.message}`);
                   return;
                 }
-
-                // End assignment
-                await supabase
-                  .from('op_operadores')
-                  .update({ fim: new Date().toISOString() })
-                  .eq('maquina_id', currentMachine.id)
-                  .is('fim', null);
 
                 // Update Machine Status & Timestamp
                 const now = new Date().toISOString();
@@ -1313,7 +1373,7 @@ const App: React.FC = () => {
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.STOPPED, {
-                  operatorId: activeOperatorId,
+                    operatorId: activeOperatorId,
                     opId: currentMachine.op_atual_id
                   })
                 );
@@ -1334,54 +1394,41 @@ const App: React.FC = () => {
             meta={activeOPData?.quantidade_meta || 500}
             realized={totalProduced}
             // Fix: Pass machine sector name if available to handle specific sector logic (like Colagem)
-            sectorName={currentMachine?.setores?.nome || currentUser?.sector || 'Produção'}
-            onShiftChange={async (produced, pending) => {
+            sectorName={currentMachine?.setores?.nome || currentUser?.sector || 'ProduÃ§Ã£o'}
+            onPartial={async (goodDelta, scrapDelta) => {
               if (!currentMachine || !activeOP) return;
-              const delta = Math.max(0, produced - totalProduced);
+              const deltaGood = Math.max(0, goodDelta || 0);
+              const deltaScrap = Math.max(0, scrapDelta || 0);
+              if (deltaGood === 0 && deltaScrap === 0) return;
 
               const operatorId = activeOperatorId;
-              const { error: prodError } = await supabase.rpc('mes_record_production', {
+              const { error: recordError } = await supabase.rpc('mes_record_production', {
                 p_op_id: activeOP,
                 p_machine_id: currentMachine.id,
                 p_operator_id: operatorId,
-                p_good_qty: delta,
-                p_scrap_qty: 0,
+                p_good_qty: deltaGood,
+                p_scrap_qty: deltaScrap,
                 p_data_inicio: localStatusChangeAt || new Date().toISOString(),
                 p_data_fim: new Date().toISOString(),
-                p_turno: 'TrocaTurno'
+                p_turno: 'Parcial',
+                p_client_event_id: generateClientEventId(),
+                p_tipo_refugo_id: null
               });
 
-              if (prodError) {
-                console.error('Erro ao salvar producao na troca de turno:', prodError);
-                alert(`Erro ao registrar producao: ${prodError.message}`);
+              if (recordError) {
+                logger.error('Erro ao registrar apontamento parcial:', recordError);
+                alert(`Erro ao registrar apontamento parcial: ${recordError.message}`);
                 return;
               }
 
-              setProductionData({ totalProduced: totalProduced + delta });
-
-              await supabase
-                .from('op_operator_sessions')
-                .update({ ended_at: new Date().toISOString() })
-                .eq('op_id', activeOP)
-                .is('ended_at', null);
-
-              await supabase.from('maquinas').update({
-                status_atual: MachineStatus.RUNNING,
-                status_change_at: new Date().toISOString(),
-                op_atual_id: activeOP,
-                operador_atual_id: null
-              }).eq('id', currentMachine.id);
-
-              await realtimeManager.broadcastMachineUpdate(
-                createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
-                  operatorId: null,
-                  opId: activeOP
-                })
-              );
-
-              setActiveOperatorSessionId(null);
-              setOpState('IDLE');
+              await refreshOpSummary(activeOP);
               closeModals();
+            }}
+            onShiftChange={async () => {
+              if (!currentMachine || !activeOP) return;
+              closeModals();
+              setSwitchInProgress(true);
+              setIsSwitchModalOpen(true);
             }}
             onTransfer={async (produced, pending) => {
               // Transfer to next sector (mark as ready for transfer)
@@ -1397,7 +1444,9 @@ const App: React.FC = () => {
                   p_scrap_qty: 0,
                   p_data_inicio: localStatusChangeAt || new Date().toISOString(),
                   p_data_fim: new Date().toISOString(),
-                  p_turno: 'Transferencia'
+                  p_turno: 'Transferencia',
+                  p_client_event_id: generateClientEventId(),
+                  p_tipo_refugo_id: null
                 });
                 if (recordError) {
                   logger.error('Erro ao registrar producao:', recordError);
@@ -1436,15 +1485,15 @@ const App: React.FC = () => {
               }
             }}
             onConfirm={async (good, scrap) => {
-              console.log('[App] ?? Iniciando finalização de OP...', { activeOP, currentMachine: currentMachine?.id, currentUser: currentUser?.id });
+              console.log('[App] ?? Iniciando finalizaÃ§Ã£o de OP...', { activeOP, currentMachine: currentMachine?.id, currentUser: currentUser?.id });
 
               if (!currentMachine || !currentUser || !activeOP) {
-                console.error('[App] ? Erro: Estado inválido para finalizar OP', {
+                console.error('[App] ? Erro: Estado invÃ¡lido para finalizar OP', {
                   hasMachine: !!currentMachine,
                   hasUser: !!currentUser,
                   hasOP: !!activeOP
                 });
-                alert('Erro: Não foi possível finalizar a OP. Verifique se você está logado e se a máquina está selecionada corretamente.');
+                alert('Erro: NÃ£o foi possÃ­vel finalizar a OP. Verifique se vocÃª estÃ¡ logado e se a mÃ¡quina estÃ¡ selecionada corretamente.');
                 return;
               }
 
@@ -1458,11 +1507,11 @@ const App: React.FC = () => {
 
                 // Determine shift (simplified logic for now)
                 const currentHour = new Date().getHours();
-                const turno = (currentHour >= 6 && currentHour < 14) ? 'Manhã' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
+                const turno = (currentHour >= 6 && currentHour < 14) ? 'ManhÃ£' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
 
                 const delta = Math.max(0, good - totalProduced);
 
-                console.log('[App] ?? Salvando registro de produção...');
+                console.log('[App] ?? Salvando registro de produÃ§Ã£o...');
                 // Save production log (historical record)
                 const operatorId = activeOperatorId;
                 const { error: recordError } = await supabase.rpc('mes_record_production', {
@@ -1473,7 +1522,9 @@ const App: React.FC = () => {
                   p_scrap_qty: scrap,
                   p_data_inicio: localStatusChangeAt || new Date().toISOString(),
                   p_data_fim: new Date().toISOString(),
-                  p_turno: turno
+                  p_turno: turno,
+                  p_client_event_id: generateClientEventId(),
+                  p_tipo_refugo_id: null
                 });
 
                 if (recordError) throw new Error(`Erro ao salvar registro de producao: ${recordError.message}`);
@@ -1490,7 +1541,7 @@ const App: React.FC = () => {
                   quantidade_refugo: scrap
                 }).select('id').single();
 
-                if (loteError) console.error('[App] ?? Erro ao gerar lote (não bloqueante):', loteError);
+                if (loteError) console.error('[App] ?? Erro ao gerar lote (nÃ£o bloqueante):', loteError);
                 if (lote) setCurrentLoteId(lote.id);
 
                 console.log('[App] Finalizando OP...');
@@ -1524,9 +1575,9 @@ const App: React.FC = () => {
                 localStorage.removeItem(`flux_phase_start_${activeOP}`);
                 localStorage.removeItem(`flux_status_change_${activeOP}`);
 
-                // ? FIX: Após encerrar OP, a máquina SEMPRE volta para IDLE
-                // O operador deve iniciar manualmente a próxima OP via SETUP
-                console.log('[App] ?? OP Finalizada. Retornando máquina para estado IDLE/Aguardando.');
+                // ? FIX: ApÃ³s encerrar OP, a mÃ¡quina SEMPRE volta para IDLE
+                // O operador deve iniciar manualmente a prÃ³xima OP via SETUP
+                console.log('[App] ?? OP Finalizada. Retornando mÃ¡quina para estado IDLE/Aguardando.');
 
                 // ? CRITICAL FIX: Atualizar currentMachine local para evitar que o useEffect de sync restaure a OP
                 if (currentMachine) {
@@ -1554,7 +1605,7 @@ const App: React.FC = () => {
                 console.log('[App] ? OP Finalizada com sucesso!');
 
               } catch (error: any) {
-                console.error('[App] ? Erro CRÍTICO ao finalizar OP:', error);
+                console.error('[App] ? Erro CRÃTICO ao finalizar OP:', error);
                 alert(`ERRO AO FINALIZAR OP: ${error.message || 'Erro desconhecido'}. \n\nPor favor, anote os valores e contate o suporte.`);
               }
             }}
@@ -1573,7 +1624,9 @@ const App: React.FC = () => {
                   p_scrap_qty: 0,
                   p_data_inicio: localStatusChangeAt || new Date().toISOString(),
                   p_data_fim: new Date().toISOString(),
-                  p_turno: 'Parcial'
+                  p_turno: 'Parcial',
+                  p_client_event_id: generateClientEventId(),
+                  p_tipo_refugo_id: null
                 });
 
                 if (prodError) {
@@ -1633,9 +1686,9 @@ const App: React.FC = () => {
             opId={activeOPCodigo || activeOP || 'N/A'}
             realized={totalProduced}
             loteId={currentLoteId || ''}
-            machine={currentMachine?.nome || 'Máquina'}
+            machine={currentMachine?.nome || 'MÃ¡quina'}
             operator={activeOperatorName}
-            unit="PÇS"
+            unit="PÃ‡S"
             productName={activeOPData?.nome_produto || 'Produto Indefinido'}
             productDescription={activeOPData?.codigo || ''}
             shift={operatorTurno || 'N/A'}
@@ -1643,7 +1696,10 @@ const App: React.FC = () => {
         )}
         <OperatorSwitchModal
           isOpen={isSwitchModalOpen}
-          onClose={() => setIsSwitchModalOpen(false)}
+          onClose={() => {
+            setIsSwitchModalOpen(false);
+            setSwitchInProgress(false);
+          }}
           onConfirm={handleOperatorSwitchConfirm}
           shifts={shiftOptions}
           isLoading={isFetchingSwitchData}
