@@ -1,4 +1,4 @@
-Ôªøimport React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MachineStatus, AppUser, Permission, MachineData, ProductionOrder, OPState, ShiftOption } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -49,21 +49,21 @@ type ThemeMode = 'dark' | 'light';
 
 const App: React.FC = () => {
   useEffect(() => {
-    logger.log('[DEBUG-APP] üèóÔ∏è App component MOUNTED');
-    return () => logger.log('[DEBUG-APP] üèöÔ∏è App component UNMOUNTED');
+    logger.log('[DEBUG-APP] ??? App component MOUNTED');
+    return () => logger.log('[DEBUG-APP] ??? App component UNMOUNTED');
   }, []);
 
   const { user: currentUser, logout: handleLogout, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    logger.log(`[DEBUG-APP] üîÑ Auth State Tracer -> loading: ${authLoading}, user: ${currentUser?.name || 'GUEST'}`);
+    logger.log(`[DEBUG-APP] ?? Auth State Tracer -> loading: ${authLoading}, user: ${currentUser?.name || 'GUEST'}`);
   }, [authLoading, currentUser]);
 
   const navigate = useNavigate();
   const location = useLocation();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>('dark'); // for√ßa tema escuro
+  const [theme, setTheme] = useState<ThemeMode>('dark'); // forÁa tema escuro
 
   useEffect(() => {
     const root = document.documentElement;
@@ -101,6 +101,34 @@ const App: React.FC = () => {
   const activeOperatorId = operatorAssignment?.id || currentMachine?.operador_atual_id || currentUser?.id || null;
   const activeOperatorName = operatorAssignment?.name || currentUser?.name || 'Operador';
   const currentShiftOptionId = shiftOptions.find(s => s.nome === operatorTurno)?.id || null;
+  const opIdForSession = currentMachine?.op_atual_id || activeOP || null;
+  const generateClientEventId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+
+  const refreshOpSummary = async (opId: string | null) => {
+    if (!opId) return null;
+    await supabase.rpc('mes_refresh_op_summary', { p_op_id: opId });
+    const { data, error } = await supabase
+      .from('op_summary')
+      .select('*')
+      .eq('op_id', opId)
+      .maybeSingle();
+    if (error) {
+      logger.error('[App] Failed to fetch op_summary:', error);
+      return null;
+    }
+    if (data) {
+      setProductionData({
+        totalProduced: data.quantidade_produzida || 0,
+        totalScrap: data.quantidade_refugo || 0
+      });
+      syncTimers({
+        accSetup: data.tempo_setup_seg || 0,
+        accProd: data.tempo_rodando_seg || 0,
+        accStop: data.tempo_parado_seg || 0
+      });
+    }
+    return data;
+  };
 
   // Last phase start time (synced with store statusChangeAt for relative calc)
   const lastPhaseStartTime = localStatusChangeAt;
@@ -116,7 +144,7 @@ const App: React.FC = () => {
     const recoverState = async () => {
       // Only run if we have a persisted machineId but no currentMachine loaded
       if (selectedMachineId && !currentMachine && currentUser) {
-        logger.log('[App] üîÑ Recovering state for machine:', selectedMachineId);
+        logger.log('[App] ?? Recovering state for machine:', selectedMachineId);
 
         // 1. Fetch machine from database
         const { data: machineData, error: machineError } = await supabase
@@ -126,13 +154,13 @@ const App: React.FC = () => {
           .single();
 
         if (machineError || !machineData) {
-          logger.error('[App] ‚ùå Failed to recover machine:', machineError);
+          logger.error('[App] ? Failed to recover machine:', machineError);
           // Clear stale persisted state
           setSelectedMachine(null);
           return;
         }
 
-        logger.log('[App] ‚úÖ Recovered machine:', machineData.nome, 'status:', machineData.status_atual, 'op_atual_id:', machineData.op_atual_id);
+        logger.log('[App] ? Recovered machine:', machineData.nome, 'status:', machineData.status_atual, 'op_atual_id:', machineData.op_atual_id);
         setCurrentMachine(machineData);
 
         // 2. Sync timers from database
@@ -142,7 +170,7 @@ const App: React.FC = () => {
 
         // 3. Fetch active OP if exists
         if (machineData.op_atual_id) {
-          logger.log('[App] üîç Fetching OP from database:', machineData.op_atual_id);
+          logger.log('[App] ?? Fetching OP from database:', machineData.op_atual_id);
           const { data: opData, error: opError } = await supabase
             .from('ordens_producao')
             .select('*')
@@ -150,21 +178,21 @@ const App: React.FC = () => {
             .single();
 
           if (opError) {
-            logger.error('[App] ‚ùå Failed to fetch OP:', opError);
+            logger.error('[App] ? Failed to fetch OP:', opError);
           } else if (opData) {
-            logger.log('[App] ‚úÖ Recovered OP:', opData.codigo);
+            logger.log('[App] ? Recovered OP:', opData.codigo);
             setActiveOP(opData as any);
           }
         } else {
-          logger.log('[App] ‚ö†Ô∏è Machine has no op_atual_id - OP will be null');
+          logger.log('[App] ?? Machine has no op_atual_id - OP will be null');
         }
 
         // 4. Map machine status to opState (database is source of truth)
         let dbOpState: OPState = 'IDLE';
 
-        // ‚úÖ Detect Inconsistency: Running without OP
+        // ? Detect Inconsistency: Running without OP
         if ((machineData.status_atual === MachineStatus.RUNNING || machineData.status_atual === MachineStatus.SETUP) && !machineData.op_atual_id) {
-          logger.warn('[App] ‚ö†Ô∏è State recovery detected production/setup without OP. Forcing IDLE.');
+          logger.warn('[App] ?? State recovery detected production/setup without OP. Forcing IDLE.');
           dbOpState = 'IDLE';
           await supabase.from('maquinas').update({
             status_atual: MachineStatus.AVAILABLE,
@@ -181,7 +209,7 @@ const App: React.FC = () => {
         }
 
         setOpState(dbOpState);
-        logger.log('[App] ‚úÖ State recovery complete. opState:', dbOpState, 'activeOP:', activeOP);
+        logger.log('[App] ? State recovery complete. opState:', dbOpState, 'activeOP:', activeOP);
       }
     };
 
@@ -190,7 +218,7 @@ const App: React.FC = () => {
 
   // DEBUG: Log activeOP changes
   useEffect(() => {
-    logger.log('[App] üîî activeOP changed:', activeOP, 'activeOPCodigo:', activeOPCodigo);
+    logger.log('[App] ?? activeOP changed:', activeOP, 'activeOPCodigo:', activeOPCodigo);
   }, [activeOP, activeOPCodigo]);
 
   // SLUG-BASED URL: Detect machine slug from URL and load machine
@@ -208,7 +236,7 @@ const App: React.FC = () => {
     }
 
     const findMachineBySlug = async () => {
-      logger.log('[App] üîç Looking for machine by slug:', slug);
+      logger.log('[App] ?? Looking for machine by slug:', slug);
 
       // First try exact codigo match (most efficient)
       let { data: machine, error } = await supabase
@@ -234,11 +262,11 @@ const App: React.FC = () => {
       }
 
       if (machine) {
-        logger.log('[App] ‚úÖ Found machine by slug:', machine.nome);
+        logger.log('[App] ? Found machine by slug:', machine.nome);
         setSelectedMachine(machine.id);
         setCurrentMachine(machine);
       } else {
-        logger.warn('[App] ‚ö†Ô∏è Machine not found for slug:', slug);
+        logger.warn('[App] ?? Machine not found for slug:', slug);
         navigate('/maquinas');
       }
     };
@@ -265,20 +293,20 @@ const App: React.FC = () => {
     if (location.pathname.startsWith('/r/')) return;
 
     if (currentUser) {
-      logger.log(`[DEBUG-APP] üë§ User identified: ${currentUser.name} (${currentUser.role})`);
-      logger.log(`[DEBUG-APP] üìç Current Path: ${location.pathname}`);
+      logger.log(`[DEBUG-APP] ?? User identified: ${currentUser.name} (${currentUser.role})`);
+      logger.log(`[DEBUG-APP] ?? Current Path: ${location.pathname}`);
 
       if (location.pathname === '/' || location.pathname === '/login') {
         let target = '/maquinas';
         if (currentUser.role === 'ADMIN') target = '/administracao';
         else if (currentUser.role === 'SUPERVISOR') target = '/supervisao';
 
-        logger.log(`[DEBUG-APP] üöÄ Redirecting to role default: ${target}`);
+        logger.log(`[DEBUG-APP] ?? Redirecting to role default: ${target}`);
         navigate(target);
       }
     } else if (!authLoading) {
       if (location.pathname === '/' || (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/r/'))) {
-        logger.log('[DEBUG-APP] üîì No user, redirecting to login');
+        logger.log('[DEBUG-APP] ?? No user, redirecting to login');
         navigate('/login');
       }
     }
@@ -304,7 +332,7 @@ const App: React.FC = () => {
         .select('*, setores(nome), ordens_producao!op_atual_id(codigo), operadores(nome)');
 
       if (data && !error) {
-        // Buscar paradas ativas de todas as m√°quinas (ordenar pela mais recente)
+        // Buscar paradas ativas de todas as m·quinas (ordenar pela mais recente)
         const { data: paradas, error: paradasError } = await supabase
           .from('paradas')
           .select('*')
@@ -320,15 +348,15 @@ const App: React.FC = () => {
         const tiposMap = new Map();
         tiposParada?.forEach(t => tiposMap.set(t.id, t.nome));
 
-        // Mapear m√°quina -> motivo (apenas paradas ATIVAS)
+        // Mapear m·quina -> motivo (apenas paradas ATIVAS)
         const paradasMap = new Map();
         paradas?.forEach(p => {
-          // Se fim for nulo, √© uma parada ativa
+          // Se fim for nulo, È uma parada ativa
           if (!p.fim) {
-            // O campo motivo cont√©m o ID do tipo. Buscar o nome no mapa de tipos
+            // O campo motivo contÈm o ID do tipo. Buscar o nome no mapa de tipos
             const tipaNome = tiposMap.get(p.motivo);
             // Prioridade: Nome do Tipo > Motivo (texto/ID) > Notas > Default
-            const razao = tipaNome || p.motivo || p.notas || 'Parada n√£o identificada';
+            const razao = tipaNome || p.motivo || p.notas || 'Parada n„o identificada';
             paradasMap.set(p.maquina_id, razao);
           }
         });
@@ -345,11 +373,11 @@ const App: React.FC = () => {
 
     fetchMachines();
 
-    // ‚úÖ Subscribe to realtime updates para sincroniza√ß√£o instant√¢nea
+    // ? Subscribe to realtime updates para sincronizaÁ„o instant‚nea
     const unsubscribe = realtimeManager.subscribeMachineUpdates((update) => {
-      logger.log('[App] üîÑ Machine update received:', update);
+      logger.log('[App] ?? Machine update received:', update);
 
-      // Atualiza apenas a m√°quina espec√≠fica na lista
+      // Atualiza apenas a m·quina especÌfica na lista
       setLiveMachines(prev => prev.map(m =>
         m.id === update.machineId
           ? {
@@ -361,9 +389,9 @@ const App: React.FC = () => {
           : m
       ));
 
-      // Se for a m√°quina selecionada ou update veio do banco, faz refresh completo
+      // Se for a m·quina selecionada ou update veio do banco, faz refresh completo
       if (update.machineId === selectedMachineId || update.source === 'database') {
-        logger.log('[App] üîÉ Refreshing machines due to update');
+        logger.log('[App] ?? Refreshing machines due to update');
         fetchMachines();
       }
     });
@@ -416,10 +444,10 @@ const App: React.FC = () => {
         // 3. DB has MORE production than local (synced from another source)
         // 4. We are NOT active (fallback)
         if (!isActive || currentState.opState === 'FINALIZADA' || total > localProduced) {
-          logger.log('[App] üì• Syncing production from DB:', total);
+          logger.log('[App] ?? Syncing production from DB:', total);
           setProductionData({ totalProduced: total });
         } else {
-          logger.log('[App] üõ°Ô∏è Preserving local production state:', localProduced, '(DB:', total, ')');
+          logger.log('[App] ??? Preserving local production state:', localProduced, '(DB:', total, ')');
         }
       }
     };
@@ -432,13 +460,13 @@ const App: React.FC = () => {
 
 
 
-  // ‚úÖ FIX: Sync activeOP from currentMachine.op_atual_id when machine updates (e.g., page reload)
+  // ? FIX: Sync activeOP from currentMachine.op_atual_id when machine updates (e.g., page reload)
   // Also re-sync if we have the ID but not the full data (can happen after page refresh)
   useEffect(() => {
     const syncOP = async () => {
       // Sync if: machine has OP ID AND (activeOP is missing OR activeOPData is missing)
       if (currentMachine?.op_atual_id && (!activeOP || !activeOPData)) {
-        logger.log('[App] üìã Syncing active OP from machine:', currentMachine.op_atual_id);
+        logger.log('[App] ?? Syncing active OP from machine:', currentMachine.op_atual_id);
         const { data: opData, error } = await supabase
           .from('ordens_producao')
           .select('*')
@@ -446,12 +474,12 @@ const App: React.FC = () => {
           .single();
 
         if (error) {
-          logger.error('[App] ‚ùå Error fetching OP:', error.message);
+          logger.error('[App] ? Error fetching OP:', error.message);
           return;
         }
 
         if (opData) {
-          logger.log('[App] ‚úÖ OP data loaded:', opData.codigo);
+          logger.log('[App] ? OP data loaded:', opData.codigo);
           // Update Store
           setActiveOP(opData as any);
 
@@ -494,11 +522,11 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  // Se o operador tentar entrar em m√°quina ocupada, abrir modal de troca em vez de redirecionar
+  // Se o operador tentar entrar em m·quina ocupada, abrir modal de troca em vez de redirecionar
   useEffect(() => {
     if (currentUser?.role !== 'OPERATOR') return;
     if (currentMachine?.operador_atual_id && currentMachine.operador_atual_id !== currentUser.id) {
-      setSwitchError('M√°quina ocupada. Digite a matr√≠cula para assumir este posto.');
+      setSwitchError('M·quina ocupada. Digite a matrÌcula para assumir este posto.');
       setIsSwitchModalOpen(true);
     }
   }, [currentMachine?.operador_atual_id, currentUser?.id, currentUser?.role]);
@@ -558,25 +586,24 @@ const App: React.FC = () => {
   }, [isSwitchModalOpen]);
 
   const handleOperatorSwitchConfirm = async (matricula: string, shiftId?: string | null) => {
-    // Valida√ß√µes iniciais
+    // ValidaÁıes iniciais
     if (!selectedMachineId || !currentMachine) {
-      setSwitchError('Selecione uma m√°quina antes de trocar o operador.');
+      setSwitchError('Selecione uma m·quina antes de trocar o operador.');
       return;
     }
 
     if (!currentMachine?.id) {
-      setSwitchError('M√°quina n√£o encontrada para registrar a sess√£o.');
+      setSwitchError('M·quina n„o encontrada para registrar a sess„o.');
       return;
     }
 
     if (!matricula?.trim()) {
-      setSwitchError('Digite uma matr√≠cula v√°lida.');
+      setSwitchError('Digite uma matrÌcula v·lida.');
       return;
     }
 
-    const opIdForSession = currentMachine.op_atual_id || activeOP || activeOPCodigo || null;
     if (!opIdForSession) {
-      setSwitchError('Nenhuma OP ativa encontrada para esta m√°quina.');
+      setSwitchError('Nenhuma OP ativa encontrada para esta m·quina.');
       return;
     }
 
@@ -594,22 +621,22 @@ const App: React.FC = () => {
 
       if (opError) {
         logger.error('[OperatorSwitch] Erro ao buscar operador:', opError);
-        throw new Error('Erro ao validar matr√≠cula do operador.');
+        throw new Error('Erro ao validar matrÌcula do operador.');
       }
 
       if (!opData) {
-        setSwitchError('Matr√≠cula n√£o encontrada ou operador inativo.');
+        setSwitchError('MatrÌcula n„o encontrada ou operador inativo.');
         return;
       }
 
-      // Valida√ß√£o de setor
+      // ValidaÁ„o de setor
       if (opData.setor_id !== currentMachine.setor_id) {
-        setSwitchError('Operador n√£o pertence ao setor desta m√°quina.');
+        setSwitchError('Operador n„o pertence ao setor desta m·quina.');
         return;
       }
 
       if (!opData.id) {
-        setSwitchError('Operador inv√°lido para troca.');
+        setSwitchError('Operador inv·lido para troca.');
         return;
       }
 
@@ -635,12 +662,12 @@ const App: React.FC = () => {
 
       const sessionId = Array.isArray(sessionResult) ? sessionResult[0] : sessionResult;
       if (!sessionId) {
-        throw new Error('N√£o foi poss√≠vel criar a sess√£o do operador.');
+        throw new Error('N„o foi possÌvel criar a sess„o do operador.');
       }
 
       setActiveOperatorSessionId(sessionId);
 
-      // Atualiza operador atual da m√°quina para UI
+      // Atualiza operador atual da m·quina para UI
       await supabase.from('maquinas').update({
         operador_atual_id: opData.id
       }).eq('id', selectedMachineId);
@@ -652,7 +679,7 @@ const App: React.FC = () => {
 
       setCurrentMachine(prev => prev ? { ...prev, operador_atual_id: opData.id } : prev);
 
-      // Atualiza a atribui√ß√£o do operador ativo
+      // Atualiza a atribuiÁ„o do operador ativo
       setOperatorAssignment({
         id: opData.id,
         name: opData.nome || activeOperatorName
@@ -663,10 +690,10 @@ const App: React.FC = () => {
       const newShiftLabel = resolvedShift?.nome || (opData as any).turnos?.nome || operatorTurno;
       setOperatorTurno(newShiftLabel);
 
-      // Busca a sess√£o rec√©m-criada para garantir sincroniza√ß√£o
+      // Busca a sess„o recÈm-criada para garantir sincronizaÁ„o
       await fetchActiveSession(opIdForSession);
 
-      // Broadcast da atualiza√ß√£o para outros clientes
+      // Broadcast da atualizaÁ„o para outros clientes
       await realtimeManager.broadcastMachineUpdate(
         createMachineUpdate(
           selectedMachineId,
@@ -678,7 +705,7 @@ const App: React.FC = () => {
         )
       );
 
-      logger.log('[OperatorSwitch] ‚úÖ Troca realizada com sucesso:', {
+      logger.log('[OperatorSwitch] ? Troca realizada com sucesso:', {
         newOperatorId: opData.id,
         newOperatorName: opData.nome,
         sessionId,
@@ -696,11 +723,11 @@ const App: React.FC = () => {
   const handleMachineSelect = async (machine: MachineData) => {
     logger.log('Selecting machine:', machine.nome, 'Current status:', machine.status_atual);
 
-    // ‚úÖ VALIDA√á√ÉO: Verificar se o operador j√° est√° em outra m√°quina
+    // ? VALIDA«√O: Verificar se o operador j· est· em outra m·quina
     if (currentUser?.role === 'OPERATOR') {
       // 1. Prevent selecting a machine preoccupied by ANOTHER operator
       if (machine.operador_atual_id && machine.operador_atual_id !== currentUser.id) {
-        setSwitchError('M√°quina ocupada. Digite a matr√≠cula para assumir este posto.');
+        setSwitchError('M·quina ocupada. Digite a matrÌcula para assumir este posto.');
         setIsSwitchModalOpen(true);
       }
 
@@ -725,7 +752,7 @@ const App: React.FC = () => {
     setCurrentMachine(machine);
     localStorage.setItem('flux_selected_machine', machine.id);
 
-    // ‚úÖ Atribuir operador √† m√°quina
+    // ? Atribuir operador ‡ m·quina
     if (currentUser?.role === 'OPERATOR') {
       await supabase.from('maquinas').update({
         operador_atual_id: currentUser.id
@@ -761,9 +788,9 @@ const App: React.FC = () => {
         setActiveOP(opData); // Store Action
       }
     } else {
-      // ‚úÖ FIX: Se a m√°quina est√° em status de produ√ß√£o/setup mas SEM OP, reseta ela
+      // ? FIX: Se a m·quina est· em status de produÁ„o/setup mas SEM OP, reseta ela
       if (initialOPState === 'PRODUCAO' || initialOPState === 'SETUP' || initialOPState === 'PARADA') {
-        logger.warn('[App] ‚ö†Ô∏è M√°quina em estado inconsistente (sem OP). Resetando para IDLE.');
+        logger.warn('[App] ?? M·quina em estado inconsistente (sem OP). Resetando para IDLE.');
         setOpState('IDLE');
         await updateSelectedMachine({
           status_atual: MachineStatus.AVAILABLE,
@@ -808,7 +835,7 @@ const App: React.FC = () => {
 
   // Return to machine selection
   const handleChangeMachine = async () => {
-    // ‚úÖ Limpar operador da m√°quina atual no banco
+    // ? Limpar operador da m·quina atual no banco
     if (selectedMachineId && currentUser?.role === 'OPERATOR') {
       await supabase.from('maquinas').update({
         operador_atual_id: null
@@ -831,12 +858,12 @@ const App: React.FC = () => {
     window.location.href = '/';
   };
 
-  // Wrapper para logout com navega√ß√£o
+  // Wrapper para logout com navegaÁ„o
   const handleLogoutWithNav = async () => {
-    // ‚úÖ FIX: Navega para login PRIMEIRO usando window.location para garantir a navega√ß√£o
-    // Isso evita tela preta porque a navega√ß√£o acontece antes do state mudar
+    // ? FIX: Navega para login PRIMEIRO usando window.location para garantir a navegaÁ„o
+    // Isso evita tela preta porque a navegaÁ„o acontece antes do state mudar
     await handleLogout();
-    // For√ßa navega√ß√£o com window.location para garantir que a p√°gina recarrega
+    // ForÁa navegaÁ„o com window.location para garantir que a p·gina recarrega
     window.location.href = '/login';
   };
 
@@ -948,7 +975,7 @@ const App: React.FC = () => {
                       onStartProduction={async () => {
                         if (currentMachine) {
                           if (!activeOP) {
-                            alert('‚ö†Ô∏è N√£o √© poss√≠vel iniciar a produ√ß√£o sem uma Ordem de Produ√ß√£o (OP) selecionada. Por favor, realize o SETUP.');
+                            alert('?? N„o È possÌvel iniciar a produÁ„o sem uma Ordem de ProduÁ„o (OP) selecionada. Por favor, realize o SETUP.');
                             return;
                           }
                           const now = new Date().toISOString();
@@ -961,6 +988,21 @@ const App: React.FC = () => {
                           }
 
                           const operatorId = activeOperatorId;
+
+                          // Sempre tenta fechar parada aberta antes de iniciar producao (mesmo se opState nao estiver PARADA)
+                          const { error: resumeError } = await supabase.rpc('mes_resume_machine', {
+                            p_machine_id: currentMachine.id,
+                            p_next_status: MachineStatus.RUNNING,
+                            p_operator_id: operatorId,
+                            p_op_id: activeOP || null
+                          });
+                          if (resumeError && !`${resumeError.message}`.includes('no_open_stop')) {
+                            // Ignora erro de "no_open_stop", mas falha para outros casos
+                            logger.error('Erro ao retomar maquina antes de iniciar producao:', resumeError);
+                            alert(`Erro ao retomar maquina: ${resumeError.message}`);
+                            return;
+                          }
+
                           const { error: prodStartError } = await supabase.rpc('mes_start_production', {
                             p_machine_id: currentMachine.id,
                             p_op_id: activeOP,
@@ -971,6 +1013,8 @@ const App: React.FC = () => {
                             alert(`Erro ao iniciar producao: ${prodStartError.message}`);
                             return;
                           }
+
+                          await refreshOpSummary(activeOP);
 
                           syncTimers({
                             statusChangeAt: now,
@@ -986,8 +1030,8 @@ const App: React.FC = () => {
                         }
                       }}
                       machineId={currentMachine.id}
-                      machineName={currentMachine.nome || 'M√°quina'}
-                      sectorName={currentUser?.sector || 'Produ√ß√£o'}
+                      machineName={currentMachine.nome || 'M·quina'}
+                      sectorName={currentUser?.sector || 'ProduÁ„o'}
                       operatorName={activeOperatorName}
                       shiftName={operatorTurno}
                       onSwitchOperator={() => setIsSwitchModalOpen(true)}
@@ -1025,9 +1069,9 @@ const App: React.FC = () => {
                       }}
                       onRequestMaintenance={async (description) => {
                         if (currentMachine && currentUser) {
-                          logger.log('Solicitando manuten√ß√£o:', { machine: currentMachine.id, description });
+                          logger.log('Solicitando manutenÁ„o:', { machine: currentMachine.id, description });
 
-                          // 1. Criar chamado de manuten√ß√£o na tabela separada
+                          // 1. Criar chamado de manutenÁ„o na tabela separada
                           const { error } = await supabase.from('chamados_manutencao').insert({
                             maquina_id: currentMachine.id,
                             operador_id: activeOperatorId,
@@ -1040,12 +1084,12 @@ const App: React.FC = () => {
 
                           if (error) {
                             logger.error('Erro ao abrir chamado:', error);
-                            alert('Erro ao registrar chamado de manuten√ß√£o.');
+                            alert('Erro ao registrar chamado de manutenÁ„o.');
                             return;
                           }
 
-                          // 2. Mudar status para MAINTENANCE (mant√©m OP e operador vinculados)
-                          // N√ÉO fechamos op_operadores - a manuten√ß√£o √© tempor√°ria
+                          // 2. Mudar status para MAINTENANCE (mantÈm OP e operador vinculados)
+                          // N√O fechamos op_operadores - a manutenÁ„o È tempor·ria
                           const now = new Date().toISOString();
                           localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
 
@@ -1059,7 +1103,7 @@ const App: React.FC = () => {
                           }
 
                           await supabase.from('maquinas').update({
-                            status_atual: MachineStatus.MAINTENANCE,  // Status espec√≠fico de manuten√ß√£o
+                            status_atual: MachineStatus.MAINTENANCE,  // Status especÌfico de manutenÁ„o
                             status_change_at: now
                           }).eq('id', currentMachine.id);
 
@@ -1076,7 +1120,7 @@ const App: React.FC = () => {
                             })
                           );
                           setOpState('MANUTENCAO');
-                          alert('Chamado de manuten√ß√£o registrado. A m√°quina est√° aguardando atendimento.');
+                          alert('Chamado de manutenÁ„o registrado. A m·quina est· aguardando atendimento.');
                         }
                       }}
                     />
@@ -1186,15 +1230,39 @@ const App: React.FC = () => {
         {activeModal === 'stop' && (
           <StopModal
             onClose={closeModals}
-            onConfirm={async (reason, notes) => {
+            onConfirm={async (reason, notes, producedDelta, scrapDelta) => {
               if (currentMachine && currentUser) {
                 logger.log('Salvando parada:', {
                   maquina_id: currentMachine.id,
                   operador_id: activeOperatorId,
                   op_id: opIdForSession,
                   motivo: reason,
-                  notas: notes
+                  notas: notes,
+                  producedDelta,
+                  scrapDelta
                 });
+
+                // Opcional: registrar produÁ„o parcial antes de parar
+                const safeProduced = Math.max(0, producedDelta || 0);
+                const safeScrap = Math.max(0, scrapDelta || 0);
+                if ((safeProduced > 0 || safeScrap > 0) && opIdForSession) {
+                  const { error: prodError } = await supabase.rpc('mes_record_production', {
+                    p_op_id: opIdForSession,
+                    p_machine_id: currentMachine.id,
+                    p_operator_id: activeOperatorId,
+                    p_good_qty: safeProduced,
+                    p_scrap_qty: safeScrap,
+                    p_data_inicio: localStatusChangeAt || new Date().toISOString(),
+                    p_data_fim: new Date().toISOString(),
+                    p_turno: operatorTurno || null,
+                    p_client_event_id: generateClientEventId()
+                  });
+                  if (prodError) {
+                    logger.error('Erro ao registrar producao parcial na parada:', prodError);
+                    alert(`Erro ao registrar producao parcial: ${prodError.message}`);
+                    return;
+                  }
+                }
 
                 const operatorId = activeOperatorId;
                 const { error: stopError } = await supabase.rpc('mes_stop_machine', {
@@ -1220,7 +1288,7 @@ const App: React.FC = () => {
                 // Update Machine Status & Timestamp
                 const now = new Date().toISOString();
 
-                // ‚úÖ FIX: Save current state to restore later
+                // ? FIX: Save current state to restore later
                 localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
 
                 // Accumulate production time before stopping
@@ -1231,7 +1299,7 @@ const App: React.FC = () => {
                   const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
                   newAccProd += elapsed;
                 }
-                // ‚úÖ FIX: Subscribe setup time as well
+                // ? FIX: Subscribe setup time as well
                 else if (lastPhaseStartTime && opState === 'SETUP') {
                   const elapsed = Math.floor((new Date().getTime() - new Date(lastPhaseStartTime).getTime()) / 1000);
                   newAccSetup += elapsed;
@@ -1250,6 +1318,10 @@ const App: React.FC = () => {
                   })
                 );
                 setOpState('PARADA');
+
+                if (opIdForSession) {
+                  await refreshOpSummary(opIdForSession);
+                }
               }
               closeModals();
             }}
@@ -1262,7 +1334,7 @@ const App: React.FC = () => {
             meta={activeOPData?.quantidade_meta || 500}
             realized={totalProduced}
             // Fix: Pass machine sector name if available to handle specific sector logic (like Colagem)
-            sectorName={currentMachine?.setores?.nome || currentUser?.sector || 'Produ√ß√£o'}
+            sectorName={currentMachine?.setores?.nome || currentUser?.sector || 'ProduÁ„o'}
             onShiftChange={async (produced, pending) => {
               if (!currentMachine || !activeOP) return;
               const delta = Math.max(0, produced - totalProduced);
@@ -1334,32 +1406,24 @@ const App: React.FC = () => {
                 }
 
                 setProductionData({ totalProduced: totalProduced + delta });
-
-                // Update OP with accumulated quantities
-                await supabase.from('ordens_producao').update({
-                  quantidade_produzida: produced,
-                  quantidade_refugo: 0,
-                  tempo_producao_segundos: accumulatedProductionTime,
-                  tempo_setup_segundos: accumulatedSetupTime,
-                  tempo_parada_segundos: accumulatedStopTime
-                }).eq('id', activeOP);
+                await refreshOpSummary(activeOP);
 
                 // Release machine but KEEP operator logged in
                 await supabase.from('maquinas').update({
                   status_atual: MachineStatus.AVAILABLE,
                   status_change_at: new Date().toISOString(),
                   op_atual_id: null
-                  // ‚úÖ operador_atual_id NOT cleared - operator stays logged in
+                  // ? operador_atual_id NOT cleared - operator stays logged in
                 }).eq('id', currentMachine.id);
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
-                    operatorId: activeOperatorId, // ‚úÖ Operator remains on machine
+                    operatorId: activeOperatorId, // ? Operator remains on machine
                     opId: null
                   })
                 );
 
-                // ‚úÖ CRITICAL FIX: Atualizar currentMachine local
+                // ? CRITICAL FIX: Atualizar currentMachine local
                 setCurrentMachine({
                   ...currentMachine,
                   op_atual_id: null,
@@ -1372,15 +1436,15 @@ const App: React.FC = () => {
               }
             }}
             onConfirm={async (good, scrap) => {
-              console.log('[App] üèÅ Iniciando finaliza√ß√£o de OP...', { activeOP, currentMachine: currentMachine?.id, currentUser: currentUser?.id });
+              console.log('[App] ?? Iniciando finalizaÁ„o de OP...', { activeOP, currentMachine: currentMachine?.id, currentUser: currentUser?.id });
 
               if (!currentMachine || !currentUser || !activeOP) {
-                console.error('[App] ‚ùå Erro: Estado inv√°lido para finalizar OP', {
+                console.error('[App] ? Erro: Estado inv·lido para finalizar OP', {
                   hasMachine: !!currentMachine,
                   hasUser: !!currentUser,
                   hasOP: !!activeOP
                 });
-                alert('Erro: N√£o foi poss√≠vel finalizar a OP. Verifique se voc√™ est√° logado e se a m√°quina est√° selecionada corretamente.');
+                alert('Erro: N„o foi possÌvel finalizar a OP. Verifique se vocÍ est· logado e se a m·quina est· selecionada corretamente.');
                 return;
               }
 
@@ -1394,11 +1458,11 @@ const App: React.FC = () => {
 
                 // Determine shift (simplified logic for now)
                 const currentHour = new Date().getHours();
-                const turno = (currentHour >= 6 && currentHour < 14) ? 'Manh√£' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
+                const turno = (currentHour >= 6 && currentHour < 14) ? 'Manh„' : (currentHour >= 14 && currentHour < 22) ? 'Tarde' : 'Noite';
 
                 const delta = Math.max(0, good - totalProduced);
 
-                console.log('[App] üíæ Salvando registro de produ√ß√£o...');
+                console.log('[App] ?? Salvando registro de produÁ„o...');
                 // Save production log (historical record)
                 const operatorId = activeOperatorId;
                 const { error: recordError } = await supabase.rpc('mes_record_production', {
@@ -1416,7 +1480,7 @@ const App: React.FC = () => {
 
                 setProductionData({ totalProduced: totalProduced + delta });
 
-                console.log('[App] üì¶ Gerando lote de rastreabilidade...');
+                console.log('[App] ?? Gerando lote de rastreabilidade...');
                 // Generate Lot Record
                 const { data: lote, error: loteError } = await supabase.from('lotes_rastreabilidade').insert({
                   op_id: activeOP,
@@ -1426,7 +1490,7 @@ const App: React.FC = () => {
                   quantidade_refugo: scrap
                 }).select('id').single();
 
-                if (loteError) console.error('[App] ‚ö†Ô∏è Erro ao gerar lote (n√£o bloqueante):', loteError);
+                if (loteError) console.error('[App] ?? Erro ao gerar lote (n„o bloqueante):', loteError);
                 if (lote) setCurrentLoteId(lote.id);
 
                 console.log('[App] Finalizando OP...');
@@ -1443,26 +1507,28 @@ const App: React.FC = () => {
 
                 if (finalizeError) throw new Error(`Erro ao finalizar OP: ${finalizeError.message}`);
 
+                await refreshOpSummary(activeOP);
+
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
-                    operatorId: activeOperatorId, // ‚úÖ Operator remains on machine
+                    operatorId: activeOperatorId, // ? Operator remains on machine
                     opId: null
                   })
                 );
 
 
-                // ‚úÖ FIX: Limpar localStorage da OP finalizada
+                // ? FIX: Limpar localStorage da OP finalizada
                 localStorage.removeItem(`flux_acc_setup_${activeOP}`);
                 localStorage.removeItem(`flux_acc_prod_${activeOP}`);
                 localStorage.removeItem(`flux_acc_stop_${activeOP}`);
                 localStorage.removeItem(`flux_phase_start_${activeOP}`);
                 localStorage.removeItem(`flux_status_change_${activeOP}`);
 
-                // ‚úÖ FIX: Ap√≥s encerrar OP, a m√°quina SEMPRE volta para IDLE
-                // O operador deve iniciar manualmente a pr√≥xima OP via SETUP
-                console.log('[App] ‚ÑπÔ∏è OP Finalizada. Retornando m√°quina para estado IDLE/Aguardando.');
+                // ? FIX: ApÛs encerrar OP, a m·quina SEMPRE volta para IDLE
+                // O operador deve iniciar manualmente a prÛxima OP via SETUP
+                console.log('[App] ?? OP Finalizada. Retornando m·quina para estado IDLE/Aguardando.');
 
-                // ‚úÖ CRITICAL FIX: Atualizar currentMachine local para evitar que o useEffect de sync restaure a OP
+                // ? CRITICAL FIX: Atualizar currentMachine local para evitar que o useEffect de sync restaure a OP
                 if (currentMachine) {
                   setCurrentMachine({
                     ...currentMachine,
@@ -1474,6 +1540,7 @@ const App: React.FC = () => {
                 setOpState('IDLE');
                 setActiveOP(null);
                 setProductionData({ totalProduced: 0, totalScrap: 0 });
+                await refreshOpSummary(activeOP);
 
                 // Resetar acumuladores de tempo
                 syncTimers({
@@ -1484,10 +1551,10 @@ const App: React.FC = () => {
                 });
 
                 setActiveModal('label');
-                console.log('[App] ‚úÖ OP Finalizada com sucesso!');
+                console.log('[App] ? OP Finalizada com sucesso!');
 
               } catch (error: any) {
-                console.error('[App] ‚ùå Erro CR√çTICO ao finalizar OP:', error);
+                console.error('[App] ? Erro CRÕTICO ao finalizar OP:', error);
                 alert(`ERRO AO FINALIZAR OP: ${error.message || 'Erro desconhecido'}. \n\nPor favor, anote os valores e contate o suporte.`);
               }
             }}
@@ -1516,48 +1583,41 @@ const App: React.FC = () => {
 
                 setProductionData({ totalProduced: totalProduced + delta });
 
+                await refreshOpSummary(activeOP);
+
                 await supabase
                   .from('op_operadores')
                   .update({ fim: new Date().toISOString() })
                   .eq('maquina_id', currentMachine.id)
                   .is('fim', null);
 
-                // Update OP with accumulated quantities, sector of suspension, and status
-                await supabase.from('ordens_producao').update({
-                  status: 'SUSPENSA',
-                  quantidade_produzida: produced,
-                  quantidade_pendente: pending,
-                  setor_suspensao_id: currentMachine.setor_id,
-                  quantidade_refugo: 0,
-                  tempo_producao_segundos: accumulatedProductionTime,
-                  tempo_setup_segundos: accumulatedSetupTime,
-                  tempo_parada_segundos: accumulatedStopTime
-                }).eq('id', activeOP);
+                // Refresh snapshot after apontamento parcial
+                await refreshOpSummary(activeOP);
 
                 // Update Machine Status & Timestamp (KEEP operator logged in)
                 await supabase.from('maquinas').update({
                   status_atual: MachineStatus.SUSPENDED,
                   status_change_at: new Date().toISOString(),
                   op_atual_id: null
-                  // ‚úÖ operador_atual_id NOT cleared - operator stays logged in
+                  // ? operador_atual_id NOT cleared - operator stays logged in
                 }).eq('id', currentMachine.id);
 
                 await realtimeManager.broadcastMachineUpdate(
                   createMachineUpdate(currentMachine.id, MachineStatus.SUSPENDED, {
-                    operatorId: currentUser?.id, // ‚úÖ Operator remains on machine
+                    operatorId: currentUser?.id, // ? Operator remains on machine
                     opId: null
                   })
                 );
 
-                // ‚úÖ CRITICAL FIX: Atualizar currentMachine local
+                // ? CRITICAL FIX: Atualizar currentMachine local
                 setCurrentMachine({
                   ...currentMachine,
                   op_atual_id: null,
                   status_atual: MachineStatus.SUSPENDED
                 });
 
-                setActiveOP(null); // ‚úÖ Clear local OP state
-                setOpState('IDLE'); // ‚úÖ Return dashboard to IDLE (Free machine)
+                setActiveOP(null); // ? Clear local OP state
+                setOpState('IDLE'); // ? Return dashboard to IDLE (Free machine)
                 closeModals();
               }
             }}
@@ -1573,9 +1633,9 @@ const App: React.FC = () => {
             opId={activeOPCodigo || activeOP || 'N/A'}
             realized={totalProduced}
             loteId={currentLoteId || ''}
-            machine={currentMachine?.nome || 'M√°quina'}
+            machine={currentMachine?.nome || 'M·quina'}
             operator={activeOperatorName}
-            unit="P√áS"
+            unit="P«S"
             productName={activeOPData?.nome_produto || 'Produto Indefinido'}
             productDescription={activeOPData?.codigo || ''}
             shift={operatorTurno || 'N/A'}
@@ -1597,6 +1657,10 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
+
 
 
 

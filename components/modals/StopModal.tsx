@@ -3,7 +3,7 @@ import { supabase } from '../../supabase';
 
 interface StopModalProps {
   onClose: () => void;
-  onConfirm: (reason: string, notes: string) => void;
+  onConfirm: (reason: string, notes: string, producedDelta: number, scrapDelta: number) => void;
 }
 
 interface TipoParada {
@@ -17,6 +17,8 @@ interface TipoParada {
 const StopModal: React.FC<StopModalProps> = ({ onClose, onConfirm }) => {
   const [reason, setReason] = useState<string>('');
   const [notes, setNotes] = useState('');
+  const [producedDelta, setProducedDelta] = useState<number>(0);
+  const [scrapDelta, setScrapDelta] = useState<number>(0);
   const [reasons, setReasons] = useState<TipoParada[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -102,6 +104,39 @@ const StopModal: React.FC<StopModalProps> = ({ onClose, onConfirm }) => {
               onChange={(e) => setNotes(e.target.value)}
             />
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-white text-sm font-bold leading-normal flex items-center gap-2" htmlFor="produced">
+                <span className="material-icons-outlined text-lg text-text-sub-dark">check_circle</span>
+                Quantidade boa produzida (opcional)
+              </label>
+              <input
+                id="produced"
+                type="number"
+                min={0}
+                value={producedDelta}
+                onChange={(e) => setProducedDelta(Math.max(0, Number(e.target.value)))}
+                className="rounded-lg border border-border-dark bg-background-dark text-white px-4 py-3 focus:ring-2 focus:ring-primary"
+                placeholder="Ex: 120"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-white text-sm font-bold leading-normal flex items-center gap-2" htmlFor="scrap">
+                <span className="material-icons-outlined text-lg text-text-sub-dark">warning</span>
+                Quantidade refugo (opcional)
+              </label>
+              <input
+                id="scrap"
+                type="number"
+                min={0}
+                value={scrapDelta}
+                onChange={(e) => setScrapDelta(Math.max(0, Number(e.target.value)))}
+                className="rounded-lg border border-border-dark bg-background-dark text-white px-4 py-3 focus:ring-2 focus:ring-primary"
+                placeholder="Ex: 5"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="p-6 border-t border-border-dark bg-background-dark/30 rounded-b-xl flex justify-end gap-3">
@@ -112,7 +147,7 @@ const StopModal: React.FC<StopModalProps> = ({ onClose, onConfirm }) => {
             console.log("=== CONFIRMAR PARADA CLICADO ===");
             console.log("Motivo selecionado (ID):", reason);
             console.log("Notas:", notes);
-            onConfirm(reason, notes);
+            onConfirm(reason, notes, producedDelta, scrapDelta);
           }} className="flex items-center justify-center gap-2 px-8 py-3 rounded-lg bg-primary hover:bg-primary/80 text-white shadow-glow text-base font-bold transition-all transform active:scale-95">
             <span className="material-icons-outlined">pause_circle</span>
             Confirm Stop

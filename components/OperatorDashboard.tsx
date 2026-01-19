@@ -214,6 +214,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [showChecklistLabelModal, setShowChecklistLabelModal] = useState(false);
   const [showPalletLabelModal, setShowPalletLabelModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [partialProduced, setPartialProduced] = useState<string>('');
+  const [partialScrap, setPartialScrap] = useState<string>('');
+  const [isSavingPartial, setIsSavingPartial] = useState(false);
 
   // Clock update
   useEffect(() => {
@@ -402,14 +405,25 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     }
   };
 
-  // Fetch production stats for current OP
+  // Fetch production stats for current OP using op_summary
   const fetchProductionStats = async () => {
     if (!opId) return;
 
-    // Get OP details
+    // Snapshot totals
+    const { data: summary, error: summaryError } = await supabase
+      .from('op_summary')
+      .select('*')
+      .eq('op_id', opId)
+      .maybeSingle();
+
+    if (summaryError) {
+      console.error('Error fetching op_summary:', summaryError);
+    }
+
+    // Meta + produto
     const { data: opData, error: opError } = await supabase
       .from('ordens_producao')
-      .select('quantidade_meta, ciclo_estimado, quantidade_produzida, quantidade_refugo, nome_produto, codigo')
+      .select('quantidade_meta, ciclo_estimado, nome_produto, codigo')
       .eq('id', opId)
       .single();
 
@@ -417,33 +431,25 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       console.error('Error fetching OP data:', opError);
     }
 
-    if (opData) {
-      // ... (code omitted for brevity in targetContent match but present in replacement)
-      const persistedProduced = opData.quantidade_produzida || 0;
-      const persistedScrap = opData.quantidade_refugo || 0;
-
-      // Also check registros_producao for validation/backup
-      const { data: prodRecords } = await supabase
-        .from('registros_producao')
-        .select('quantidade_boa, quantidade_refugo')
-        .eq('op_id', opId);
-
-      let recordsProduced = 0;
-      let recordsScrap = 0;
-      if (prodRecords && prodRecords.length > 0) {
-        recordsProduced = prodRecords.reduce((sum, r) => sum + (r.quantidade_boa || 0), 0);
-        recordsScrap = prodRecords.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
-      }
-
+    if (summary) {
       setProductionData({
-        totalProduced: persistedProduced,
-        totalScrap: persistedScrap
+        totalProduced: summary.quantidade_produzida || 0,
+        totalScrap: summary.quantidade_refugo || 0
       });
 
+      // Sincroniza timers acumulados
+      syncTimers({
+        accSetup: summary.tempo_setup_seg || 0,
+        accProd: summary.tempo_rodando_seg || 0,
+        accStop: summary.tempo_parado_seg || 0
+      });
+    }
+
+    if (opData) {
       setOpQuantity(opData.quantidade_meta || 0);
       setCycleTime(Number(opData.ciclo_estimado) || 0);
 
-      const remainingQty = Math.max(0, (opData.quantidade_meta || 0) - persistedProduced);
+      const remainingQty = Math.max(0, (opData.quantidade_meta || 0) - (summary?.quantidade_produzida || 0));
       const totalSecondsRemaining = remainingQty * (Number(opData.ciclo_estimado) || 0);
 
       const hours = Math.floor(totalSecondsRemaining / 3600);
@@ -461,12 +467,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const handleQuickUpdate = async (type: 'produced' | 'scrap', delta: number) => {
     if (!opId || !machineId) return;
 
-    // Optimistic Update
-    if (type === 'produced') {
-      setProductionData({ totalProduced: totalProduced + delta });
-    } else {
-      setProductionData({ totalScrap: totalScrap + delta });
-    }
+    const clientEventId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
     try {
       const { error: logError } = await supabase.rpc('mes_record_production', {
@@ -477,15 +478,67 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         p_scrap_qty: type === 'scrap' ? delta : 0,
         p_data_inicio: new Date().toISOString(),
         p_data_fim: new Date().toISOString(),
-        p_turno: null
+        p_turno: null,
+        p_client_event_id: clientEventId
       });
 
       if (logError) throw logError;
+
+      await supabase.rpc('mes_refresh_op_summary', { p_op_id: opId });
+      await fetchProductionStats();
     } catch (error) {
       console.error('Error in quick update:', error);
       // Revert optimistic update on error
-      fetchProductionStats();
       alert('Erro ao atualizar quantidade.');
+    }
+  };
+
+  // Manual partial production without stopping/suspending
+  const handlePartialProduction = async () => {
+    if (!opId || !machineId) {
+      alert('Selecione uma OP antes de apontar produção parcial.');
+      return;
+    }
+
+    const good = Math.max(0, Number(partialProduced) || 0);
+    const scrap = Math.max(0, Number(partialScrap) || 0);
+
+    if (good === 0 && scrap === 0) {
+      alert('Informe pelo menos uma quantidade produzida ou refugo.');
+      return;
+    }
+
+    setIsSavingPartial(true);
+    try {
+      const clientEventId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      const { error: recordError } = await supabase.rpc('mes_record_production', {
+        p_op_id: opId,
+        p_machine_id: machineId,
+        p_operator_id: operatorId || null,
+        p_good_qty: good,
+        p_scrap_qty: scrap,
+        p_data_inicio: new Date().toISOString(),
+        p_data_fim: new Date().toISOString(),
+        p_turno: null,
+        p_client_event_id: clientEventId
+      });
+
+      if (recordError) throw recordError;
+
+      const { error: refreshError } = await supabase.rpc('mes_refresh_op_summary', { p_op_id: opId });
+      if (refreshError) {
+        alert(`Produção registrada, mas falhou atualizar o resumo: ${refreshError.message}`);
+      }
+
+      await fetchProductionStats();
+      setPartialProduced('');
+      setPartialScrap('');
+    } catch (error) {
+      console.error('Erro ao apontar produção parcial:', error);
+      const msg = (error as any)?.message || 'Erro ao apontar produção parcial.';
+      alert(msg);
+    } finally {
+      setIsSavingPartial(false);
     }
   };
 
@@ -1414,6 +1467,74 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
           </button>
         </div>
+
+        {/* Partial production without stopping */}
+        {opId && (
+          <div className="mt-4 p-4 bg-surface-dark/60 rounded-lg border border-border-dark space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider">Apontar produção parcial</div>
+                <div className="text-sm text-text-sub-dark">Lance produção/refugo sem suspender ou finalizar a OP.</div>
+              </div>
+              <span className="material-icons-outlined text-primary text-2xl">playlist_add</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-text-sub-dark uppercase tracking-wider">Produzida (un)</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={partialProduced}
+                  onChange={(e) => setPartialProduced(e.target.value)}
+                  className="w-full rounded-lg border border-border-dark bg-surface-dark px-3 py-2 text-white focus:outline-none focus:border-primary/60"
+                  placeholder="0"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-text-sub-dark uppercase tracking-wider">Refugo (un)</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={partialScrap}
+                  onChange={(e) => setPartialScrap(e.target.value)}
+                  className="w-full rounded-lg border border-border-dark bg-surface-dark px-3 py-2 text-white focus:outline-none focus:border-danger/60"
+                  placeholder="0"
+                />
+              </label>
+              <div className="flex items-end justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setPartialProduced('');
+                    setPartialScrap('');
+                  }}
+                  className="px-3 py-2 rounded-lg border border-border-dark text-text-sub-dark hover:text-white hover:border-white/40 transition-colors"
+                >
+                  Limpar
+                </button>
+                <button
+                  onClick={handlePartialProduction}
+                  disabled={isSavingPartial || (!partialProduced && !partialScrap)}
+                  className={`px-4 py-2 rounded-lg text-white font-bold flex items-center gap-2 transition-colors ${isSavingPartial || (!partialProduced && !partialScrap)
+                    ? 'bg-primary/20 border border-primary/20 cursor-not-allowed opacity-60'
+                    : 'bg-primary/20 border border-primary/40 hover:bg-primary/30'
+                    }`}
+                >
+                  {isSavingPartial ? (
+                    <>
+                      <span className="material-icons-outlined text-sm animate-spin">refresh</span>
+                      Registrando...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-icons-outlined text-sm">add_task</span>
+                      Registrar parcial
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Time Summary and Quick Actions */}
         <div className="flex flex-wrap gap-4 items-center justify-between mt-4 p-4 bg-surface-dark/50 rounded-lg border border-border-dark">

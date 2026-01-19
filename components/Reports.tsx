@@ -103,39 +103,27 @@ const Reports: React.FC = () => {
                 })));
             }
 
-            // 2. Fetch Production Data for stats
-            const { data: producao } = await supabase
-                .from('registros_producao')
-                .select('quantidade_boa, quantidade_refugo')
-                .eq('maquina_id', selectedMachine)
-                .gte('created_at', startISO)
-                .lte('created_at', endISO);
+            // 2. Fetch Production/Stops via snapshots and views
+            const { data: summary } = await supabase
+                .from('op_summary')
+                .select('quantidade_produzida, quantidade_refugo, tempo_parado_seg')
+                .eq('machine_id', selectedMachine);
 
-            let totalProduction = 0;
-            let totalScrap = 0;
-            if (producao) {
-                totalProduction = producao.reduce((sum, r) => sum + (r.quantidade_boa || 0), 0);
-                totalScrap = producao.reduce((sum, r) => sum + (r.quantidade_refugo || 0), 0);
-            }
+            const totalProduction = (summary || []).reduce((sum, s: any) => sum + (s.quantidade_produzida || 0), 0);
+            const totalScrap = (summary || []).reduce((sum, s: any) => sum + (s.quantidade_refugo || 0), 0);
+            const totalStopSeconds = (summary || []).reduce((sum, s: any) => sum + (s.tempo_parado_seg || 0), 0);
+            const totalStopTime = Math.floor(totalStopSeconds / 60); // minutos
 
-            // 3. Fetch Stops Data for availability calculation
-            const { data: stops } = await supabase
-                .from('paradas')
-                .select('duracao_minutos, tipos_parada(nome)')
-                .eq('maquina_id', selectedMachine)
-                .gte('inicio', startISO)
-                .lte('inicio', endISO);
+            const { data: stopsByReason } = await supabase
+                .from('vw_op_stop_by_reason')
+                .select('tipo_parada_id, tempo_parado_seg')
+                .eq('machine_id', selectedMachine);
 
-            let totalStopTime = 0;
             const stopsByType: Record<string, number> = {};
-
-            if (stops) {
-                stops.forEach((stop: any) => {
-                    const duration = stop.duracao_minutos || 0;
-                    totalStopTime += duration;
-
-                    const stopType = stop.tipos_parada?.nome || 'Outros';
-                    stopsByType[stopType] = (stopsByType[stopType] || 0) + duration;
+            if (stopsByReason) {
+                stopsByReason.forEach((s: any) => {
+                    const key = s.tipo_parada_id || 'Outros';
+                    stopsByType[key] = (stopsByType[key] || 0) + Math.floor((s.tempo_parado_seg || 0) / 60);
                 });
             }
 
