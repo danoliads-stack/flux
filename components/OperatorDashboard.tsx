@@ -133,6 +133,43 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     return `${hours}:${minutes}:${seconds}`;
   };
 
+  const parseCycleTimeToSeconds = (value: unknown): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, value);
+    }
+    if (typeof value !== 'string') return 0;
+
+    const raw = value.trim().toLowerCase();
+    if (!raw) return 0;
+
+    if (raw.includes(':')) {
+      const parts = raw.split(':').map((part) => Number(part.replace(',', '.')));
+      if (parts.some((p) => Number.isNaN(p))) return 0;
+      if (parts.length === 3) {
+        return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+      }
+      if (parts.length === 2) {
+        return Math.max(0, parts[0] * 60 + parts[1]);
+      }
+      return Math.max(0, parts[0]);
+    }
+
+    const normalized = raw.replace(',', '.');
+    const match = normalized.match(/^(\d+(?:\.\d+)?)([a-z]+)?$/);
+    if (!match) {
+      const fallback = Number(normalized);
+      return Number.isFinite(fallback) ? Math.max(0, fallback) : 0;
+    }
+
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount)) return 0;
+    const unit = match[2] || 's';
+    if (unit === 's' || unit === 'sec' || unit === 'secs') return Math.max(0, amount);
+    if (unit === 'm' || unit === 'min' || unit === 'mins') return Math.max(0, amount * 60);
+    if (unit === 'h' || unit === 'hr' || unit === 'hrs') return Math.max(0, amount * 3600);
+    return Math.max(0, amount);
+  };
+
   // Calculate current phase elapsed seconds (for adding to accumulated)
   const currentPhaseSeconds = statusChangeAt
     ? Math.max(0, Math.floor((Date.now() - new Date(statusChangeAt).getTime()) / 1000))
@@ -163,7 +200,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // const [totalProduced, setTotalProduced] = useState(0); // REMOVED
   // const [totalScrap, setTotalScrap] = useState(0); // REMOVED
   const [opQuantity, setOpQuantity] = useState(0);
-  const [estimatedTime, setEstimatedTime] = useState('--:--');
+  const targetQuantity = opQuantity || meta || 0;
+  const progressPercent = targetQuantity > 0 ? (totalProduced / targetQuantity) * 100 : 0;
+  const currentRunSeconds = accumulatedProductionTime + (opState === 'PRODUCAO' ? currentPhaseSeconds : 0);
+  const avgSecondsPerUnit = totalProduced > 0 ? currentRunSeconds / totalProduced : 0;
+  const estimatedTotalSeconds = targetQuantity > 0 && avgSecondsPerUnit > 0 ? avgSecondsPerUnit * targetQuantity : 0;
+  const estimatedRemainingSeconds = estimatedTotalSeconds > 0
+    ? Math.max(0, estimatedTotalSeconds - currentRunSeconds)
+    : 0;
   const [operatorShiftProduction, setOperatorShiftProduction] = useState(0);
 
 
@@ -180,20 +224,69 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // OEE States
   const [cycleTime, setCycleTime] = useState(0);
   const [calculatedOEE, setCalculatedOEE] = useState(0);
+  const [oeeGoal, setOeeGoal] = useState(95);
+  const isOeeOnTarget = calculatedOEE >= oeeGoal;
 
   // Calculate OEE Effect
   useEffect(() => {
+    const phaseSeconds = statusChangeAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(statusChangeAt).getTime()) / 1000))
+      : 0;
+    const runSeconds = accumulatedProductionTime + (opState === 'PRODUCAO' ? phaseSeconds : 0);
+    const stopSeconds = accumulatedStopTime + (opState === 'PARADA' ? phaseSeconds : 0);
+    const setupSeconds = accumulatedSetupTime + (opState === 'SETUP' ? phaseSeconds : 0);
+    const totalSeconds = runSeconds + stopSeconds + setupSeconds;
+
     // Avoid division by zero
-    if (accumulatedProductionTime > 0 && cycleTime > 0) {
+    if (runSeconds > 0 && cycleTime > 0) {
       // OEE = (Total Produced * Ideal Cycle Time) / Run Time
       // Result is a percentage (0-100+)
       const theoreticalTime = totalProduced * cycleTime;
-      const efficiency = (theoreticalTime / accumulatedProductionTime) * 100;
+      const efficiency = (theoreticalTime / runSeconds) * 100;
       setCalculatedOEE(Math.min(999, Math.max(0, efficiency))); // Cap at sensible limits if needed, but allow over-performance
-    } else if (accumulatedProductionTime === 0 && totalProduced === 0) {
-      setCalculatedOEE(0); // Start at 0
+    } else if (totalSeconds > 0) {
+      const availability = (runSeconds / totalSeconds) * 100;
+      const totalProducedWithScrap = totalProduced + totalScrap;
+      const quality = totalProducedWithScrap > 0 ? (totalProduced / totalProducedWithScrap) * 100 : 100;
+      const operatingMinutes = runSeconds / 60;
+      const throughputPerMinute = operatingMinutes > 0 ? totalProduced / operatingMinutes : 0;
+      const performance = Math.min(100, throughputPerMinute * 100);
+      const oeeValue = (availability / 100) * (quality / 100) * (performance / 100) * 100;
+      setCalculatedOEE(Number.isFinite(oeeValue) ? oeeValue : 0);
+    } else {
+      setCalculatedOEE(0);
     }
-  }, [accumulatedProductionTime, totalProduced, cycleTime]);
+  }, [
+    accumulatedProductionTime,
+    accumulatedStopTime,
+    accumulatedSetupTime,
+    statusChangeAt,
+    opState,
+    totalProduced,
+    totalScrap,
+    cycleTime
+  ]);
+
+  useEffect(() => {
+    if (!machineId) return;
+    const loadGoal = async () => {
+      const { data, error } = await supabase
+        .from('maquinas')
+        .select('oee_meta')
+        .eq('id', machineId)
+        .maybeSingle();
+      if (!error && data?.oee_meta !== null && data?.oee_meta !== undefined) {
+        const parsed = Number(data.oee_meta);
+        if (!Number.isNaN(parsed)) {
+          const clamped = Math.max(0, Math.min(100, parsed));
+          setOeeGoal(clamped);
+          return;
+        }
+      }
+    };
+
+    loadGoal();
+  }, [machineId]);
 
   // Checklist states
   const [sequencedOPs, setSequencedOPs] = useState<SequencedOP[]>([]);
@@ -542,14 +635,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     if (opData) {
       setOpQuantity(opData.quantidade_meta || 0);
-      setCycleTime(Number(opData.ciclo_estimado) || 0);
-
-      const remainingQty = Math.max(0, (opData.quantidade_meta || 0) - (summary?.quantidade_produzida || 0));
-      const totalSecondsRemaining = remainingQty * (Number(opData.ciclo_estimado) || 0);
-
-      const hours = Math.floor(totalSecondsRemaining / 3600);
-      const minutes = Math.floor((totalSecondsRemaining % 3600) / 60);
-      setEstimatedTime(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
+      const parsedCycleTime = parseCycleTimeToSeconds(opData.ciclo_estimado);
+      setCycleTime(parsedCycleTime);
 
       setProductInfo({
         nome: opData.nome_produto,
@@ -1430,9 +1517,12 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             <span className="material-icons-outlined text-6xl">flag</span>
           </div>
           <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Meta da OP (UN)</div>
-          <div className="text-4xl md:text-5xl font-display font-bold text-text-main-dark mb-1">{opId ? (opQuantity || meta || 0) : 0}</div>
+          <div className="text-4xl md:text-5xl font-display font-bold text-text-main-dark mb-1">{opId ? targetQuantity : 0}</div>
           <div className="text-xs text-text-sub-dark">
-            Tempo estimado: <strong className="text-primary">{opId ? estimatedTime : '--:--'}</strong>
+            Tempo usado: <strong className="text-primary">{opId ? formatSeconds(currentRunSeconds) : '--:--'}</strong>
+          </div>
+          <div className="text-xs text-text-sub-dark mt-1">
+            Falta: <strong className="text-primary">{opId && estimatedTotalSeconds > 0 ? formatSeconds(estimatedRemainingSeconds).slice(0, 5) : '--:--'}</strong>
           </div>
         </div>
 
@@ -1445,9 +1535,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             {totalProduced}
           </div>
           <div className="text-xs font-bold text-secondary">
-            {opQuantity > 0 ? `${((totalProduced / opQuantity) * 100).toFixed(1)}% concluÃ­do` : '0% progresso'}
+            {targetQuantity > 0 ? `${progressPercent.toFixed(1)}% concluido` : '0% progresso'}
           </div>
-          <div className="text-xs text-text-sub-dark mt-1">Faltam: {Math.max(0, (opQuantity || meta) - totalProduced)} peÃ§as</div>
+          <div className="text-xs text-text-sub-dark mt-1">Faltam: {Math.max(0, targetQuantity - totalProduced)} pecas</div>
         </div>
 
         <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group">
@@ -1459,26 +1549,30 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="text-xs font-bold text-secondary">
             {totalProduced > 0 ? `${((totalScrap / (totalProduced + totalScrap)) * 100).toFixed(1)}% taxa` : '0% taxa'}
           </div>
-          <div className="text-xs text-text-sub-dark mt-1">{totalScrap === 0 ? 'Dentro do limite' : 'AtenÃ§Ã£o'}</div>
+          <div className="text-xs text-text-sub-dark mt-1">{totalScrap === 0 ? 'Dentro do limite' : 'Atenção'}</div>
         </div>
 
-        <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group">
+        <div className={`bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group ${isOeeOnTarget ? 'border-green-500/30' : 'border-red-500/30'}`}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <span className="material-icons-outlined text-6xl">trending_up</span>
+            <span className={`material-icons-outlined text-6xl ${isOeeOnTarget ? 'text-green-500' : 'text-red-500'}`}>trending_up</span>
           </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">OEE (EficiÃªncia)</div>
-          <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-500 ${calculatedOEE < 85 ? 'text-danger' : 'text-warning'}`}>
+          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">OEE (Eficiência)</div>
+          <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-500 ${isOeeOnTarget ? 'text-green-500' : 'text-red-500'}`}>
             {calculatedOEE.toFixed(1)}%
           </div>
-          <div className="text-xs font-bold text-secondary">Live feed</div>
-          <div className="text-xs text-text-sub-dark mt-1">Meta de OEE: 95%</div>
+          <div className={`text-xs font-bold ${isOeeOnTarget ? 'text-green-400' : 'text-red-400'}`}>{isOeeOnTarget ? 'Meta atingida' : 'Abaixo da meta'}</div>
+          <div className="text-xs text-text-sub-dark mt-1">Meta de OEE: {oeeGoal}%</div>
+          {cycleTime <= 0 && (
+            <div className="text-[10px] text-warning mt-1">Ciclo estimado nao definido</div>
+          )}
+ 
         </div>
 
         <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group border-l-primary/30">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-icons-outlined text-6xl text-primary">person</span>
           </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Sua ProduÃ§Ã£o (Turno)</div>
+          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Sua Produção (Turno)</div>
           <div className="text-4xl md:text-5xl font-display font-bold text-primary mb-1">{operatorShiftProduction}</div>
           <div className="text-xs font-bold text-secondary capitalize">{shiftName?.toLowerCase() || 'Turno atual'}</div>
           <div className="text-xs text-text-sub-dark mt-1">Total acumulado hoje</div>
@@ -2000,6 +2094,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 };
 
 export default OperatorDashboard;
+
+
 
 
 

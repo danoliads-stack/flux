@@ -55,6 +55,7 @@ export interface MachineData {
   data_emissao?: string; // For sorting
   realized?: number;
   oee?: number;
+  oee_meta?: number;
   stopReason?: string;
   status_change_at?: string;
   ordens_producao?: { codigo: string } | null;

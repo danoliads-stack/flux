@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { MachineStatus, MachineData } from '../types';
 import { supabase } from '../supabase';
 
@@ -209,6 +209,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const [machineSessionMap, setMachineSessionMap] = useState<Map<string, string>>(new Map());
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
   const [oeeGlobal, setOeeGlobal] = useState(0);
+  const [oeeGoalInputs, setOeeGoalInputs] = useState<Record<string, string>>({});
+  const oeeGoalSaveTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [machineOeeMap, setMachineOeeMap] = useState<Map<string, number>>(new Map());
 
   // NOVOS ESTADOS
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>(null);
@@ -227,9 +230,82 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const [historyRecords, setHistoryRecords] = useState<ProductionHistoryItem[]>([]);
 
   // Configurações
-  const OEE_GOAL = 80; // Meta OEE
+  const OEE_GOAL = 80; // Meta OEE (fallback)
   const SCRAP_LIMIT = 5; // Limite de refugo em %
   const STOP_ALERT_MINUTES = 10; // Minutos para alerta de parada
+
+  const getMachineOeeGoal = useCallback((machine: MachineData): number => {
+    const raw = oeeGoalInputs[machine.id];
+    const parsed = Number(raw);
+    const fallback = Number(machine.oee_meta ?? OEE_GOAL);
+    const value = Number.isNaN(parsed) ? fallback : parsed;
+    return Math.max(0, Math.min(100, value));
+  }, [oeeGoalInputs, OEE_GOAL]);
+
+  const persistMachineOeeGoal = useCallback(async (machineId: string, goal: number) => {
+    const { error } = await supabase
+      .from('maquinas')
+      .update({ oee_meta: goal })
+      .eq('id', machineId);
+    if (error) {
+      console.error('Erro ao salvar meta de OEE:', error);
+    }
+  }, []);
+
+  const fetchMachineOee = useCallback(async () => {
+    if (!machines.length) {
+      setMachineOeeMap(new Map());
+      return;
+    }
+
+    const opIds = machines.map((m) => m.op_atual_id).filter((id): id is string => !!id);
+    if (!opIds.length) {
+      setMachineOeeMap(new Map());
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('op_summary')
+      .select('op_id, machine_id, quantidade_produzida, quantidade_refugo, tempo_rodando_seg, tempo_parado_seg, tempo_setup_seg')
+      .in('op_id', opIds);
+
+    if (error || !data) {
+      setMachineOeeMap(new Map());
+      return;
+    }
+
+    const nextMap = new Map<string, number>();
+    data.forEach((row: any) => {
+      const machineId = row.machine_id;
+      if (!machineId) return;
+
+      const produced = row.quantidade_produzida || 0;
+      const scrap = row.quantidade_refugo || 0;
+      const runSeconds = row.tempo_rodando_seg || 0;
+      const stopSeconds = row.tempo_parado_seg || 0;
+      const setupSeconds = row.tempo_setup_seg || 0;
+      const totalSeconds = runSeconds + stopSeconds + setupSeconds;
+
+      const availability = totalSeconds > 0 ? (runSeconds / totalSeconds) * 100 : 0;
+      const totalProduced = produced + scrap;
+      const quality = totalProduced > 0 ? (produced / totalProduced) * 100 : 100;
+      const operatingMinutes = runSeconds / 60;
+      const throughputPerMinute = operatingMinutes > 0 ? produced / operatingMinutes : 0;
+      const performance = Math.min(100, throughputPerMinute * 100);
+      const oeeValue = (availability / 100) * (quality / 100) * (performance / 100) * 100;
+
+      nextMap.set(machineId, Number.isFinite(oeeValue) ? oeeValue : 0);
+    });
+
+    setMachineOeeMap(nextMap);
+  }, [machines, machineOeeMap, getMachineOeeGoal]);
+
+  useEffect(() => {
+    return () => {
+      oeeGoalSaveTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      oeeGoalSaveTimeoutsRef.current.clear();
+    };
+  }, []);
 
   // Find current turno based on current time
   useEffect(() => {
@@ -269,6 +345,22 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     };
     findCurrentTurno();
   }, []);
+
+  useEffect(() => {
+    setOeeGoalInputs((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      machines.forEach((machine) => {
+        const base = Number(machine.oee_meta ?? OEE_GOAL);
+        const clamped = Number.isNaN(base) ? OEE_GOAL : Math.max(0, Math.min(100, base));
+        if (next[machine.id] !== String(clamped)) {
+          next[machine.id] = String(clamped);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [machines, OEE_GOAL]);
 
   // Fetch shift data when turno is identified
   const fetchShiftData = useCallback(async () => {
@@ -431,14 +523,24 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
 
   useEffect(() => {
     fetchShiftData();
+    fetchMachineOee();
     const channel = supabase
       .channel('shift-production-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'registros_producao' }, () => fetchShiftData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordens_producao' }, () => fetchShiftData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maquinas' }, () => fetchShiftData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registros_producao' }, () => {
+        fetchShiftData();
+        fetchMachineOee();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordens_producao' }, () => {
+        fetchShiftData();
+        fetchMachineOee();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maquinas' }, () => {
+        fetchShiftData();
+        fetchMachineOee();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchShiftData]);
+  }, [fetchShiftData, fetchMachineOee]);
 
   useEffect(() => {
     const tick = setInterval(() => setNowTimestamp(Date.now()), 1000);
@@ -494,14 +596,15 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       }
 
       // OEE abaixo da meta
-      const oeeValue = m.oee ?? 0;
-      if (oeeValue > 0 && oeeValue < OEE_GOAL * 0.7) {
+      const oeeValue = machineOeeMap.get(m.id) ?? (m.oee ?? 0);
+      const machineGoal = getMachineOeeGoal(m);
+      if (oeeValue > 0 && oeeValue < machineGoal * 0.7) {
         items.push({
           id: `oee-${m.id}`,
           type: 'low_oee',
           machineName: m.nome,
           machineId: m.id,
-          detail: `OEE ${oeeValue.toFixed(0)}% (meta ${OEE_GOAL}%)`,
+          detail: `OEE ${oeeValue.toFixed(0)}% (meta ${machineGoal}%)`,
           severity: 2
         });
       }
@@ -579,7 +682,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
           return priority(a.status_atual) - priority(b.status_atual);
         }
         case 'oee': {
-          return (a.oee || 0) - (b.oee || 0); // Menor OEE primeiro
+          const aOee = machineOeeMap.get(a.id) ?? (a.oee ?? 0);
+          const bOee = machineOeeMap.get(b.id) ?? (b.oee ?? 0);
+          return aOee - bOee; // Menor OEE primeiro
         }
         case 'stopTime': {
           const getStopTime = (m: MachineData) => {
@@ -598,7 +703,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
           return 0;
       }
     });
-  }, [machines, statusFilter, sortType]);
+  }, [machines, statusFilter, sortType, machineOeeMap]);
 
   // Handler para click nos cards de status
   const handleStatusCardClick = (filter: StatusFilterType) => {
@@ -834,7 +939,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 // Safe value access
                 const machineLiveProd = machineProductionMap.get(m.id);
                 const productionCount = machineLiveProd !== undefined ? machineLiveProd : (m.realized ?? 0);
-                const oeeValue = m.oee ?? 0;
+                const oeeValue = machineOeeMap.get(m.id) ?? (m.oee ?? 0);
+                const machineGoal = getMachineOeeGoal(m);
 
                 // NOVO: Dados de refugo da máquina
                 const scrapInfo = machineScrapMap.get(m.id);
@@ -842,7 +948,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
 
                 // NOVO: Verificar se deve mostrar alerta
                 const showAlert = (
-                  oeeValue < OEE_GOAL * 0.7 ||
+                  oeeValue < machineGoal * 0.7 ||
                   scrapRate > SCRAP_LIMIT ||
                   (isStopped && !m.stopReason && m.status_change_at &&
                     (Date.now() - new Date(m.status_change_at).getTime()) > STOP_ALERT_MINUTES * 60000)
@@ -912,6 +1018,42 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       <div className="text-right">
                         <div className="text-xs font-bold text-white tabular-nums bg-white/5 px-2 py-1 rounded shadow-inner border border-white/5">
                           {oeeValue.toFixed(0)}% OEE
+                        </div>
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <span className="text-[9px] uppercase tracking-widest text-text-sub-dark">Meta</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={oeeGoalInputs[m.id] ?? ''}
+                            onChange={(e) => {
+                              const nextValue = e.target.value;
+                              setOeeGoalInputs((prev) => ({ ...prev, [m.id]: nextValue }));
+
+                              const existing = oeeGoalSaveTimeoutsRef.current.get(m.id);
+                              if (existing) {
+                                clearTimeout(existing);
+                              }
+
+                              const parsed = Number(nextValue);
+                              if (Number.isNaN(parsed)) {
+                                return;
+                              }
+
+                              const nextGoal = Math.max(0, Math.min(100, parsed));
+                              const timeoutId = setTimeout(() => {
+                                persistMachineOeeGoal(m.id, nextGoal);
+                              }, 500);
+                              oeeGoalSaveTimeoutsRef.current.set(m.id, timeoutId);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="w-16 bg-background-dark border border-border-dark rounded-md px-2 py-0.5 text-[10px] text-white text-right outline-none focus:border-primary"
+                          />
                         </div>
                       </div>
                     </div>
