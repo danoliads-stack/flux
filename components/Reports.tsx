@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 
@@ -16,14 +16,14 @@ interface OperatorLog {
     operator_id?: string;
 }
 
-interface ChecklistEvent {
-    id: string;
-    checklist_nome: string;
-    status: 'ok' | 'problema' | 'nao_realizado';
-    observacao?: string;
-    created_at: string;
-    operator_name?: string;
-    photos?: string[]; // Assuming we store photo URLs somewhere or mocked for now
+interface OpSummary {
+    op_id: string;
+    op_codigo: string;
+    quantidade_produzida: number;
+    quantidade_refugo: number;
+    tempo_rodando_seg: number;
+    tempo_setup_seg: number;
+    tempo_parado_seg: number;
 }
 
 const Reports: React.FC = () => {
@@ -34,8 +34,8 @@ const Reports: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     // Data States
-    const [checklistEvents, setChecklistEvents] = useState<ChecklistEvent[]>([]);
     const [operatorLogs, setOperatorLogs] = useState<OperatorLog[]>([]);
+    const [opSummaries, setOpSummaries] = useState<OpSummary[]>([]);
     const [topStops, setTopStops] = useState<Array<[string, number]>>([]);
     const [stats, setStats] = useState({
         availability: 0,
@@ -43,7 +43,10 @@ const Reports: React.FC = () => {
         performance: 0,
         oee: 0,
         totalProduction: 0,
-        totalScrap: 0
+        totalScrap: 0,
+        totalSetupSeconds: 0,
+        totalProductionSeconds: 0,
+        totalStopSeconds: 0
     });
 
     useEffect(() => {
@@ -64,6 +67,13 @@ const Reports: React.FC = () => {
         }
     };
 
+    const formatSeconds = (totalSeconds: number) => {
+        const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+        const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+        const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+        return `${hours}:${minutes}:${seconds}`;
+    };
+
     const fetchReportData = async () => {
         setLoading(true);
         try {
@@ -82,36 +92,17 @@ const Reports: React.FC = () => {
             const startISO = startDate.toISOString();
             const endISO = endDate.toISOString();
 
-            // 1. Fetch Checklists
-            const { data: checklists } = await supabase
-                .from('checklist_eventos')
-                .select('*, checklists(nome), operadores(nome)')
-                .eq('maquina_id', selectedMachine)
-                .gte('created_at', startISO)
-                .lte('created_at', endISO)
-                .order('created_at', { ascending: false })
-                .limit(50);
-
-            if (checklists) {
-                setChecklistEvents(checklists.map((c: any) => ({
-                    id: c.id,
-                    checklist_nome: c.checklists?.nome || 'Unknown',
-                    status: c.status,
-                    observacao: c.observacao,
-                    created_at: c.created_at,
-                    operator_name: c.operadores?.nome || 'Unknown Operator'
-                })));
-            }
-
-            // 2. Fetch Production/Stops via snapshots and views
+            // 1. Fetch Production/Stops via snapshots and views
             const { data: summary } = await supabase
                 .from('op_summary')
-                .select('quantidade_produzida, quantidade_refugo, tempo_parado_seg')
+                .select('op_id, quantidade_produzida, quantidade_refugo, tempo_parado_seg, tempo_setup_seg, tempo_rodando_seg, ordens_producao(codigo)')
                 .eq('machine_id', selectedMachine);
 
             const totalProduction = (summary || []).reduce((sum, s: any) => sum + (s.quantidade_produzida || 0), 0);
             const totalScrap = (summary || []).reduce((sum, s: any) => sum + (s.quantidade_refugo || 0), 0);
             const totalStopSeconds = (summary || []).reduce((sum, s: any) => sum + (s.tempo_parado_seg || 0), 0);
+            const totalSetupSeconds = (summary || []).reduce((sum, s: any) => sum + (s.tempo_setup_seg || 0), 0);
+            const totalProductionSeconds = (summary || []).reduce((sum, s: any) => sum + (s.tempo_rodando_seg || 0), 0);
             const totalStopTime = Math.floor(totalStopSeconds / 60); // minutos
 
             const { data: stopsByReason } = await supabase
@@ -119,10 +110,17 @@ const Reports: React.FC = () => {
                 .select('tipo_parada_id, tempo_parado_seg')
                 .eq('machine_id', selectedMachine);
 
+            const { data: stopTypes } = await supabase
+                .from('tipos_parada')
+                .select('id, nome');
+
+            const stopTypeMap = new Map<string, string>();
+            (stopTypes || []).forEach((t: any) => stopTypeMap.set(t.id, t.nome));
+
             const stopsByType: Record<string, number> = {};
             if (stopsByReason) {
                 stopsByReason.forEach((s: any) => {
-                    const key = s.tipo_parada_id || 'Outros';
+                    const key = stopTypeMap.get(s.tipo_parada_id) || s.tipo_parada_id || 'Outros';
                     stopsByType[key] = (stopsByType[key] || 0) + Math.floor((s.tempo_parado_seg || 0) / 60);
                 });
             }
@@ -139,7 +137,7 @@ const Reports: React.FC = () => {
                 ? (totalProduction / totalProduced) * 100
                 : 100;
 
-            // Performance: aproximaÇõÇœ simples usando throughput por minuto (base 1 un/min se nÄo houver meta)
+            // Performance: aproximação simples usando throughput por minuto (base 1 un/min se não houver meta)
             const operatingMinutes = Math.max(0, periodMinutes - totalStopTime);
             const throughputPerMinute = operatingMinutes > 0 ? totalProduction / operatingMinutes : 0;
             const performance = Math.min(100, throughputPerMinute * 100);
@@ -152,7 +150,10 @@ const Reports: React.FC = () => {
                 performance,
                 oee,
                 totalProduction,
-                totalScrap
+                totalScrap,
+                totalSetupSeconds,
+                totalProductionSeconds,
+                totalStopSeconds
             });
 
             // Set stops for display (sorted by duration)
@@ -161,20 +162,33 @@ const Reports: React.FC = () => {
                 .slice(0, 5);
             setTopStops(sortedStops);
 
-            // 4. Sessões de operadores no período (usa op_operadores para rastreabilidade real)
+            const mappedSummaries: OpSummary[] = (summary || []).map((s: any) => ({
+                op_id: s.op_id,
+                op_codigo: s.ordens_producao?.codigo || 'OP',
+                quantidade_produzida: s.quantidade_produzida || 0,
+                quantidade_refugo: s.quantidade_refugo || 0,
+                tempo_rodando_seg: s.tempo_rodando_seg || 0,
+                tempo_setup_seg: s.tempo_setup_seg || 0,
+                tempo_parado_seg: s.tempo_parado_seg || 0
+            }));
+
+            setOpSummaries(mappedSummaries);
+
+            // 2. Sessões de operadores no período (usa op_operator_sessions alinhado à troca de operador)
             const { data: sessionLogs } = await supabase
-                .from('op_operadores')
-                .select('operador_id, inicio, fim, operadores(nome, turno)')
-                .eq('maquina_id', selectedMachine)
-                .gte('inicio', startISO)
-                .lte('inicio', endISO);
+                .from('op_operator_sessions')
+                .select('operator_id, started_at, ended_at, operadores(nome), turnos(nome), ordens_producao!inner(maquina_id)')
+                .eq('ordens_producao.maquina_id', selectedMachine)
+                .gte('started_at', startISO)
+                .lte('started_at', endISO)
+                .order('started_at', { ascending: false });
 
             const mappedSessions: OperatorLog[] = (sessionLogs || []).map((s: any) => ({
-                operator_id: s.operador_id,
+                operator_id: s.operator_id,
                 operator_name: s.operadores?.nome || 'Operador',
-                shift: s.operadores?.turno || 'N/A',
-                login_time: s.inicio,
-                logout_time: s.fim || undefined
+                shift: s.turnos?.nome || 'N/A',
+                login_time: s.started_at,
+                logout_time: s.ended_at || undefined
             }));
 
             setOperatorLogs(mappedSessions);
@@ -194,9 +208,9 @@ const Reports: React.FC = () => {
                 <div>
                     <h1 className="text-3xl font-display font-bold text-white uppercase tracking-tight flex items-center gap-3">
                         <span className="material-icons-outlined text-primary text-4xl">analytics</span>
-                        Relatórios Detalhados
+                        Relatórios de Produção
                     </h1>
-                    <p className="text-gray-400 mt-1">Histórico operacional e análise de performance</p>
+                    <p className="text-gray-400 mt-1">Métricas de produção e desempenho por OP</p>
                 </div>
 
                 <div className="flex items-center gap-3 bg-[#15181e] p-2 rounded-xl border border-border-dark">
@@ -251,25 +265,25 @@ const Reports: React.FC = () => {
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div className="bg-[#15181e] border border-border-dark rounded-xl p-5 hover:border-primary/30 transition-all group">
+                <div className={`bg-[#15181e] border border-border-dark rounded-xl p-5 transition-all group ${stats.oee < 0 ? 'hover:border-red-500/30' : 'hover:border-primary/30'}`}>
                     <div className="flex justify-between items-start mb-2">
                         <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">OEE Global</span>
-                        <span className="material-icons-outlined text-primary opacity-50 group-hover:opacity-100 transition-opacity">donut_large</span>
+                        <span className={`material-icons-outlined opacity-50 group-hover:opacity-100 transition-opacity ${stats.oee < 0 ? 'text-red-500' : 'text-primary'}`}>donut_large</span>
                     </div>
-                    <div className="text-3xl font-bold text-white">{stats.oee.toFixed(1)}%</div>
+                    <div className={`text-3xl font-bold ${stats.oee < 0 ? 'text-red-500' : 'text-white'}`}>{stats.oee.toFixed(1)}%</div>
                     <div className="w-full bg-gray-800 h-1.5 mt-3 rounded-full overflow-hidden">
-                        <div className="bg-primary h-full rounded-full" style={{ width: `${stats.oee}%` }}></div>
+                        <div className={`${stats.oee < 0 ? 'bg-red-500' : 'bg-primary'} h-full rounded-full`} style={{ width: `${Math.max(0, stats.oee)}%` }}></div>
                     </div>
                 </div>
 
-                <div className="bg-[#15181e] border border-border-dark rounded-xl p-5 hover:border-green-500/30 transition-all group">
+                <div className={`bg-[#15181e] border border-border-dark rounded-xl p-5 transition-all group ${stats.availability < 0 ? 'hover:border-red-500/30' : 'hover:border-green-500/30'}`}>
                     <div className="flex justify-between items-start mb-2">
                         <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Disponibilidade</span>
-                        <span className="material-icons-outlined text-green-500 opacity-50 group-hover:opacity-100 transition-opacity">timer</span>
+                        <span className={`material-icons-outlined opacity-50 group-hover:opacity-100 transition-opacity ${stats.availability < 0 ? 'text-red-500' : 'text-green-500'}`}>timer</span>
                     </div>
-                    <div className="text-3xl font-bold text-white">{stats.availability.toFixed(1)}%</div>
+                    <div className={`text-3xl font-bold ${stats.availability < 0 ? 'text-red-500' : 'text-white'}`}>{stats.availability.toFixed(1)}%</div>
                     <div className="w-full bg-gray-800 h-1.5 mt-3 rounded-full overflow-hidden">
-                        <div className="bg-green-500 h-full rounded-full" style={{ width: `${stats.availability}%` }}></div>
+                        <div className={`${stats.availability < 0 ? 'bg-red-500' : 'bg-green-500'} h-full rounded-full`} style={{ width: `${Math.max(0, stats.availability)}%` }}></div>
                     </div>
                 </div>
 
@@ -298,15 +312,15 @@ const Reports: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
 
-                {/* Left Column: Checklist History */}
+                {/* Left Column: OP Summary */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-[#15181e] border border-border-dark rounded-xl overflow-hidden flex flex-col h-full">
                         <div className="p-4 border-b border-border-dark bg-[#1a1d24] flex justify-between items-center">
                             <h3 className="font-bold text-white flex items-center gap-2">
-                                <span className="material-icons-outlined text-gray-400">playlist_add_check</span>
-                                Histórico de Checklists
+                                <span className="material-icons-outlined text-gray-400">summarize</span>
+                                Resumo de OPs
                             </h3>
-                            <span className="text-xs text-gray-500 uppercase font-bold bg-black/30 px-2 py-1 rounded">Últimos Lançamentos</span>
+                            <span className="text-xs text-gray-500 uppercase font-bold bg-black/30 px-2 py-1 rounded">Totais por OP</span>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar max-h-[500px]">
@@ -315,53 +329,42 @@ const Reports: React.FC = () => {
                                     <span className="material-icons-outlined animate-spin text-2xl mb-2">sync</span>
                                     <p>Carregando dados...</p>
                                 </div>
-                            ) : checklistEvents.length === 0 ? (
+                            ) : opSummaries.length === 0 ? (
                                 <div className="text-center py-12 text-gray-500 border border-dashed border-gray-800 rounded-lg">
-                                    Nenhum checklist encontrado para este período.
+                                    Nenhuma OP encontrada para esta máquina.
                                 </div>
                             ) : (
-                                checklistEvents.map(event => (
-                                    <div key={event.id} className="bg-[#0b0c10] border border-border-dark rounded-lg p-4 hover:border-gray-600 transition-all">
+                                opSummaries.map((op) => (
+                                    <div key={op.op_id} className="bg-[#0b0c10] border border-border-dark rounded-lg p-4 hover:border-gray-600 transition-all">
                                         <div className="flex justify-between items-start mb-3">
                                             <div>
-                                                <h4 className="font-bold text-white text-sm">{event.checklist_nome}</h4>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-xs text-gray-500 flex items-center gap-1">
-                                                        <span className="material-icons-outlined text-[10px]">person</span>
-                                                        {event.operator_name}
-                                                    </span>
-                                                    <span className="text-xs text-gray-600">•</span>
-                                                    <span className="text-xs text-gray-500 font-mono">
-                                                        {new Date(event.created_at).toLocaleString('pt-BR')}
-                                                    </span>
-                                                </div>
+                                                <h4 className="font-bold text-white text-sm">{op.op_codigo}</h4>
+                                                <div className="text-xs text-gray-500 mt-1">Tempo total: {formatSeconds(op.tempo_setup_seg + op.tempo_rodando_seg + op.tempo_parado_seg)}</div>
                                             </div>
-                                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase border ${event.status === 'ok' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                                                event.status === 'problema' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                                                    'bg-gray-500/10 text-gray-500 border-gray-500/20'
-                                                }`}>
-                                                {event.status === 'ok' ? 'OK' : event.status === 'problema' ? 'Problema' : 'Não Realizado'}
-                                            </span>
+                                            <div className="text-right">
+                                                <div className="text-xs text-gray-400 uppercase font-bold">Produzido</div>
+                                                <div className="text-sm font-mono text-white">{op.quantidade_produzida} un</div>
+                                            </div>
                                         </div>
 
-                                        {(event.observacao || event.status === 'problema') && (
-                                            <div className="bg-[#15181e] p-3 rounded border border-white/5 mt-2">
-                                                {event.observacao && (
-                                                    <p className="text-sm text-gray-300 italic mb-2">"{event.observacao}"</p>
-                                                )}
-                                                {/* Mock Photos */}
-                                                {event.status === 'problema' && (
-                                                    <div className="flex gap-2 mt-2">
-                                                        <div className="w-16 h-16 bg-gray-800 rounded border border-gray-700 flex items-center justify-center cursor-pointer hover:bg-gray-700 transition-colors">
-                                                            <span className="material-icons-outlined text-gray-500 text-lg">image</span>
-                                                        </div>
-                                                        <div className="w-16 h-16 bg-gray-800 rounded border border-gray-700 flex items-center justify-center cursor-pointer hover:bg-gray-700 transition-colors">
-                                                            <span className="material-icons-outlined text-gray-500 text-lg">image</span>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                        <div className="grid grid-cols-3 gap-3 text-xs text-gray-400">
+                                            <div>
+                                                <div className="uppercase font-bold text-[10px]">Setup</div>
+                                                <div className="font-mono text-white">{formatSeconds(op.tempo_setup_seg)}</div>
                                             </div>
-                                        )}
+                                            <div>
+                                                <div className="uppercase font-bold text-[10px]">Produção</div>
+                                                <div className="font-mono text-white">{formatSeconds(op.tempo_rodando_seg)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="uppercase font-bold text-[10px]">Parada</div>
+                                                <div className="font-mono text-white">{formatSeconds(op.tempo_parado_seg)}</div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                                            <span>Refugo: <span className="text-red-400 font-mono">{op.quantidade_refugo} un</span></span>
+                                            <span>Eficiência: <span className="text-green-400 font-mono">{op.quantidade_produzida > 0 ? (((op.quantidade_produzida) / (op.quantidade_produzida + op.quantidade_refugo)) * 100).toFixed(1) : '0.0'}%</span></span>
+                                        </div>
                                     </div>
                                 ))
                             )}
@@ -395,7 +398,7 @@ const Reports: React.FC = () => {
                                             <div className="text-xs text-gray-500">{op.shift ? `Turno ${op.shift}` : 'Turno N/A'}</div>
                                             <div className="text-[10px] text-gray-600 font-mono">
                                                 {new Date(op.login_time).toLocaleString('pt-BR')} {' '}
-                                                {op.logout_time ? `– ${new Date(op.logout_time).toLocaleString('pt-BR')}` : '(aberta)'}
+                                                {op.logout_time ? `- ${new Date(op.logout_time).toLocaleString('pt-BR')}` : '(aberta)'}
                                             </div>
                                         </div>
                                     </div>
@@ -456,3 +459,9 @@ const Reports: React.FC = () => {
 };
 
 export default Reports;
+
+
+
+
+
+

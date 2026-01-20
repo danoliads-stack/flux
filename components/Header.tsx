@@ -1,4 +1,4 @@
-
+﻿
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { AppUser } from '../types';
@@ -47,7 +47,7 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme, operatorSes
         <div className="flex items-center gap-3 border-l border-border-dark pl-6">
           <div className="text-right hidden sm:block">
             <div className="text-sm font-bold leading-tight uppercase text-white">{user?.name || 'Usuário'}</div>
-            <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">{user?.role || 'GUEST'} • {user?.sector || 'N/A'}</div>
+            <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">{user?.role || 'GUEST'} - {user?.sector || 'N/A'}</div>
             {user?.role === 'OPERATOR' && operatorSessionElapsed && (
               <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">
                 Tempo no posto: {operatorSessionElapsed}
@@ -73,3 +73,5 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme, operatorSes
 };
 
 export default Header;
+
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { UserRole, Permission } from '../types';
 import { supabase } from '../supabase';
 import { useNavigate, useLocation, Link, NavLink } from 'react-router-dom';
@@ -28,10 +28,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }
   const [sectorMachineIds, setSectorMachineIds] = useState<string[] | null>(null);
 
   const fetchNotifications = async () => {
+    const sinceDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+
     const paradasQuery = supabase
       .from('paradas')
       .select('id, motivo, data_inicio, data_fim, created_at, maquinas!inner(nome, setor_id)')
       .is('data_fim', null)
+      .gte('data_inicio', sinceDate)
       .order('data_inicio', { ascending: false })
       .limit(10);
 
@@ -39,6 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }
       .from('chamados_manutencao')
       .select('id, descricao, prioridade, status, data_abertura, maquinas!inner(nome, setor_id)')
       .in('status', ['ABERTO', 'EM_ANDAMENTO'])
+      .gte('data_abertura', sinceDate)
       .order('data_abertura', { ascending: false })
       .limit(10);
 
@@ -60,9 +64,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }
         ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000)
         : 0;
       const type: Notification['type'] = minutesOpen >= 10 ? 'danger' : 'warning';
-      const message = ((p.maquinas as any)?.nome || 'Maquina') +
+      const message = ((p.maquinas as any)?.nome || 'Máquina') +
         ': ' + (p.motivo || 'Sem motivo') +
-        ' (aberta ha ' + minutesOpen + ' min)';
+        ' (aberta há ' + minutesOpen + ' min)';
 
       return {
         id: `stop-${p.id}`,
@@ -85,9 +89,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }
       const priority = (c.prioridade || '').toUpperCase();
       const type: Notification['type'] =
         priority === 'CRITICA' || minutesOpen >= 30 ? 'danger' : 'warning';
-      const message = ((c.maquinas as any)?.nome || 'Maquina') +
-        ': ' + (c.descricao || 'Sem descricao') +
-        ' (aberta ha ' + minutesOpen + ' min)';
+      const message = ((c.maquinas as any)?.nome || 'Máquina') +
+        ': ' + (c.descricao || 'Sem descrição') +
+        ' (aberta há ' + minutesOpen + ' min)';
 
       return {
         id: `maint-${c.id}`,
@@ -175,9 +179,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }
       permission: Permission.VIEW_SUPERVISOR_DASHBOARD
     },
     {
-      id: '/relatorios',
+      id: '/relatorios/producao',
       icon: 'assessment',
-      label: 'Relatórios',
+      label: 'Produção',
       permission: Permission.VIEW_SUPERVISOR_DASHBOARD
     },
     {
@@ -372,7 +376,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }
               {/* Version */}
               <div className="text-center pt-4 border-t border-border-dark">
                 <p className="text-xs text-text-sub-dark">FLUX INSIGHT v1.0.0</p>
-                <p className="text-[10px] text-text-sub-dark mt-1">© 2024 FLUX Industrial</p>
+                <p className="text-[10px] text-text-sub-dark mt-1">(c) 2024 FLUX Industrial</p>
               </div>
             </div>
           </div>
@@ -383,3 +387,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, userPermissions, sectorId }
 };
 
 export default Sidebar;
+
+
+

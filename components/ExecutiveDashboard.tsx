@@ -69,11 +69,23 @@ const ExecutiveDashboard: React.FC = () => {
             const totalScrap = production.reduce((acc, curr) => acc + (curr.quantidade_refugo || 0), 0);
             const scrapRate = totalProduced + totalScrap > 0 ? (totalScrap / (totalProduced + totalScrap)) * 100 : 0;
 
-            // Calculate approx OEE (Mean of machine OEEs)
-            const avgOee = machines.reduce((acc, m) => acc + (m.oee || 0), 0) / (machines.length || 1);
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const periodMinutes = Math.max(1, Math.floor((Date.now() - todayStart.getTime()) / 60000));
+            const stopMinutes = (stops || []).reduce((acc, s) => {
+                const start = s.data_inicio ? new Date(s.data_inicio).getTime() : null;
+                const end = s.data_fim ? new Date(s.data_fim).getTime() : Date.now();
+                if (!start) return acc;
+                return acc + Math.max(0, Math.floor((end - start) / 60000));
+            }, 0);
+            const availability = periodMinutes > 0 ? ((periodMinutes - stopMinutes) / periodMinutes) * 100 : 100;
+            const quality = totalProduced + totalScrap > 0 ? (totalProduced / (totalProduced + totalScrap)) * 100 : 100;
+            const operatingMinutes = Math.max(0, periodMinutes - stopMinutes);
+            const productivity = operatingMinutes > 0 ? Math.min(100, (totalProduced / operatingMinutes) * 100) : 0;
+            const oeeGlobal = (availability / 100) * (quality / 100) * (productivity / 100) * 100;
 
             setKpis([
-                { label: 'OEE Global', value: avgOee.toFixed(1), unit: '%', trend: 'up', trendValue: '+2.1%', icon: 'donut_large', color: 'text-secondary' },
+                { label: 'OEE Global', value: oeeGlobal.toFixed(1), unit: '%', trend: 'up', trendValue: '+2.1%', icon: 'donut_large', color: 'text-secondary' },
                 { label: 'Produção Hoje', value: totalProduced.toLocaleString(), unit: 'un', trend: 'up', trendValue: '+5.4%', icon: 'inventory_2', color: 'text-primary' },
                 { label: 'Máquinas Ativas', value: `${activeCount}/${machines.length}`, unit: '', trend: 'neutral', trendValue: '0', icon: 'precision_manufacturing', color: 'text-blue-400' },
                 { label: 'Taxa de Refugo', value: scrapRate.toFixed(2), unit: '%', trend: scrapRate > 2 ? 'down' : 'up', trendValue: '-0.5%', icon: 'delete_forever', color: scrapRate > 2 ? 'text-danger' : 'text-green-500' }

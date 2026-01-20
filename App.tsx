@@ -1315,6 +1315,11 @@ const App: React.FC = () => {
                   <Reports />
                 </ProtectedRoute>
               } />
+              <Route path="/relatorios/producao" element={
+                <ProtectedRoute user={currentUser} userPermissions={userPermissions}>
+                  <Reports />
+                </ProtectedRoute>
+              } />
 
               <Route path="/admin/insights" element={
                 <ProtectedRoute user={currentUser} permission={Permission.VIEW_SUPERVISOR_DASHBOARD} userPermissions={userPermissions}>

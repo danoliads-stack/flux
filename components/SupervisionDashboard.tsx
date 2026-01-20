@@ -208,6 +208,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const [machineProductionMap, setMachineProductionMap] = useState<Map<string, number>>(new Map());
   const [machineSessionMap, setMachineSessionMap] = useState<Map<string, string>>(new Map());
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
+  const [oeeGlobal, setOeeGlobal] = useState(0);
 
   // NOVOS ESTADOS
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>(null);
@@ -298,8 +299,11 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       .select('quantidade_boa, quantidade_refugo, operador_id, op_id, maquina_id, ordens_producao(codigo), maquinas(nome), operadores(nome)')
       .gte('created_at', turnoStartISO);
 
+    let totalBoas = 0;
+    let totalScrap = 0;
     if (producaoData && producaoData.length > 0) {
-      const totalBoas = producaoData.reduce((acc, r) => acc + (r.quantidade_boa || 0), 0);
+      totalBoas = producaoData.reduce((acc, r) => acc + (r.quantidade_boa || 0), 0);
+      totalScrap = producaoData.reduce((acc, r) => acc + (r.quantidade_refugo || 0), 0);
       setTotalProduzido(totalBoas);
 
       const scrapMap = new Map<string, { opCode: string; machineName: string; scrapQty: number; goodQty: number }>();
@@ -382,6 +386,26 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       setMachineScrapMap(new Map());
     }
 
+    const { data: stopData } = await supabase
+      .from('paradas')
+      .select('data_inicio, data_fim')
+      .gte('data_inicio', turnoStartISO);
+
+    const stopMinutes = (stopData || []).reduce((acc, p) => {
+      const start = p.data_inicio ? new Date(p.data_inicio).getTime() : null;
+      const end = p.data_fim ? new Date(p.data_fim).getTime() : Date.now();
+      if (!start) return acc;
+      return acc + Math.max(0, Math.floor((end - start) / 60000));
+    }, 0);
+
+    const periodMinutes = Math.max(1, Math.floor((Date.now() - turnoStartTime.getTime()) / 60000));
+    const availability = periodMinutes > 0 ? ((periodMinutes - stopMinutes) / periodMinutes) * 100 : 100;
+    const quality = totalBoas + totalScrap > 0 ? (totalBoas / (totalBoas + totalScrap)) * 100 : 100;
+    const operatingMinutes = Math.max(0, periodMinutes - stopMinutes);
+    const productivity = operatingMinutes > 0 ? Math.min(100, (totalBoas / operatingMinutes) * 100) : 0;
+    const oeeValue = (availability / 100) * (quality / 100) * (productivity / 100) * 100;
+    setOeeGlobal(Number.isFinite(oeeValue) ? oeeValue : 0);
+
     const { data: sessionData, error: sessionError } = await supabase
       .from('op_operator_sessions')
       .select('started_at, op_id, ordens_producao(maquina_id)')
@@ -427,9 +451,9 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       stopped: machines.filter(m => m.status_atual === MachineStatus.STOPPED).length,
       maintenance: machines.filter(m => m.status_atual === MachineStatus.MAINTENANCE).length,
       setup: machines.filter(m => m.status_atual === MachineStatus.SETUP).length,
-      totalOee: (machines.reduce((acc, m) => acc + (m.oee || 0), 0) / (machines.length || 1)).toFixed(1)
+      totalOee: oeeGlobal.toFixed(1)
     };
-  }, [machines]);
+  }, [machines, oeeGlobal]);
 
   // NOVO: Gerar itens do painel "Atenção Necessária"
   const attentionItems = useMemo(() => {
