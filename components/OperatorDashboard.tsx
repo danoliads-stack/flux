@@ -196,7 +196,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [productInfo, setProductInfo] = useState<{ nome: string; codigo: string } | null>(null);
 
   // Production stats state
-  const { totalProduced, totalScrap, setProductionData } = useAppStore();
+  const { totalProduced, totalScrap, setProductionData, syncTimers } = useAppStore();
   // const [totalProduced, setTotalProduced] = useState(0); // REMOVED
   // const [totalScrap, setTotalScrap] = useState(0); // REMOVED
   const [opQuantity, setOpQuantity] = useState(0);
@@ -271,7 +271,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if (!machineId) return;
     const loadGoal = async () => {
       const { data, error } = await supabase
-        .from('maquinas')
+        .from('máquinas')
         .select('oee_meta')
         .eq('id', machineId)
         .maybeSingle();
@@ -790,7 +790,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         id: d.id,
         descricao: d.descricao,
         tipo: 'info',
-        autor: 'Operador', // Fallback temporário até resolvermos o join
+        autor: 'Operador', // Fallback temporÃ¡rio até resolvermos o join
         created_at: d.created_at
       })));
     }
@@ -1099,7 +1099,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       )
       .subscribe();
 
-    // 4. Diário
+    // 4. DiÃ¡rio
     const diarySubscription = supabase
       .channel('diario_bordo_eventos_realtime')
       .on(
@@ -1148,7 +1148,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             <span className="material-icons-outlined text-red-500 text-5xl">warning</span>
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h2 className="text-2xl font-display font-bold text-white mb-2">Inconsistência de Estado Detectada</h2>
+            <h2 className="text-2xl font-display font-bold text-white mb-2">InconsistÃªncia de Estado Detectada</h2>
             <p className="text-red-200 opacity-80">
               A máquina está em modo de operação ({opState}), mas não há uma Ordem de Produção (OP) ativa vinculada.
               <br />
@@ -1160,7 +1160,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               onClick={onOpenSetup}
               className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all"
             >
-              Realizar SETUP / Víncular OP
+              Realizar SETUP / VÃ­ncular OP
             </button>
           )}
         </div>
@@ -1212,7 +1212,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     : opState === 'MANUTENCAO' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
                       : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
                 }`}>
-                {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : opState === 'MANUTENCAO' ? 'Manutencao' : 'Aguardando'}
+                {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : opState === 'MANUTENCAO' ? 'Manutenção' : 'Aguardando'}
               </span>
             </div>
 
@@ -1257,10 +1257,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </span>
                   <div>
                     <div className="text-xs font-bold uppercase tracking-wider">
-                      {opState === 'MANUTENCAO' ? 'Manutencao em andamento' : 'Chamar manutencao'}
+                      {opState === 'MANUTENCAO' ? 'Manutenção em andamento' : 'Chamar manutenção'}
                     </div>
                     <div className="text-[10px] text-text-sub-dark">
-                      {opState === 'MANUTENCAO' ? 'Aguardando tecnico' : 'Solicitar tecnico e parar maquina'}
+                      {opState === 'MANUTENCAO' ? 'Aguardando técnico' : 'Solicitar técnico e parar máquina'}
                     </div>
                   </div>
                 </div>
@@ -1284,7 +1284,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   <span className="material-icons-outlined text-primary text-sm">playlist_play</span>
                   <span className="text-white text-xs font-bold uppercase tracking-wider">Fila de Producao</span>
                 </div>
-                <p className="text-[10px] text-text-sub-dark mt-1">Ordem das OPs desta maquina (a atual fica em destaque)</p>
+                <p className="text-[10px] text-text-sub-dark mt-1">Ordem das OPs desta máquina (a atual fica em destaque)</p>
               </div>
             </div>
             <div className="space-y-2">
@@ -1425,7 +1425,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 hover:text-white border border-white/10 rounded-lg transition-all flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10"
               >
                 <span className="material-icons-outlined text-sm">history</span>
-                Historico completo
+                Histórico completo
               </button>
             )}
           </div>
@@ -1453,7 +1453,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               <button
                 onClick={onChangeMachine}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border-dark bg-surface-dark/80 hover:bg-primary/10 hover:border-primary/50 text-text-main-dark/80 hover:text-primary transition-all duration-200 group"
-                title="Voltar para selecao de maquinas"
+                title="Voltar para seleção de máquinas"
               >
                 <span className="material-icons-outlined text-lg text-text-main-dark/70 group-hover:text-primary transition-colors">swap_horiz</span>
                 <span className="text-sm font-semibold hidden md:inline">Trocar Maquina</span>
@@ -1497,7 +1497,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xs uppercase tracking-wider text-text-sub-dark mb-1">Relógio do Sistema</div>
+          <div className="text-xs uppercase tracking-wider text-text-sub-dark mb-1">RelÃ³gio do Sistema</div>
           <div className="text-3xl md:text-5xl font-mono font-medium tracking-tight mb-2 text-white">{time}</div>
           <div className={`inline-block px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${opState === 'PRODUCAO'
             ? 'bg-secondary/10 text-secondary border-secondary/30'
@@ -1535,9 +1535,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             {totalProduced}
           </div>
           <div className="text-xs font-bold text-secondary">
-            {targetQuantity > 0 ? `${progressPercent.toFixed(1)}% concluido` : '0% progresso'}
+            {targetQuantity > 0 ? `${progressPercent.toFixed(1)}% concluído` : '0% progresso'}
           </div>
-          <div className="text-xs text-text-sub-dark mt-1">Faltam: {Math.max(0, targetQuantity - totalProduced)} pecas</div>
+          <div className="text-xs text-text-sub-dark mt-1">Faltam: {Math.max(0, targetQuantity - totalProduced)} peças</div>
         </div>
 
         <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group">
@@ -1549,14 +1549,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="text-xs font-bold text-secondary">
             {totalProduced > 0 ? `${((totalScrap / (totalProduced + totalScrap)) * 100).toFixed(1)}% taxa` : '0% taxa'}
           </div>
-          <div className="text-xs text-text-sub-dark mt-1">{totalScrap === 0 ? 'Dentro do limite' : 'Aten��o'}</div>
+          <div className="text-xs text-text-sub-dark mt-1">{totalScrap === 0 ? 'Dentro do limite' : 'Atenção'}</div>
         </div>
 
         <div className={`bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group ${isOeeOnTarget ? 'border-green-500/30' : 'border-red-500/30'}`}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className={`material-icons-outlined text-6xl ${isOeeOnTarget ? 'text-green-500' : 'text-red-500'}`}>trending_up</span>
           </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">OEE (Efici�ncia)</div>
+          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">OEE (Eficiência)</div>
           <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-500 ${isOeeOnTarget ? 'text-green-500' : 'text-red-500'}`}>
             {calculatedOEE.toFixed(1)}%
           </div>
@@ -1572,7 +1572,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-icons-outlined text-6xl text-primary">person</span>
           </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Sua Produ��o (Turno)</div>
+          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Sua Produção (Turno)</div>
           <div className="text-4xl md:text-5xl font-display font-bold text-primary mb-1">{operatorShiftProduction}</div>
           <div className="text-xs font-bold text-secondary capitalize">{shiftName?.toLowerCase() || 'Turno atual'}</div>
           <div className="text-xs text-text-sub-dark mt-1">Total acumulado hoje</div>
@@ -1586,7 +1586,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <h3 className="text-xl font-display font-bold text-text-main-dark">Controle de Produção</h3>
           <div className="flex items-center gap-1 text-xs text-text-sub-dark">
             <span className="w-2 h-2 rounded-full bg-text-sub-dark"></span>
-            Teclas de atalho disponíveis
+            Teclas de atalho disponÃ­veis
           </div>
         </div>
 
@@ -1621,7 +1621,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <button
             onClick={() => {
               if (!opId && (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO')) {
-                alert('?? Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
+                alert('Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
                 return;
               }
               if (opState === 'SETUP') onStartProduction();
@@ -1744,7 +1744,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
 
       {/* Checklist Execution Modal */}
-      < ChecklistExecutionModal
+      <ChecklistExecutionModal
         isOpen={showChecklistModal}
         onClose={() => setShowChecklistModal(false)}
         checklistId={selectedChecklistId}
@@ -1844,7 +1844,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 <th className="px-6 py-3 font-medium">Hora</th>
                 <th className="px-6 py-3 font-medium">Evento</th>
                 <th className="px-6 py-3 font-medium">Detalhe</th>
-                <th className="px-6 py-3 font-medium">Usuário</th>
+                <th className="px-6 py-3 font-medium">UsuÃ¡rio</th>
                 <th className="px-6 py-3 font-medium text-right">Status</th>
               </tr>
             </thead>
@@ -1882,7 +1882,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 <div className="flex items-center gap-3">
                   <span className="material-icons-outlined text-primary text-2xl">menu_book</span>
                   <div>
-                    <h2 className="text-white text-lg font-bold">Diário da Máquina</h2>
+                    <h2 className="text-white text-lg font-bold">DiÃ¡rio da Máquina</h2>
                     <p className="text-text-sub-dark text-xs">Todos os registros</p>
                   </div>
                 </div>
@@ -1897,7 +1897,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     <div className="flex-1">
                       <p className="text-sm text-text-main-dark">{entry.descricao}</p>
                       <p className="text-xs text-text-sub-dark mt-2">
-                        {entry.autor} • {new Date(entry.created_at).toLocaleDateString('pt-BR')} às {new Date(entry.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {entry.autor} â€¢ {new Date(entry.created_at).toLocaleDateString('pt-BR')} Ã s {new Date(entry.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>
@@ -1995,7 +1995,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 <span className="material-icons-outlined text-purple-400 text-2xl">edit_note</span>
                 <div>
                   <h2 className="text-white text-lg font-bold">Nova Anotação</h2>
-                  <p className="text-text-sub-dark text-xs">Diário de Bordo - {machineName}</p>
+                  <p className="text-text-sub-dark text-xs">DiÃ¡rio de Bordo - {machineName}</p>
                 </div>
               </div>
               <button onClick={() => setShowDiaryInputModal(false)} className="text-text-sub-dark hover:text-white p-2 rounded-lg hover:bg-white/5">
