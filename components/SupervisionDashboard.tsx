@@ -106,20 +106,46 @@ const formatStopTime = (minutes: number): string => {
   return `00:${m.toString().padStart(2, '0')}`;
 };
 
+const formatElapsedSeconds = (startedAt: string, nowMs: number): string => {
+  const start = new Date(startedAt).getTime();
+  const diff = Math.max(0, Math.floor((nowMs - start) / 1000));
+  const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+  const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+  const s = (diff % 60).toString().padStart(2, '0');
+  return `${h}:${m}:${s}`;
+};
+
+const formatElapsedMs = (startMs: number, nowMs: number): string => {
+  const diff = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+  const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+  const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+  const s = (diff % 60).toString().padStart(2, '0');
+  return `${h}:${m}:${s}`;
+};
+
 // Componente de Cronômetro para cada máquina
-const StatusTimer: React.FC<{ statusChangeAt?: string; status: string }> = ({ statusChangeAt, status }) => {
+const StatusTimer: React.FC<{ statusChangeAt?: string; status: string; operatorSessionStartedAt?: string | null }> = ({
+  statusChangeAt,
+  status,
+  operatorSessionStartedAt
+}) => {
   const [elapsed, setElapsed] = useState('00:00:00');
 
   useEffect(() => {
-    if (!statusChangeAt || status === 'AVAILABLE' || status === 'IDLE') {
+    const statusStart = statusChangeAt ? new Date(statusChangeAt).getTime() : 0;
+    const sessionStart = operatorSessionStartedAt ? new Date(operatorSessionStartedAt).getTime() : 0;
+    const baseStart = (status === 'RUNNING' || status === 'IN_USE') && sessionStart
+      ? Math.max(statusStart, sessionStart)
+      : statusStart;
+
+    if (!baseStart || status === 'AVAILABLE' || status === 'IDLE') {
       setElapsed('00:00:00');
       return;
     }
 
     const updateTimer = () => {
       const now = Date.now();
-      const start = new Date(statusChangeAt).getTime();
-      const diff = Math.max(0, Math.floor((now - start) / 1000));
+      const diff = Math.max(0, Math.floor((now - baseStart) / 1000));
 
       const h = Math.floor(diff / 3600).toString().padStart(2, '0');
       const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
@@ -130,9 +156,10 @@ const StatusTimer: React.FC<{ statusChangeAt?: string; status: string }> = ({ st
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [statusChangeAt, status]);
+  }, [statusChangeAt, status, operatorSessionStartedAt]);
 
-  if (!statusChangeAt || status === 'AVAILABLE' || status === 'IDLE') return null;
+  const hasStart = !!(statusChangeAt || operatorSessionStartedAt);
+  if (!hasStart || status === 'AVAILABLE' || status === 'IDLE') return null;
 
   return (
     <div className="mt-1.5 bg-white/5 px-2 py-0.5 rounded w-fit border border-white/5">
@@ -179,6 +206,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   const [scrapData, setScrapData] = useState<ScrapData[]>([]);
   const [operatorProduction, setOperatorProduction] = useState<OperatorProduction[]>([]);
   const [machineProductionMap, setMachineProductionMap] = useState<Map<string, number>>(new Map());
+  const [machineSessionMap, setMachineSessionMap] = useState<Map<string, string>>(new Map());
+  const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
 
   // NOVOS ESTADOS
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>(null);
@@ -353,6 +382,25 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       setMachineScrapMap(new Map());
     }
 
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('op_operator_sessions')
+      .select('started_at, op_id, ordens_producao(maquina_id)')
+      .is('ended_at', null);
+
+    if (!sessionError && sessionData) {
+      const sessionMap = new Map<string, string>();
+      sessionData.forEach((session: any) => {
+        const op = session.ordens_producao as any;
+        const machineId = op?.maquina_id;
+        if (machineId && session.started_at) {
+          sessionMap.set(machineId, session.started_at);
+        }
+      });
+      setMachineSessionMap(sessionMap);
+    } else if (sessionError) {
+      setMachineSessionMap(new Map());
+    }
+
     // Atualizar timestamp
     setlastUpdateTime(new Date());
   }, [turnoStartTime]);
@@ -367,6 +415,11 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchShiftData]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setNowTimestamp(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
 
   const stats = useMemo(() => {
     return {
@@ -732,11 +785,6 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 // Map DB status to UI logic - normalize status to uppercase for reliable comparison
                 const status = String(m.status_atual || '').toUpperCase();
 
-                // DEBUG: Log status value for BB1
-                if (m.nome.includes('BB1')) {
-                  console.log('BB1 status normalized:', status, 'original:', m.status_atual);
-                }
-
                 // Status flags using normalized uppercase comparison
                 const isActive = status === 'RUNNING' || status === 'IN_USE';
                 const isStopped = status === 'STOPPED';
@@ -759,11 +807,6 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   return 'border-l-gray-500 shadow-gray-500/5'; // Fallback
                 };
 
-                // DEBUG: Log border class for BB1
-                if (m.nome.includes('BB1')) {
-                  console.log('BB1 border class:', getBorderColorClass(), 'isAvailable:', isAvailable);
-                }
-
                 // Safe value access
                 const machineLiveProd = machineProductionMap.get(m.id);
                 const productionCount = machineLiveProd !== undefined ? machineLiveProd : (m.realized ?? 0);
@@ -783,6 +826,16 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
 
                 const currentOp = m.ordens_producao?.codigo ||
                   (m.op_atual_id ? `OP-${m.op_atual_id.substring(0, 8)}...` : '--');
+                const sessionStartedAt = machineSessionMap.get(m.id);
+                const operatorElapsed = sessionStartedAt
+                  ? formatElapsedSeconds(sessionStartedAt, nowTimestamp)
+                  : null;
+                const operatorProductionElapsed = (sessionStartedAt && isActive && m.status_change_at)
+                  ? formatElapsedMs(
+                    Math.max(new Date(sessionStartedAt).getTime(), new Date(m.status_change_at).getTime()),
+                    nowTimestamp
+                  )
+                  : null;
 
                 return (
                   <div
@@ -825,7 +878,11 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                                         isAvailable ? 'check_circle' : 'check_circle'
                             }</span> {translateStatus(m.status_atual)}
                           </span>
-                          <StatusTimer statusChangeAt={m.status_change_at} status={m.status_atual} />
+                          <StatusTimer
+                            statusChangeAt={m.status_change_at}
+                            status={m.status_atual}
+                            operatorSessionStartedAt={sessionStartedAt}
+                          />
                         </div>
                       </div>
                       <div className="text-right">
@@ -853,6 +910,17 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                           <span className="text-sm font-bold text-white">{(m.operadores as any)?.nome || 'Sem Operador'}</span>
                         </div>
                         {/* NOVO: Indicadores mínimos */}
+
+                        {operatorElapsed && (
+                          <div className="text-[11px] text-text-sub-dark font-mono">
+                            Tempo no posto: {operatorElapsed}
+                          </div>
+                        )}
+                        {operatorProductionElapsed && (
+                          <div className="text-[11px] text-text-sub-dark font-mono">
+                            Tempo de producao: {operatorProductionElapsed}
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 gap-2 mt-3">
                           <div className="flex justify-between text-xs">
                             <span className="text-text-sub-dark uppercase tracking-widest font-bold opacity-60">Prod:</span>

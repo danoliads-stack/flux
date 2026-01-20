@@ -275,8 +275,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 p_pin: pin
             });
 
-        console.log('[DEBUG] Login RPC Response:', { data, error, matricula }); // Temporary Debug Log
-
         if (error) {
             logger.error('[AUTH] Operator login RPC error:', error.message);
             return { error: 'Erro ao validar credenciais (RPC Error)' };

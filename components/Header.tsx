@@ -8,9 +8,10 @@ interface HeaderProps {
   user: AppUser | null;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+  operatorSessionElapsed?: string | null;
 }
 
-const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme }) => {
+const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme, operatorSessionElapsed }) => {
   const location = useLocation();
 
   const getTitle = () => {
@@ -47,6 +48,11 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme }) => {
           <div className="text-right hidden sm:block">
             <div className="text-sm font-bold leading-tight uppercase text-white">{user?.name || 'Usuário'}</div>
             <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">{user?.role || 'GUEST'} • {user?.sector || 'N/A'}</div>
+            {user?.role === 'OPERATOR' && operatorSessionElapsed && (
+              <div className="text-[10px] text-text-sub-dark uppercase tracking-widest font-bold">
+                Tempo no posto: {operatorSessionElapsed}
+              </div>
+            )}
           </div>
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm shadow-glow border border-white/10 overflow-hidden">
             {user?.avatar?.startsWith('http') ? (

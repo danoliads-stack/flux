@@ -94,18 +94,26 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   // New Independent Timer State
   const [elapsedString, setElapsedString] = useState('00:00:00');
+  const [operatorSessionStartedAt, setOperatorSessionStartedAt] = useState<string | null>(null);
+  const [operatorSessionElapsed, setOperatorSessionElapsed] = useState('00:00:00');
 
   // Timer Effect
   useEffect(() => {
-    if (!statusChangeAt || opState === 'IDLE') {
+    const baseStart = opState === 'PRODUCAO' && operatorSessionStartedAt
+      ? Math.max(
+        new Date(operatorSessionStartedAt).getTime(),
+        statusChangeAt ? new Date(statusChangeAt).getTime() : 0
+      )
+      : (statusChangeAt ? new Date(statusChangeAt).getTime() : 0);
+
+    if (!baseStart || opState === 'IDLE') {
       setElapsedString('00:00:00');
       return;
     }
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
-      const start = new Date(statusChangeAt).getTime();
-      const diff = Math.max(0, Math.floor((now - start) / 1000));
+      const diff = Math.max(0, Math.floor((now - baseStart) / 1000));
 
       const hours = Math.floor(diff / 3600).toString().padStart(2, '0');
       const minutes = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
@@ -115,7 +123,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [statusChangeAt, opState]);
+  }, [statusChangeAt, opState, operatorSessionStartedAt]);
 
   // Helper: Format seconds to HH:MM:SS
   const formatSeconds = (totalSeconds: number): string => {
@@ -550,6 +558,52 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!sessionId) {
+      setOperatorSessionStartedAt(null);
+      setOperatorSessionElapsed('00:00:00');
+      return;
+    }
+
+    const fetchSession = async () => {
+      const { data, error } = await supabase
+        .from('op_operator_sessions')
+        .select('started_at')
+        .eq('id', sessionId)
+        .maybeSingle();
+
+      if (!error && data?.started_at) {
+        setOperatorSessionStartedAt(data.started_at);
+      } else {
+        setOperatorSessionStartedAt(null);
+      }
+    };
+
+    fetchSession();
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!operatorSessionStartedAt) {
+      setOperatorSessionElapsed('00:00:00');
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const start = new Date(operatorSessionStartedAt).getTime();
+      const diff = Math.max(0, Math.floor((now - start) / 1000));
+
+      const hours = Math.floor(diff / 3600).toString().padStart(2, '0');
+      const minutes = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+      const seconds = (diff % 60).toString().padStart(2, '0');
+
+      setOperatorSessionElapsed(`${hours}:${minutes}:${seconds}`);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [operatorSessionStartedAt]);
+
+
   // Quick Update Function for Production/Scrap
   const handleQuickUpdate = async (type: 'produced' | 'scrap', delta: number) => {
     if (!opId || !machineId) return;
@@ -642,8 +696,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     if (error) {
       console.error('Error fetching diary:', error);
-    } else {
-      console.log('Diary data fetched:', data);
     }
 
     if (data) {
@@ -747,7 +799,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       // alert('Checklist não realizado registrado automaticamente.'); // Optional: notify user
       fetchLogs(); // Refresh logs
     } else {
-      console.error('DEBUG: Error auto-registering checklist miss:', error, error.message, error.details);
+      console.error('Error auto-registering checklist miss:', error, error.message, error.details);
     }
   };
 
@@ -835,8 +887,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if (!opId || opState === 'IDLE') return;
 
     const checkTimers = async () => {
-      console.log(`[${new Date().toLocaleTimeString()}] DEBUG: Checking Server-Side Timers...`, { opId, opState, checklistsCount: checklists.length });
-
       // 1. CHECK CHECKLISTS TIMERS
       for (const checklist of checklists) {
         if (!checklist.intervalo_minutos) continue;
@@ -852,20 +902,12 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           .maybeSingle();
 
         if (error && error.code !== 'PGRST116') { // Ignore "Row not found" error
-          console.error('DEBUG: Error querying last checklist event:', error);
+          console.error('Error querying last checklist event:', error);
         }
 
         const lastTime = lastEvent ? new Date(lastEvent.created_at).getTime() : new Date(statusChangeAt || Date.now()).getTime(); // Fallback to status change or now
         const now = Date.now();
         const elapsedMinutes = (now - lastTime) / 60000;
-
-        console.log(`DEBUG: Checklist '${checklist.nome}' check:`, {
-          hasLastEvent: !!lastEvent,
-          lastEventTime: lastEvent?.created_at,
-          statusChangeAt,
-          elapsedMinutes: elapsedMinutes.toFixed(2),
-          interval: checklist.intervalo_minutos
-        });
 
         if (elapsedMinutes > checklist.intervalo_minutos) {
           console.warn(`Checklist ${checklist.nome} OVERDUE (${elapsedMinutes.toFixed(1)} min). Auto-registering miss...`);
@@ -901,6 +943,12 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     fetchProductionStats();
     fetchOperatorShiftProduction();
   }, [machineId, opState, operatorName, opId, accumulatedProductionTime]);
+
+  useEffect(() => {
+    if (!operatorId) return;
+    setOperatorShiftProduction(0);
+    fetchOperatorShiftProduction();
+  }, [operatorId]);
 
   // Real-time shift production update
   useEffect(() => {
@@ -984,7 +1032,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordens_producao', filter: `maquina_id=eq.${machineId}` },
         () => {
-          console.log('Realtime OP update detected');
           fetchOPSequence();
           fetchProductionStats(); // ? Also update production stats when OP changes
         }
@@ -1435,6 +1482,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <div className="text-4xl md:text-5xl font-display font-bold text-primary mb-1">{operatorShiftProduction}</div>
           <div className="text-xs font-bold text-secondary capitalize">{shiftName?.toLowerCase() || 'Turno atual'}</div>
           <div className="text-xs text-text-sub-dark mt-1">Total acumulado hoje</div>
+          <div className="text-xs text-text-sub-dark mt-1">Tempo no posto: {operatorSessionElapsed}</div>
         </div>
       </div>
 
@@ -1478,7 +1526,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           {/* 2. Production Button */}
           <button
             onClick={() => {
-              console.log('Production button clicked, opState:', opState);
               if (!opId && (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO')) {
                 alert('?? Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
                 return;
@@ -1550,7 +1597,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           {/* 4. Apontamento de OP */}
           <button
             onClick={() => {
-              console.log('Apontamento button clicked', { opId, machineId });
               onOpenFinalize();
             }}
             disabled={!opId}

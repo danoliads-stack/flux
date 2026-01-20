@@ -48,16 +48,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, user, permiss
 type ThemeMode = 'dark' | 'light';
 
 const App: React.FC = () => {
-  useEffect(() => {
-    logger.log('[DEBUG-APP] ??? App component MOUNTED');
-    return () => logger.log('[DEBUG-APP] ??? App component UNMOUNTED');
-  }, []);
-
   const { user: currentUser, logout: handleLogout, loading: authLoading, setOperatorSession } = useAuth();
-
-  useEffect(() => {
-    logger.log(`[DEBUG-APP] ?? Auth State Tracer -> loading: ${authLoading}, user: ${currentUser?.name || 'GUEST'}`);
-  }, [authLoading, currentUser]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -99,6 +90,8 @@ const App: React.FC = () => {
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [currentLoteId, setCurrentLoteId] = useState<string | null>(null);
   const [activeOperatorSessionId, setActiveOperatorSessionId] = useState<string | null>(null);
+  const [operatorSessionStartedAt, setOperatorSessionStartedAt] = useState<string | null>(null);
+  const [operatorSessionElapsed, setOperatorSessionElapsed] = useState<string | null>(null);
   const [pendingOperatorId, setPendingOperatorId] = useState<string | null>(null);
   const activeOperatorId = operatorAssignment?.id || currentMachine?.operador_atual_id || currentUser?.id || null;
   const assignedOperatorId = pendingOperatorId || operatorAssignment?.id || currentUser?.id || null;
@@ -219,10 +212,6 @@ const App: React.FC = () => {
     recoverState();
   }, [selectedMachineId, currentMachine, currentUser]);
 
-  // DEBUG: Log activeOP changes
-  useEffect(() => {
-    logger.log('[App] ?? activeOP changed:', activeOP, 'activeOPCodigo:', activeOPCodigo);
-  }, [activeOP, activeOPCodigo]);
 
   // SLUG-BASED URL: Detect machine slug from URL and load machine
   useEffect(() => {
@@ -296,24 +285,83 @@ const App: React.FC = () => {
     if (location.pathname.startsWith('/r/')) return;
 
     if (currentUser) {
-      logger.log(`[DEBUG-APP] ?? User identified: ${currentUser.name} (${currentUser.role})`);
-      logger.log(`[DEBUG-APP] ?? Current Path: ${location.pathname}`);
-
       if (location.pathname === '/' || location.pathname === '/login') {
         let target = '/maquinas';
         if (currentUser.role === 'ADMIN') target = '/administracao';
         else if (currentUser.role === 'SUPERVISOR') target = '/supervisao';
-
-        logger.log(`[DEBUG-APP] ?? Redirecting to role default: ${target}`);
         navigate(target);
       }
     } else if (!authLoading) {
       if (location.pathname === '/' || (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/r/'))) {
-        logger.log('[DEBUG-APP] ?? No user, redirecting to login');
         navigate('/login');
       }
     }
   }, [currentUser, authLoading, navigate, location.pathname]);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'OPERATOR') return;
+    if (location.pathname !== '/maquinas' && location.pathname !== '/') return;
+
+    const restoreMachine = async () => {
+      if (selectedMachineId) {
+        if (currentMachine) {
+          if (currentMachine.operador_atual_id && currentMachine.operador_atual_id !== currentUser.id) {
+            return;
+          }
+          const slug = getMachineSlug(currentMachine);
+          if (!slug) return;
+          navigate(`/maquinas/${slug}`);
+          return;
+        }
+
+        const cached = liveMachines.find(m => m.id === selectedMachineId);
+        if (cached) {
+          setCurrentMachine(cached as any);
+          const slug = getMachineSlug(cached as any);
+          if (!slug) return;
+          navigate(`/maquinas/${slug}`);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('maquinas')
+          .select('*, setores(nome)')
+          .eq('id', selectedMachineId)
+          .maybeSingle();
+        if (!error && data) {
+          setCurrentMachine(data as any);
+          const slug = getMachineSlug(data as any);
+          if (!slug) return;
+          navigate(`/maquinas/${slug}`);
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('maquinas')
+        .select('*, setores(nome)')
+        .eq('operador_atual_id', currentUser.id)
+        .maybeSingle();
+      if (!error && data) {
+        setSelectedMachine(data.id);
+        setCurrentMachine(data as any);
+        const slug = getMachineSlug(data as any);
+        if (!slug) return;
+        navigate(`/maquinas/${slug}`);
+      }
+    };
+
+    restoreMachine();
+  }, [
+    currentUser,
+    currentMachine,
+    selectedMachineId,
+    liveMachines,
+    location.pathname,
+    navigate,
+    setCurrentMachine,
+    setSelectedMachine
+  ]);
 
   const userPermissions = useMemo(() => {
     if (!currentUser) return [];
@@ -553,6 +601,50 @@ const App: React.FC = () => {
     }
   }, [pendingOperatorId, operatorAssignment?.id, currentUser?.id]);
 
+  useEffect(() => {
+    if (!activeOperatorSessionId) {
+      setOperatorSessionStartedAt(null);
+      setOperatorSessionElapsed(null);
+      return;
+    }
+
+    const fetchSessionStart = async () => {
+      const { data, error } = await supabase
+        .from('op_operator_sessions')
+        .select('started_at')
+        .eq('id', activeOperatorSessionId)
+        .maybeSingle();
+
+      if (!error && data?.started_at) {
+        setOperatorSessionStartedAt(data.started_at);
+      } else {
+        setOperatorSessionStartedAt(null);
+      }
+    };
+
+    fetchSessionStart();
+  }, [activeOperatorSessionId]);
+
+  useEffect(() => {
+    if (!operatorSessionStartedAt) {
+      setOperatorSessionElapsed(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const start = new Date(operatorSessionStartedAt).getTime();
+      const diff = Math.max(0, Math.floor((now - start) / 1000));
+
+      const hours = Math.floor(diff / 3600).toString().padStart(2, '0');
+      const minutes = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+      const seconds = (diff % 60).toString().padStart(2, '0');
+      setOperatorSessionElapsed(`${hours}:${minutes}:${seconds}`);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [operatorSessionStartedAt]);
+
   const fetchActiveSession = async (opId: string | null) => {
     if (!opId) {
       setActiveOperatorSessionId(null);
@@ -597,7 +689,13 @@ const App: React.FC = () => {
     fetchOperatorSwitchData();
   }, [isSwitchModalOpen]);
 
-  const handleOperatorSwitchConfirm = async (matricula: string, pin: string, shiftId?: string | null) => {
+  const handleOperatorSwitchConfirm = async (
+    matricula: string,
+    pin: string,
+    shiftId?: string | null,
+    producedQty?: number,
+    scrapQty?: number
+  ) => {
     // Validações iniciais
     if (!selectedMachineId || !currentMachine) {
       setSwitchError('Selecione uma máquina antes de trocar o operador.');
@@ -629,6 +727,9 @@ const App: React.FC = () => {
     setSwitchError(null);
 
     try {
+      const prevOperatorId = activeOperatorId;
+      const safeProduced = Math.max(0, Number(producedQty) || 0);
+      const safeScrap = Math.max(0, Number(scrapQty) || 0);
       const { data: pinData, error: pinError } = await supabase.rpc('validate_operator_pin', {
         p_matricula: matricula.trim(),
         p_pin: pin
@@ -666,6 +767,29 @@ const App: React.FC = () => {
       if (!opData.id) {
         setSwitchError('Operador inválido para troca.');
         return;
+      }
+
+      if ((safeProduced > 0 || safeScrap > 0) && prevOperatorId) {
+        const now = new Date().toISOString();
+        const { error: prodError } = await supabase.rpc('mes_record_production', {
+          p_op_id: opIdForSession,
+          p_machine_id: currentMachine.id,
+          p_operator_id: prevOperatorId,
+          p_good_qty: safeProduced,
+          p_scrap_qty: safeScrap,
+          p_data_inicio: now,
+          p_data_fim: now,
+          p_turno: operatorTurno || null,
+          p_client_event_id: generateClientEventId(),
+          p_tipo_refugo_id: null
+        });
+
+        if (prodError) {
+          logger.error('[OperatorSwitch] Erro ao registrar producao:', prodError);
+          throw new Error('Falha ao registrar apontamento antes da troca.');
+        }
+
+        await refreshOpSummary(opIdForSession);
       }
 
       logger.log('[OperatorSwitch] Iniciando troca de operador:', {
@@ -714,6 +838,11 @@ const App: React.FC = () => {
         name: opData.nome || activeOperatorName
       });
 
+      // Atualiza o turno se fornecido
+      const resolvedShift = shiftOptions.find(s => s.id === shiftId);
+      const newShiftLabel = resolvedShift?.nome || (opData as any).turnos?.nome || operatorTurno;
+      setOperatorTurno(newShiftLabel);
+
       setOperatorSession({
         id: opData.id,
         name: opData.nome,
@@ -724,11 +853,6 @@ const App: React.FC = () => {
         turno: newShiftLabel,
         matricula: opData.matricula
       });
-
-      // Atualiza o turno se fornecido
-      const resolvedShift = shiftOptions.find(s => s.id === shiftId);
-      const newShiftLabel = resolvedShift?.nome || (opData as any).turnos?.nome || operatorTurno;
-      setOperatorTurno(newShiftLabel);
 
       // Busca a sessão recém-criada para garantir sincronização
       await fetchActiveSession(opIdForSession);
@@ -933,6 +1057,7 @@ const App: React.FC = () => {
             user={currentUser}
             theme={theme}
             onToggleTheme={handleToggleTheme}
+            operatorSessionElapsed={operatorSessionElapsed}
           />
         )}
 

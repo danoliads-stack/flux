@@ -4,7 +4,7 @@ import { ShiftOption } from '../../types';
 interface OperatorSwitchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (matricula: string, pin: string, shiftId?: string | null) => void;
+  onConfirm: (matricula: string, pin: string, shiftId?: string | null, producedQty?: number, scrapQty?: number) => void;
   shifts: ShiftOption[];
   isLoading: boolean;
   isSubmitting: boolean;
@@ -25,19 +25,25 @@ const OperatorSwitchModal: React.FC<OperatorSwitchModalProps> = ({
   const [matricula, setMatricula] = useState<string>('');
   const [pin, setPin] = useState<string>('');
   const [selectedShift, setSelectedShift] = useState<string>(currentShiftId || '');
+  const [produced, setProduced] = useState<string>('');
+  const [scrap, setScrap] = useState<string>('');
 
   useEffect(() => {
     if (!isOpen) return;
     setMatricula('');
     setPin('');
     setSelectedShift(currentShiftId || '');
+    setProduced('');
+    setScrap('');
   }, [isOpen, currentShiftId]);
 
   if (!isOpen) return null;
 
   const handleConfirm = () => {
     if (!matricula.trim() || !pin.trim()) return;
-    onConfirm(matricula.trim(), pin.trim(), selectedShift || null);
+    const producedQty = produced.trim() === '' ? undefined : Number(produced);
+    const scrapQty = scrap.trim() === '' ? undefined : Number(scrap);
+    onConfirm(matricula.trim(), pin.trim(), selectedShift || null, producedQty, scrapQty);
   };
 
   return (
@@ -51,6 +57,31 @@ const OperatorSwitchModal: React.FC<OperatorSwitchModalProps> = ({
         <div className="p-6 space-y-4">
           <div className="text-sm text-text-sub-dark">
             {isLoading ? 'Carregando operadores e turnos...' : 'Digite a matricula e o PIN do novo operador.'}
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs uppercase tracking-widest text-text-sub-dark">Apontamento antes da troca</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                placeholder="Produzido"
+                value={produced}
+                onChange={(e) => setProduced(e.target.value)}
+                disabled={isLoading}
+                className="w-full bg-background-dark border border-border-dark rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary"
+              />
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                placeholder="Refugo"
+                value={scrap}
+                onChange={(e) => setScrap(e.target.value)}
+                disabled={isLoading}
+                className="w-full bg-background-dark border border-border-dark rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary"
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-xs uppercase tracking-widest text-text-sub-dark">Matrícula</label>
