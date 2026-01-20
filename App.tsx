@@ -403,7 +403,7 @@ const App: React.FC = () => {
         const paradasMap = new Map();
         paradas?.forEach(p => {
           // Se fim for nulo, é uma parada ativa
-          if (!p.fim) {
+          if (!p.data_fim) {
             // O campo motivo contém o ID do tipo. Buscar o nome no mapa de tipos
             const tipaNome = tiposMap.get(p.motivo);
             // Prioridade: Nome do Tipo > Motivo (texto/ID) > Notas > Default
