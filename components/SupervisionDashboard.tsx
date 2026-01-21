@@ -744,8 +744,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   return (
     <div className="p-6 md:p-10 space-y-8 animate-fade-in">
       {/* Header com turno e OEE */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center items-start justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-4">
           <h2 className="text-2xl font-display font-bold tracking-tight text-white uppercase">Status Geral do Turno (v2)</h2>
           {currentTurno && (
             <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider">
@@ -753,7 +753,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
             </span>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 w-full lg:w-auto lg:justify-end">
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-sub-dark uppercase tracking-widest font-bold">OEE Global:</span>
             <span className="text-xl font-display font-bold text-secondary">{stats.totalOee}%</span>
@@ -765,7 +765,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       <div className="flex flex-col xl:flex-row gap-6">
         {/* Cards de Status Clicáveis */}
         <div className="flex-1">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {[
               { label: 'Máquinas Rodando', val: stats.running, icon: 'settings_motion_mode', color: 'text-green-500', filter: 'RUNNING' as StatusFilterType, progress: (stats.running / machines.length) * 100 },
               { label: 'Máquinas Paradas', val: stats.stopped, icon: 'warning', color: 'text-orange-500', filter: 'STOPPED' as StatusFilterType, progress: (stats.stopped / machines.length) * 100 },
@@ -870,13 +870,13 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       {/* Mapa Operacional + Performance */}
       <div className="flex flex-col xl:flex-row gap-6">
         <div className="flex-1 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col lg:flex-row lg:items-center items-start justify-between gap-3 mb-4">
+            <div className="flex flex-wrap items-center gap-4">
               <h2 className="text-xl font-display font-bold text-white uppercase tracking-wider">Mapa Operacional</h2>
               {/* Indicador Live */}
               <LiveIndicator lastUpdate={lastUpdateTime} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* FASE 2: Dropdown de ordenação */}
               <div className="relative">
                 <select
@@ -908,7 +908,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
             {filteredAndSortedMachines
               .map((m) => {
                 // Map DB status to UI logic - normalize status to uppercase for reliable comparison
@@ -941,6 +941,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                 const productionCount = machineLiveProd !== undefined ? machineLiveProd : (m.realized ?? 0);
                 const oeeValue = machineOeeMap.get(m.id) ?? (m.oee ?? 0);
                 const machineGoal = getMachineOeeGoal(m);
+                const isAboveGoal = isActive && machineGoal > 0 && oeeValue >= machineGoal;
 
                 // NOVO: Dados de refugo da máquina
                 const scrapInfo = machineScrapMap.get(m.id);
@@ -971,7 +972,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   <div
                     key={m.id}
                     onDoubleClick={() => openHistoryModal(m)}
-                    className={`bg-surface-dark rounded-xl border-l-[6px] p-5 hover:shadow-glow transition-all cursor-pointer group flex flex-col justify-between h-full relative ${getBorderColorClass()}`}
+                    className={`bg-surface-dark rounded-xl border-l-[6px] p-6 hover:shadow-glow transition-all cursor-pointer group flex flex-col gap-4 h-full relative ${getBorderColorClass()}`}
+                    style={{ minWidth: 420 }}
                   >
                     {/* Ícone de manutenção ou alerta */}
                     {(isMaintenance && hasMaintenanceCall) ? (
@@ -988,17 +990,18 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       </div>
                     )}
 
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-lg font-bold text-white mb-2 leading-tight text-left">{m.nome}</h3>
-                        <div className="flex flex-col gap-1 items-start">
-                          <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isMaintenance ? 'text-red-600' :
-                            isStopped ? 'text-orange-500' :
-                              isSetup ? 'text-yellow-500' :
-                                isActive ? 'text-green-500' :
-                                  isSuspended ? 'text-orange-500' :
-                                    isAvailable ? 'text-blue-500' : 'text-text-sub-dark'
-                            }`}>
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-lg font-bold text-white mb-2 leading-snug text-left break-words">{m.nome}</h3>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isMaintenance ? 'text-red-600' :
+                              isStopped ? 'text-orange-500' :
+                                isSetup ? 'text-yellow-500' :
+                                  isActive ? 'text-green-500' :
+                                    isSuspended ? 'text-orange-500' :
+                                      isAvailable ? 'text-blue-500' : 'text-text-sub-dark'
+                              }`}>
                             <span className="material-icons-outlined text-base">{
                               isMaintenance ? 'engineering' :
                                 isStopped ? 'error' :
@@ -1008,106 +1011,110 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                                         isAvailable ? 'check_circle' : 'check_circle'
                             }</span> {translateStatus(m.status_atual)}
                           </span>
+                          {isAboveGoal && (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-secondary mt-1">
+                              Produzindo em cima de meta
+                            </span>
+                          )}
                           <StatusTimer
                             statusChangeAt={m.status_change_at}
                             status={m.status_atual}
                             operatorSessionStartedAt={sessionStartedAt}
                           />
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-bold text-white tabular-nums bg-white/5 px-2 py-1 rounded shadow-inner border border-white/5">
-                          {oeeValue.toFixed(0)}% OEE
-                        </div>
-                        <div className="mt-2 flex items-center justify-end gap-2">
-                          <span className="text-[9px] uppercase tracking-widest text-text-sub-dark">Meta</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                            value={oeeGoalInputs[m.id] ?? ''}
-                            onChange={(e) => {
-                              const nextValue = e.target.value;
-                              setOeeGoalInputs((prev) => ({ ...prev, [m.id]: nextValue }));
+                        <div className="text-right ml-auto w-full sm:w-auto shrink-0">
+                          <div className="text-xs font-bold text-white tabular-nums bg-white/5 px-2 py-1 rounded shadow-inner border border-white/5">
+                            {oeeValue.toFixed(0)}% OEE
+                          </div>
+                          <div className="mt-2 flex items-center justify-end gap-2 flex-wrap">
+                            <span className="text-[9px] uppercase tracking-widest text-text-sub-dark">Meta</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={oeeGoalInputs[m.id] ?? ''}
+                              onChange={(e) => {
+                                const nextValue = e.target.value;
+                                setOeeGoalInputs((prev) => ({ ...prev, [m.id]: nextValue }));
 
-                              const existing = oeeGoalSaveTimeoutsRef.current.get(m.id);
-                              if (existing) {
-                                clearTimeout(existing);
-                              }
+                                const existing = oeeGoalSaveTimeoutsRef.current.get(m.id);
+                                if (existing) {
+                                  clearTimeout(existing);
+                                }
 
-                              const parsed = Number(nextValue);
-                              if (Number.isNaN(parsed)) {
-                                return;
-                              }
+                                const parsed = Number(nextValue);
+                                if (Number.isNaN(parsed)) {
+                                  return;
+                                }
 
-                              const nextGoal = Math.max(0, Math.min(100, parsed));
-                              const timeoutId = setTimeout(() => {
-                                persistMachineOeeGoal(m.id, nextGoal);
-                              }, 500);
-                              oeeGoalSaveTimeoutsRef.current.set(m.id, timeoutId);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
+                                const nextGoal = Math.max(0, Math.min(100, parsed));
+                                const timeoutId = setTimeout(() => {
+                                  persistMachineOeeGoal(m.id, nextGoal);
+                                }, 500);
+                                oeeGoalSaveTimeoutsRef.current.set(m.id, timeoutId);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
                             className="w-16 bg-background-dark border border-border-dark rounded-md px-2 py-0.5 text-[10px] text-white text-right outline-none focus:border-primary"
                           />
                         </div>
                       </div>
                     </div>
 
-                    {
-                      isStopped && (
-                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mb-4">
+                      {isStopped && (
+                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
                           <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Motivo da Parada:</p>
                           <p className="text-sm text-white font-medium">{m.stopReason || 'Aguardando justificativa...'}</p>
                         </div>
-                      )
-                    }
+                      )}
 
-                    <div className="space-y-4 mb-4 bg-white/[0.02] p-4 rounded-xl border border-white/5">
-                      <div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary border border-primary/20 shadow-sm">
-                            {(m.operadores as any)?.nome?.charAt(0) || '?'}
+                      <div className="space-y-4 bg-white/[0.02] p-4 rounded-xl border border-white/5">
+                        <div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary border border-primary/20 shadow-sm">
+                              {(m.operadores as any)?.nome?.charAt(0) || '?'}
+                            </div>
+                            <span className="text-sm font-bold text-white">{(m.operadores as any)?.nome || 'Sem Operador'}</span>
                           </div>
-                          <span className="text-sm font-bold text-white">{(m.operadores as any)?.nome || 'Sem Operador'}</span>
-                        </div>
-                        {/* NOVO: Indicadores mínimos */}
+                          {/* NOVO: Indicadores mínimos */}
 
-                        {operatorElapsed && (
-                          <div className="text-[11px] text-text-sub-dark font-mono">
-                            Tempo no posto: {operatorElapsed}
-                          </div>
-                        )}
-                        {operatorProductionElapsed && (
-                          <div className="text-[11px] text-text-sub-dark font-mono">
-                            Tempo de producao: {operatorProductionElapsed}
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-2 mt-3">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-text-sub-dark uppercase tracking-widest font-bold opacity-60">Prod:</span>
-                            <span className="text-primary font-mono font-bold">{productionCount} un</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-text-sub-dark uppercase tracking-widest font-bold opacity-60">Refugo:</span>
-                            <span className={`font-mono font-bold ${scrapRate > SCRAP_LIMIT ? 'text-danger' : 'text-text-sub-dark'}`}>
-                              {scrapRate.toFixed(1)}%
-                            </span>
+                          {operatorElapsed && (
+                            <div className="text-[11px] text-text-sub-dark font-mono">
+                              Tempo no posto: {operatorElapsed}
+                            </div>
+                          )}
+                          {operatorProductionElapsed && (
+                            <div className="text-[11px] text-text-sub-dark font-mono">
+                              Tempo de producao: {operatorProductionElapsed}
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-2 mt-3">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-text-sub-dark uppercase tracking-widest font-bold opacity-60">Prod:</span>
+                              <span className="text-primary font-mono font-bold">{productionCount} un</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-text-sub-dark uppercase tracking-widest font-bold opacity-60">Refugo:</span>
+                              <span className={`font-mono font-bold ${scrapRate > SCRAP_LIMIT ? 'text-danger' : 'text-text-sub-dark'}`}>
+                                {scrapRate.toFixed(1)}%
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="pt-3 border-t border-white/5">
-                        <div className="flex justify-between text-[11px] mb-2 font-bold uppercase tracking-wider text-text-sub-dark">
-                          <span>OP: {currentOp}</span>
-                          <span className="text-white font-mono">{productionCount} un</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-background-dark rounded-full overflow-hidden shadow-inner">
-                          <div className={`h-full transition-all duration-1000 ease-out ${isActive ? 'bg-secondary' : 'bg-surface-dark-highlight'}`} style={{ width: '60%' }}></div>
+                        <div className="pt-3 border-t border-white/5">
+                          <div className="flex items-center justify-between gap-2 text-[11px] mb-2 font-bold uppercase tracking-wider text-text-sub-dark">
+                            <span className="min-w-0 truncate">OP: {currentOp}</span>
+                            <span className="text-white font-mono shrink-0">{productionCount} un</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-background-dark rounded-full overflow-hidden shadow-inner">
+                            <div className={`h-full transition-all duration-1000 ease-out ${isActive ? 'bg-secondary' : 'bg-surface-dark-highlight'}`} style={{ width: '60%' }}></div>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -133,6 +133,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     return `${hours}:${minutes}:${seconds}`;
   };
 
+
   const parseCycleTimeToSeconds = (value: unknown): number => {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return Math.max(0, value);
@@ -299,6 +300,10 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [newDiaryText, setNewDiaryText] = useState('');
   const [showDiaryInput, setShowDiaryInput] = useState(false);
   const [pendingAlert, setPendingAlert] = useState<PendingAlert | null>(null);
+  const [nextChecklistName, setNextChecklistName] = useState<string | null>(null);
+  const [nextChecklistDueAt, setNextChecklistDueAt] = useState<number | null>(null);
+  const [nextChecklistCountdown, setNextChecklistCountdown] = useState('--:--:--');
+  const [isNextChecklistOverdue, setIsNextChecklistOverdue] = useState(false);
   const [showRecordsModal, setShowRecordsModal] = useState(false);
   const [allRecentRecords, setAllRecentRecords] = useState<RecentRecord[]>([]);
 
@@ -320,6 +325,26 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [partialProduced, setPartialProduced] = useState<string>('');
   const [partialScrap, setPartialScrap] = useState<string>('');
   const [isSavingPartial, setIsSavingPartial] = useState(false);
+
+  // Countdown for next checklist
+  useEffect(() => {
+    if (!nextChecklistDueAt) {
+      setNextChecklistCountdown('--:--:--');
+      setIsNextChecklistOverdue(false);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const now = Date.now();
+      const diffSeconds = Math.max(0, Math.floor((nextChecklistDueAt - now) / 1000));
+      setNextChecklistCountdown(formatSeconds(diffSeconds));
+      setIsNextChecklistOverdue(nextChecklistDueAt <= now);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [nextChecklistDueAt]);
 
   // Clock update
   useEffect(() => {
@@ -974,6 +999,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if (!opId || opState === 'IDLE') return;
 
     const checkTimers = async () => {
+      let soonestDueAt: number | null = null;
+      let soonestDueName: string | null = null;
       // 1. CHECK CHECKLISTS TIMERS
       for (const checklist of checklists) {
         if (!checklist.intervalo_minutos) continue;
@@ -995,6 +1022,12 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         const lastTime = lastEvent ? new Date(lastEvent.created_at).getTime() : new Date(statusChangeAt || Date.now()).getTime(); // Fallback to status change or now
         const now = Date.now();
         const elapsedMinutes = (now - lastTime) / 60000;
+        const dueAt = lastTime + checklist.intervalo_minutos * 60000;
+
+        if (soonestDueAt === null || dueAt < soonestDueAt) {
+          soonestDueAt = dueAt;
+          soonestDueName = checklist.nome;
+        }
 
         if (elapsedMinutes > checklist.intervalo_minutos) {
           console.warn(`Checklist ${checklist.nome} OVERDUE (${elapsedMinutes.toFixed(1)} min). Auto-registering miss...`);
@@ -1010,6 +1043,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         }
       }
 
+      setNextChecklistDueAt(soonestDueAt);
+      setNextChecklistName(soonestDueName);
+
       // NOTE: Auto-label generation has been REMOVED.
       // Labels are now emitted manually via the "Emitir Etiqueta" button.
       // The old handleAutoGenerateLote logic has been disabled.
@@ -1021,6 +1057,13 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     return () => clearInterval(timerLoop);
   }, [opId, opState, checklists, machineId, statusChangeAt]); // Re-run if these change
+
+  useEffect(() => {
+    if (!opId || opState === 'IDLE') {
+      setNextChecklistDueAt(null);
+      setNextChecklistName(null);
+    }
+  }, [opId, opState]);
 
   // Initial fetch
   useEffect(() => {
@@ -1340,6 +1383,15 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   <span className="text-white text-xs font-bold uppercase tracking-wider">Checklists do Setor</span>
                 </div>
                 <p className="text-[10px] text-text-sub-dark mt-1">Toque para abrir e registrar</p>
+                <p className="text-[10px] text-text-sub-dark mt-1">
+                  Proximo checklist:{' '}
+                  <span className={`font-mono ${isNextChecklistOverdue ? 'text-danger' : 'text-white'}`}>
+                    {nextChecklistCountdown}
+                  </span>
+                  {nextChecklistName && (
+                    <span className="text-text-sub-dark"> - {nextChecklistName}</span>
+                  )}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-2">
@@ -1445,8 +1497,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
 
       {/* Main Stats Header */}
-      <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:flex-wrap justify-between items-end md:items-center gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-4 mb-2">
             <h2 className="text-4xl md:text-6xl font-display font-black tracking-tight text-white drop-shadow-lg">{machineName.toUpperCase()}</h2>
             {onChangeMachine && (
@@ -1496,8 +1548,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             )}
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs uppercase tracking-wider text-text-sub-dark mb-1">RelÃ³gio do Sistema</div>
+        <div className="text-right shrink-0">
+          <div className="text-xs uppercase tracking-wider text-text-sub-dark mb-1">Relogio do Sistema</div>
           <div className="text-3xl md:text-5xl font-mono font-medium tracking-tight mb-2 text-white">{time}</div>
           <div className={`inline-block px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${opState === 'PRODUCAO'
             ? 'bg-secondary/10 text-secondary border-secondary/30'
