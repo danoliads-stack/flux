@@ -1460,21 +1460,21 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-4 md:gap-8 text-sm text-text-sub-dark">
+          <div className="flex flex-wrap gap-4 md:gap-8 text-base md:text-lg text-text-sub-dark">
             <div className="flex items-center gap-2">
-              <span className="material-icons-outlined text-lg">grid_view</span>
+              <span className="material-icons-outlined text-xl">grid_view</span>
               <span>Setor: <strong className="text-text-main-dark">{sectorName.toUpperCase()}</strong></span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="material-icons-outlined text-lg">fingerprint</span>
+              <span className="material-icons-outlined text-xl">fingerprint</span>
               <span>Ordem: <strong className="text-primary">{opCodigo || opId || 'N/A'}</strong></span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="material-icons-outlined text-lg">schedule</span>
+              <span className="material-icons-outlined text-xl">schedule</span>
               <span>Turno: <strong className="text-text-main-dark">{shiftName}</strong></span>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <span className="material-icons-outlined text-lg">person</span>
+              <span className="material-icons-outlined text-xl">person</span>
               <div className="flex items-center gap-2 flex-wrap">
                 <span>Operador: <strong className="text-text-main-dark">{operatorName}</strong></span>
                 {onSwitchOperator && (
@@ -1490,7 +1490,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
             {productInfo?.nome && (
               <div className="flex items-center gap-2">
-                <span className="material-icons-outlined text-lg">inventory_2</span>
+                <span className="material-icons-outlined text-xl">inventory_2</span>
                 <span>Produto: <strong className="text-secondary">{productInfo.nome}</strong></span>
               </div>
             )}
