@@ -3,6 +3,7 @@ import { MachineStatus, AppUser, Permission, MachineData, ProductionOrder, OPSta
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import OperatorDashboard from './components/OperatorDashboard';
+import MobileOperatorDashboard from './components/MobileOperatorDashboard';
 import SupervisionDashboard from './components/SupervisionDashboard';
 import QualityDashboard from './components/QualityDashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -66,6 +67,14 @@ const App: React.FC = () => {
 
   const handleToggleTheme = () => setTheme('dark'); // desabilita modo claro
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- ZUSTAND STORE ---
   const {
     selectedMachineId, setSelectedMachine,
@@ -78,7 +87,8 @@ const App: React.FC = () => {
     accumulatedSetupTime, accumulatedProductionTime, accumulatedStopTime,
     // Production Data from Store
     totalProduced,
-    setProductionData
+    setProductionData,
+    updateProduction
   } = useAppStore();
 
   const [operatorTurno, setOperatorTurno] = useState<string>('Turno Atual');
@@ -827,7 +837,9 @@ const App: React.FC = () => {
         m.id === selectedMachineId ? { ...m, operador_atual_id: opData.id } : m
       ));
 
-      setCurrentMachine(prev => prev ? { ...prev, operador_atual_id: opData.id } : prev);
+      if (currentMachine) {
+        setCurrentMachine({ ...currentMachine, operador_atual_id: opData.id });
+      }
 
       // Atualiza a atribuição do operador ativo
       setOperatorAssignment({
@@ -1030,6 +1042,162 @@ const App: React.FC = () => {
     window.location.href = '/login';
   };
 
+  const handleStartProduction = async () => {
+    if (currentMachine) {
+      if (!activeOP) {
+        alert('?? Não é possível iniciar a produção sem uma Ordem de Produção (OP) selecionada. Por favor, realize o SETUP.');
+        return;
+      }
+      const now = new Date().toISOString();
+
+      // Accumulate Setup Time BEFORE switching to Production
+      let newAccSetup = accumulatedSetupTime;
+      if (localStatusChangeAt && opState === 'SETUP') {
+        const elapsed = Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+        newAccSetup += elapsed;
+      }
+
+      const operatorId = activeOperatorId;
+
+      // Sempre tenta fechar parada aberta antes de iniciar producao (mesmo se opState nao estiver PARADA)
+      const { error: resumeError } = await supabase.rpc('mes_resume_machine', {
+        p_machine_id: currentMachine.id,
+        p_next_status: MachineStatus.RUNNING,
+        p_operator_id: operatorId,
+        p_op_id: activeOP || null
+      });
+      if (resumeError && !`${resumeError.message}`.includes('no_open_stop')) {
+        // Ignora erro de "no_open_stop", mas falha para outros casos
+        logger.error('Erro ao retomar maquina antes de iniciar producao:', resumeError);
+        alert(`Erro ao retomar maquina: ${resumeError.message}`);
+        return;
+      }
+
+      const { error: prodStartError } = await supabase.rpc('mes_start_production', {
+        p_machine_id: currentMachine.id,
+        p_op_id: activeOP,
+        p_operator_id: operatorId
+      });
+      if (prodStartError) {
+        logger.error('Erro ao iniciar producao:', prodStartError);
+        alert(`Erro ao iniciar producao: ${prodStartError.message}`);
+        return;
+      }
+
+      await refreshOpSummary(activeOP);
+
+      syncTimers({
+        statusChangeAt: now,
+        accSetup: newAccSetup
+      });
+
+      await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
+        operatorId: activeOperatorId,
+        opId: activeOP
+      }));
+
+      setOpState('PRODUCAO');
+    }
+  };
+
+  const handleResumeProduction = async () => {
+    if (currentMachine) {
+      const now = new Date().toISOString();
+
+      // Accumulate Stop Time
+      let newAccStop = accumulatedStopTime;
+      if (localStatusChangeAt && opState === 'PARADA') {
+        const elapsed = Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+        newAccStop += elapsed;
+      }
+
+      const lastState = localStorage.getItem(`flux_pre_stop_state_${currentMachine.id}`);
+      const nextStatus = lastState === 'SETUP' ? MachineStatus.SETUP : MachineStatus.RUNNING;
+      const nextOpState = lastState === 'SETUP' ? 'SETUP' : 'PRODUCAO';
+
+      const operatorId = activeOperatorId;
+      const { error: resumeError } = await supabase.rpc('mes_resume_machine', {
+        p_machine_id: currentMachine.id,
+        p_next_status: nextStatus,
+        p_operator_id: operatorId,
+        p_op_id: activeOP || null
+      });
+      if (resumeError) {
+        logger.error('Erro ao retomar maquina:', resumeError);
+        alert(`Erro ao retomar maquina: ${resumeError.message}`);
+        return;
+      }
+
+      syncTimers({
+        statusChangeAt: now,
+        accStop: newAccStop
+      });
+
+      await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, nextStatus, {
+        operatorId: activeOperatorId,
+        opId: activeOP
+      }));
+
+      setOpState(nextOpState);
+    }
+  };
+
+  const handleRequestMaintenance = async (description: string) => {
+    if (currentMachine && currentUser) {
+      logger.log('Solicitando manutenção:', { machine: currentMachine.id, description });
+
+      // 1. Criar chamado de manutenção na tabela separada
+      const { error } = await supabase.from('chamados_manutencao').insert({
+        maquina_id: currentMachine.id,
+        operador_id: activeOperatorId,
+        op_id: activeOP || null,
+        descricao: description,
+        prioridade: 'NORMAL',
+        status: 'ABERTO',
+        data_abertura: new Date().toISOString()
+      });
+
+      if (error) {
+        logger.error('Erro ao abrir chamado:', error);
+        alert('Erro ao registrar chamado de manutenção.');
+        return;
+      }
+
+      // 2. Mudar status para MAINTENANCE (mantém OP e operador vinculados)
+      const now = new Date().toISOString();
+      localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
+
+      let newAccProd = accumulatedProductionTime;
+      let newAccSetup = accumulatedSetupTime;
+
+      if (localStatusChangeAt && opState === 'PRODUCAO') {
+        newAccProd += Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+      } else if (localStatusChangeAt && opState === 'SETUP') {
+        newAccSetup += Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
+      }
+
+      await supabase.from('maquinas').update({
+        status_atual: MachineStatus.MAINTENANCE,
+        status_change_at: now
+      }).eq('id', currentMachine.id);
+
+      syncTimers({
+        statusChangeAt: now,
+        accProd: newAccProd,
+        accSetup: newAccSetup
+      });
+
+      await realtimeManager.broadcastMachineUpdate(
+        createMachineUpdate(currentMachine.id, MachineStatus.MAINTENANCE, {
+          operatorId: activeOperatorId,
+          opId: currentMachine.op_atual_id
+        })
+      );
+      setOpState('MANUTENCAO');
+      alert('Chamado de manutenção registrado. A máquina está aguardando atendimento.');
+    }
+  };
+
 
 
   if (authLoading) {
@@ -1077,220 +1245,106 @@ const App: React.FC = () => {
               <Route path="/maquinas/:id" element={
                 <ProtectedRoute user={currentUser} permission={Permission.VIEW_OPERATOR_DASHBOARD} userPermissions={userPermissions}>
                   {currentMachine ? (
-                    <OperatorDashboard
-                      opState={opState}
-                      statusChangeAt={localStatusChangeAt}
-                      realized={totalProduced}
-                      oee={95} // TODO: Calculate OEE
-                      opId={activeOP}
-                      opCodigo={activeOPCodigo}
-                      onOpenSetup={() => setActiveModal('setup')}
-                      onOpenStop={() => setActiveModal('stop')}
-                      onOpenFinalize={() => {
-                        logger.log('Opening Finalize Modal');
-                        setActiveModal('finalize');
-                      }}
-                      onGenerateLabel={() => setActiveModal('label')}
-                      sessionId={activeOperatorSessionId}
-                      onStop={async () => {
-                        setActiveModal('stop');
-                      }}
-                      onRetomar={async () => {
-                        if (currentMachine) {
-                          const now = new Date().toISOString();
-
-                          // Accumulate Stop Time
-                          let newAccStop = accumulatedStopTime;
-                          if (localStatusChangeAt && opState === 'PARADA') {
-                            const elapsed = Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
-                            newAccStop += elapsed;
-                          }
-
-                          const lastState = localStorage.getItem(`flux_pre_stop_state_${currentMachine.id}`);
-                          const nextStatus = lastState === 'SETUP' ? MachineStatus.SETUP : MachineStatus.RUNNING;
-                          const nextOpState = lastState === 'SETUP' ? 'SETUP' : 'PRODUCAO';
+                    isMobile ? (
+                      <MobileOperatorDashboard
+                        opState={opState}
+                        statusChangeAt={localStatusChangeAt}
+                        realized={totalProduced}
+                        oee={95}
+                        opCodigo={activeOPCodigo}
+                        onOpenSetup={() => setActiveModal('setup')}
+                        onOpenStop={() => setActiveModal('stop')}
+                        onOpenFinalize={() => setActiveModal('finalize')}
+                        onStartProduction={handleStartProduction}
+                        onRegisterChecklist={() => setActiveModal('checklist_execution')}
+                        onQuickUpdate={async (type, delta) => {
+                          if (!currentMachine || !activeOP) return;
+                          updateProduction(type, delta);
 
                           const operatorId = activeOperatorId;
-                          const { error: resumeError } = await supabase.rpc('mes_resume_machine', {
-                            p_machine_id: currentMachine.id,
-                            p_next_status: nextStatus,
-                            p_operator_id: operatorId,
-                            p_op_id: activeOP || null
-                          });
-                          if (resumeError) {
-                            logger.error('Erro ao retomar maquina:', resumeError);
-                            alert(`Erro ao retomar maquina: ${resumeError.message}`);
-                            return;
-                          }
-
-                          syncTimers({
-                            statusChangeAt: now,
-                            accStop: newAccStop
-                          });
-
-                          await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, nextStatus, {
-                            operatorId: activeOperatorId,
-                            opId: activeOP
-                          }));
-
-                          setOpState(nextOpState);
-                        }
-                      }}
-                      onStartProduction={async () => {
-                        if (currentMachine) {
-                          if (!activeOP) {
-                            alert('?? Não é possível iniciar a produção sem uma Ordem de Produção (OP) selecionada. Por favor, realize o SETUP.');
-                            return;
-                          }
-                          const now = new Date().toISOString();
-
-                          // Accumulate Setup Time BEFORE switching to Production
-                          let newAccSetup = accumulatedSetupTime;
-                          if (localStatusChangeAt && opState === 'SETUP') {
-                            const elapsed = Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
-                            newAccSetup += elapsed;
-                          }
-
-                          const operatorId = activeOperatorId;
-
-                          // Sempre tenta fechar parada aberta antes de iniciar producao (mesmo se opState nao estiver PARADA)
-                          const { error: resumeError } = await supabase.rpc('mes_resume_machine', {
-                            p_machine_id: currentMachine.id,
-                            p_next_status: MachineStatus.RUNNING,
-                            p_operator_id: operatorId,
-                            p_op_id: activeOP || null
-                          });
-                          if (resumeError && !`${resumeError.message}`.includes('no_open_stop')) {
-                            // Ignora erro de "no_open_stop", mas falha para outros casos
-                            logger.error('Erro ao retomar maquina antes de iniciar producao:', resumeError);
-                            alert(`Erro ao retomar maquina: ${resumeError.message}`);
-                            return;
-                          }
-
-                          const { error: prodStartError } = await supabase.rpc('mes_start_production', {
-                            p_machine_id: currentMachine.id,
+                          const { error } = await supabase.rpc('mes_record_production', {
                             p_op_id: activeOP,
-                            p_operator_id: operatorId
+                            p_machine_id: currentMachine.id,
+                            p_operator_id: operatorId,
+                            p_good_qty: type === 'produced' ? delta : 0,
+                            p_scrap_qty: type === 'scrap' ? delta : 0,
+                            p_data_inicio: new Date().toISOString(),
+                            p_data_fim: new Date().toISOString(),
+                            p_turno: operatorTurno,
+                            p_client_event_id: generateClientEventId(),
+                            p_tipo_refugo_id: null
                           });
-                          if (prodStartError) {
-                            logger.error('Erro ao iniciar producao:', prodStartError);
-                            alert(`Erro ao iniciar producao: ${prodStartError.message}`);
-                            return;
+
+                          if (!error) {
+                            await refreshOpSummary(activeOP);
                           }
-
-                          await refreshOpSummary(activeOP);
-
-                          syncTimers({
-                            statusChangeAt: now,
-                            accSetup: newAccSetup
-                          });
-
-                          await realtimeManager.broadcastMachineUpdate(createMachineUpdate(currentMachine.id, MachineStatus.RUNNING, {
-                            operatorId: activeOperatorId,
-                            opId: activeOP
-                          }));
-
-                          setOpState('PRODUCAO');
-                        }
-                      }}
-                      machineId={currentMachine.id}
-                      machineName={currentMachine.nome || 'Máquina'}
-                      sectorName={currentUser?.sector || 'Produção'}
-                      operatorName={activeOperatorName}
-                      shiftName={operatorTurno}
-                      onSwitchOperator={() => {
-                        setSwitchInProgress(true);
-                        setIsSwitchModalOpen(true);
-                      }}
-                      meta={activeOPData?.quantidade_meta || 0}
-                      operatorId={currentUser!.id}
-                      sectorId={currentMachine.setor_id}
-                      loteId={currentLoteId || 'LOTE-PADRAO'}
-                      onChangeMachine={handleChangeMachine}
-                      userPermissions={userPermissions}
-                      accumulatedSetupTime={accumulatedSetupTime}
-                      accumulatedProductionTime={accumulatedProductionTime}
-                      accumulatedStopTime={accumulatedStopTime}
-                      onRegisterChecklist={async (status, obs) => {
-                        const { data: opData } = await supabase.from('ordens_producao').select('id').eq('codigo', activeOP).single();
-                        await supabase.from('checklist_eventos').insert({
-                          op_id: opData?.id,
-                          operador_id: activeOperatorId,
-                          maquina_id: currentMachine.id,
-                          setor_id: currentMachine.setor_id,
-                          tipo_acionamento: 'tempo',
-                          referencia_acionamento: 'Manual',
-                          status,
-                          observacao: obs
-                        });
-                      }}
-                      onRegisterLogbook={async (desc) => {
-                        const { error } = await supabase.from('diario_bordo_eventos').insert({
-                          op_id: activeOP || null,
-                          operador_id: currentUser!.id,
-                          maquina_id: currentMachine.id,
-                          setor_id: currentMachine.setor_id,
-                          descricao: desc
-                        });
-                        if (error) throw error;
-                      }}
-                      onRequestMaintenance={async (description) => {
-                        if (currentMachine && currentUser) {
-                          logger.log('Solicitando manutenção:', { machine: currentMachine.id, description });
-
-                          // 1. Criar chamado de manutenção na tabela separada
-                          const { error } = await supabase.from('chamados_manutencao').insert({
-                            maquina_id: currentMachine.id,
+                        }}
+                      />
+                    ) : (
+                      <OperatorDashboard
+                        opState={opState}
+                        statusChangeAt={localStatusChangeAt}
+                        realized={totalProduced}
+                        oee={95} // TODO: Calculate OEE
+                        opId={activeOP}
+                        opCodigo={activeOPCodigo}
+                        onOpenSetup={() => setActiveModal('setup')}
+                        onOpenStop={() => setActiveModal('stop')}
+                        onOpenFinalize={() => {
+                          logger.log('Opening Finalize Modal');
+                          setActiveModal('finalize');
+                        }}
+                        onGenerateLabel={() => setActiveModal('label')}
+                        sessionId={activeOperatorSessionId}
+                        onStop={async () => {
+                          setActiveModal('stop');
+                        }}
+                        onRetomar={handleResumeProduction}
+                        onStartProduction={handleStartProduction}
+                        machineId={currentMachine.id}
+                        machineName={currentMachine.nome || 'Máquina'}
+                        sectorName={currentUser?.sector || 'Produção'}
+                        operatorName={activeOperatorName}
+                        shiftName={operatorTurno}
+                        onSwitchOperator={() => {
+                          setSwitchInProgress(true);
+                          setIsSwitchModalOpen(true);
+                        }}
+                        meta={activeOPData?.quantidade_meta || 0}
+                        operatorId={currentUser!.id}
+                        sectorId={currentMachine.setor_id}
+                        loteId={currentLoteId || 'LOTE-PADRAO'}
+                        onChangeMachine={handleChangeMachine}
+                        userPermissions={userPermissions}
+                        accumulatedSetupTime={accumulatedSetupTime}
+                        accumulatedProductionTime={accumulatedProductionTime}
+                        accumulatedStopTime={accumulatedStopTime}
+                        onRegisterChecklist={async (status, obs) => {
+                          const { data: opData } = await supabase.from('ordens_producao').select('id').eq('codigo', activeOP).single();
+                          await supabase.from('checklist_eventos').insert({
+                            op_id: opData?.id,
                             operador_id: activeOperatorId,
-                            op_id: opIdForSession,
-                            descricao: description,
-                            prioridade: 'NORMAL',
-                            status: 'ABERTO',
-                            data_abertura: new Date().toISOString()
+                            maquina_id: currentMachine.id,
+                            setor_id: currentMachine.setor_id,
+                            tipo_acionamento: 'tempo',
+                            referencia_acionamento: 'Manual',
+                            status,
+                            observacao: obs
                           });
-
-                          if (error) {
-                            logger.error('Erro ao abrir chamado:', error);
-                            alert('Erro ao registrar chamado de manutenção.');
-                            return;
-                          }
-
-                          // 2. Mudar status para MAINTENANCE (mantém OP e operador vinculados)
-                          // NÃO fechamos op_operadores - a manutenção é temporária
-                          const now = new Date().toISOString();
-                          localStorage.setItem(`flux_pre_stop_state_${currentMachine.id}`, opState);
-
-                          let newAccProd = accumulatedProductionTime;
-                          let newAccSetup = accumulatedSetupTime;
-
-                          if (localStatusChangeAt && opState === 'PRODUCAO') {
-                            newAccProd += Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
-                          } else if (localStatusChangeAt && opState === 'SETUP') {
-                            newAccSetup += Math.floor((new Date().getTime() - new Date(localStatusChangeAt).getTime()) / 1000);
-                          }
-
-                          await supabase.from('maquinas').update({
-                            status_atual: MachineStatus.MAINTENANCE,  // Status específico de manutenção
-                            status_change_at: now
-                          }).eq('id', currentMachine.id);
-
-                          syncTimers({
-                            statusChangeAt: now,
-                            accProd: newAccProd,
-                            accSetup: newAccSetup
+                        }}
+                        onRegisterLogbook={async (desc) => {
+                          const { error } = await supabase.from('diario_bordo_eventos').insert({
+                            op_id: activeOP || null,
+                            operador_id: currentUser!.id,
+                            maquina_id: currentMachine.id,
+                            setor_id: currentMachine.setor_id,
+                            descricao: desc
                           });
-
-                          await realtimeManager.broadcastMachineUpdate(
-                            createMachineUpdate(currentMachine.id, MachineStatus.MAINTENANCE, {
-                              operatorId: activeOperatorId,
-                              opId: currentMachine.op_atual_id
-                            })
-                          );
-                          setOpState('MANUTENCAO');
-                          alert('Chamado de manutenção registrado. A máquina está aguardando atendimento.');
-                        }
-                      }}
-                    />
+                          if (error) throw error;
+                        }}
+                        onRequestMaintenance={handleRequestMaintenance}
+                      />
+                    )
                   ) : <Navigate to="/maquinas" replace />}
                 </ProtectedRoute>
               } />
