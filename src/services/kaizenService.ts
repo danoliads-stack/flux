@@ -108,15 +108,15 @@ export const generateKaizen = (
             .map(c => ({ tipo: 'Checklist Não Realizado', id: c.id, created_at: c.created_at }));
 
         const sug: KaizenSuggestion = {
-            titulo: 'Reforçar disciplina de checklist',
+            titulo: 'Reforçar Disciplina e Autocontrole',
             severidade: 'ALTA',
             categoria: 'PADRONIZACAO',
-            justificativa: `Detectados ${metrics.checklists_nao_realizado} checklists não realizados no período.`,
+            justificativa: `Foram identificados ${metrics.checklists_nao_realizado} esquecimentos de checklist. A falta de registro impede a rastreabilidade real do processo.`,
             evidencias: evidence,
-            acaoRecomendada: 'Revisar rotina com os operadores, reduzir intervalo de monitoramento e realizar treinamento rápido sobre a importância do registro.'
+            acaoRecomendada: 'Realizar um "Diálogo Diário de Segurança e Qualidade" focado na importância do registro em tempo real para evitar perdas de informação.'
         };
         sugestoes.push(sug);
-        if (metrics.checklists_nao_realizado >= 3) alertas.push({ ...sug, severidade: 'CRITICA' });
+        if (metrics.checklists_nao_realizado >= 3) alertas.push({ ...sug, severidade: 'CRITICA', titulo: 'ALERTA: Quebra de Padrão Operacional' });
     }
 
     // 2. Recurrent Problems
@@ -132,12 +132,12 @@ export const generateKaizen = (
     Object.entries(problemCounts).forEach(([item, data]) => {
         if (data.count >= 3) {
             const sug: KaizenSuggestion = {
-                titulo: `Atacar causa raiz do item: ${item}`,
+                titulo: `Eliminar Causa Raiz de Falha: ${item}`,
                 severidade: data.count >= 5 ? 'CRITICA' : 'ALTA',
                 categoria: 'QUALIDADE',
-                justificativa: `O item "${item}" apresentou falha ${data.count} vezes no período selecionado.`,
-                evidencias: data.ids.map((id, i) => ({ tipo: 'Falha Checklist', id, created_at: data.dates[i] })),
-                acaoRecomendada: 'Realizar análise de causa raiz (5 Porquês), ajustar parâmetros de setup e verificar qualidade dos insumos relacionados a este item.'
+                justificativa: `O item "${item}" falhou ${data.count} vezes. Isso indica uma instabilidade crônica no setup ou componente.`,
+                evidencias: data.ids.map((id, i) => ({ tipo: 'Falha Recorrente', id, created_at: data.dates[i] })),
+                acaoRecomendada: 'Aplicar a metodologia dos "5 Porquês". Verificar se há desgaste prematuro de peças ou variação na matéria-prima.'
             };
             sugestoes.push(sug);
             if (data.count >= 5) alertas.push(sug);
@@ -157,12 +157,12 @@ export const generateKaizen = (
     Object.entries(stopCounts).forEach(([motivo, data]) => {
         if (data.count >= 2) {
             sugestoes.push({
-                titulo: `Plano de manutenção focado em: ${motivo}`,
+                titulo: `Otimizar Disponibilidade: ${motivo}`,
                 severidade: 'ALTA',
                 categoria: 'MANUTENCAO',
-                justificativa: `Máquina parou ${data.count} vezes pelo mesmo motivo: ${motivo}.`,
+                justificativa: `A máquina parou ${data.count} vezes pelo mesmo motivo (${motivo}). Isso impacta diretamente o OEE.`,
                 evidencias: data.ids.map((id, i) => ({ tipo: 'Parada Recorrente', id, created_at: data.dates[i] })),
-                acaoRecomendada: 'Abrir tarefa de manutenção corretiva, revisar o componente afetado e antecipar a próxima manutenção preventiva.'
+                acaoRecomendada: 'Avaliar a necessidade de uma intervenção técnica preventiva. O custo da parada recorrente supera o custo do reparo planejado.'
             });
         }
     });
@@ -170,12 +170,12 @@ export const generateKaizen = (
     // 4. Diary Overload
     if (diario.length >= 10) {
         sugestoes.push({
-            titulo: 'Revisar padrão operacional e documentação',
+            titulo: 'Simplificar Registros Operacionais',
             severidade: 'MEDIA',
             categoria: 'TREINAMENTO',
-            justificativa: `Alto volume de registros no diário de bordo (${diario.length}) indica instabilidade no processo ou necessidade de registro excessivo.`,
+            justificativa: `Volume alto de registros manuais (${diario.length}). Isso consome tempo produtivo do operador.`,
             evidencias: diario.slice(0, 5).map(d => ({ tipo: 'Evento Diário', id: d.id, created_at: d.created_at })),
-            acaoRecomendada: 'Padronizar os registros frequentes criando tags ou campos dedicados no checklist para reduzir a necessidade de texto livre.'
+            acaoRecomendada: 'Verificar se existem novos tipos de ocorrências que poderiam ser automatizados ou transformados em botões rápidos no painel.'
         });
     }
 
@@ -183,12 +183,12 @@ export const generateKaizen = (
     const unidentified = difficulties.find(d => d.operadorId === 'unidentified');
     if (unidentified && unidentified.metricas.taxa_nao_realizado > 0) {
         sugestoes.push({
-            titulo: 'Melhorar identificação de operadores',
+            titulo: 'Garantir Rastreabilidade de Pessoas',
             severidade: 'MEDIA',
             categoria: 'DADOS',
-            justificativa: 'Existem eventos registrados sem identificação clara do operador responsável.',
-            evidencias: unidentified.metricas.taxa_nao_realizado > 0 ? [{ tipo: 'Alerta Dados', id: 'N/A', created_at: new Date().toISOString() }] : [],
-            acaoRecomendada: 'Reforçar o login obrigatório ao assumir a máquina e revisar o fluxo de identificação no terminal do operador.'
+            justificativa: 'Existem falhas de processo que não podem ser atribuídas a um responsável para feedback.',
+            evidencias: unidentified.metricas.taxa_nao_realizado > 0 ? [{ tipo: 'Falha de Identificação', id: 'SISTEMA', created_at: new Date().toISOString() }] : [],
+            acaoRecomendada: 'Auditarem o uso de crachás/logins no terminal e garantir que nenhum operador inicie o turno sem se identificar.'
         });
     }
 

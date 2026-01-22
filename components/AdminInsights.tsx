@@ -141,23 +141,35 @@ const AdminInsights: React.FC = () => {
         }
     };
 
+    const [showExplanation, setShowExplanation] = useState(false);
+
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-20">
             {/* Header & Filters */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-dark p-6 rounded-2xl border border-border-dark shadow-xl">
-                <div>
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <span className="material-icons-outlined text-primary text-3xl">Auto_awesome</span>
-                        Insights IA do Supervisor
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-dark/40 backdrop-blur-xl p-6 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary to-primary opacity-50"></div>
+                <div className="relative z-10">
+                    <h1 className="text-3xl font-black text-white flex items-center gap-3 tracking-tight">
+                        <span className="material-icons-outlined text-primary text-4xl drop-shadow-glow">Auto_awesome</span>
+                        Insights IA <span className="text-primary/80">Flux</span>
                     </h1>
-                    <p className="text-text-sub-dark text-sm mt-1">Inteligência Operacional e Melhoria Contínua (Kaizen)</p>
+                    <div className="flex items-center gap-2 mt-2">
+                        <p className="text-text-sub-dark text-sm font-medium">Inteligência Operacional e Melhoria Contínua</p>
+                        <button
+                            onClick={() => setShowExplanation(!showExplanation)}
+                            className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors border border-primary/20"
+                        >
+                            <span className="material-icons-outlined text-xs">help_outline</span>
+                            Como funciona?
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 relative z-10">
                     <select
                         value={selectedMachine}
                         onChange={(e) => setSelectedMachine(e.target.value)}
-                        className="bg-background-dark border border-border-dark text-white text-sm rounded-lg px-3 py-2 focus:ring-primary outline-none"
+                        className="bg-black/40 backdrop-blur-md border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/50 outline-none transition-all hover:bg-black/60"
                     >
                         <option value="all">Todas as Máquinas</option>
                         {machines.map(m => (
@@ -165,186 +177,260 @@ const AdminInsights: React.FC = () => {
                         ))}
                     </select>
 
-                    <div className="flex bg-background-dark p-1 rounded-lg border border-border-dark">
+                    <div className="flex bg-black/40 backdrop-blur-md p-1 rounded-xl border border-white/10">
                         {(['today', 'yesterday', '7d', '30d'] as const).map((p) => (
                             <button
                                 key={p}
                                 onClick={() => setPeriod(p)}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === p ? 'bg-primary text-white shadow-glow' : 'text-text-sub-dark hover:text-white'
+                                className={`px-4 py-2 text-xs font-black rounded-lg transition-all duration-300 ${period === p
+                                    ? 'bg-primary text-white shadow-glow translate-y-[-1px]'
+                                    : 'text-text-sub-dark hover:text-white hover:bg-white/5'
                                     }`}
                             >
-                                {p === 'today' ? 'Hoje' : p === 'yesterday' ? 'Ontem' : p === '7d' ? '7 Dias' : '30 Dias'}
+                                {p === 'today' ? 'Hoje' : p === 'yesterday' ? 'Ontem' : p === '7d' ? '7D' : '30D'}
                             </button>
                         ))}
                     </div>
                 </div>
             </div>
 
+            {/* Explanation Section (Hidden by default) */}
+            {showExplanation && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-slide-up bg-primary/5 border border-primary/20 p-6 rounded-3xl backdrop-blur-sm">
+                    <div className="space-y-2">
+                        <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center mb-3">
+                            <span className="material-icons-outlined text-primary">psychology</span>
+                        </div>
+                        <h4 className="text-white font-bold text-sm">Heurísticas Determinísticas</h4>
+                        <p className="text-text-sub-dark text-xs leading-relaxed">
+                            Nossa "IA" analisa padrões através de regras matemáticas precisas. Se um comportamento se repete X vezes, uma sugestão Kaizen é gerada automaticamente baseada em dados históricos.
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="w-10 h-10 bg-secondary/20 rounded-xl flex items-center justify-center mb-3">
+                            <span className="material-icons-outlined text-secondary">fact_check</span>
+                        </div>
+                        <h4 className="text-white font-bold text-sm">Cruzamento de Dados</h4>
+                        <p className="text-text-sub-dark text-xs leading-relaxed">
+                            Cruzamos Checklists, Paradas e Diário de Bordo para entender se um problema é mecânico (Manutenção), processual (Padronização) ou humano (Treinamento).
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="w-10 h-10 bg-warning/20 rounded-xl flex items-center justify-center mb-3">
+                            <span className="material-icons-outlined text-warning">speed</span>
+                        </div>
+                        <h4 className="text-white font-bold text-sm">Foco em OEE</h4>
+                        <p className="text-text-sub-dark text-xs leading-relaxed">
+                            O algoritmo prioriza alertas que impactam diretamente a Disponibilidade e Qualidade, as duas maiores alavancas para o OEE industrial.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 bg-surface-dark rounded-2xl border border-border-dark">
-                    <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4"></div>
-                    <p className="text-text-sub-dark">Analisando dados e gerando recomendações...</p>
+                <div className="flex flex-col items-center justify-center py-24 bg-surface-dark/40 backdrop-blur-md rounded-3xl border border-white/10">
+                    <div className="relative">
+                        <div className="w-16 h-16 border-4 border-primary/10 border-t-primary rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="material-icons-outlined text-primary animate-pulse text-xl">auto_fix_high</span>
+                        </div>
+                    </div>
+                    <p className="text-text-sub-dark mt-6 font-medium tracking-wide">Refinando heurísticas e gerando recomendações...</p>
                 </div>
             ) : insights.length === 0 ? (
-                <div className="text-center py-20 bg-surface-dark rounded-2xl border border-border-dark">
-                    <span className="material-icons-outlined text-6xl text-text-sub-dark/30 mb-4">analytics</span>
-                    <p className="text-text-sub-dark">Dados insuficientes para análise no período.</p>
+                <div className="text-center py-24 bg-surface-dark/40 backdrop-blur-md rounded-3xl border border-white/10">
+                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span className="material-icons-outlined text-4xl text-text-sub-dark/30">analytics</span>
+                    </div>
+                    <p className="text-text-sub-dark font-medium text-lg">Sem dados suficientes para análise neste período.</p>
+                    <button onClick={() => setPeriod('7d')} className="text-primary text-sm mt-4 hover:underline font-bold">Tentar um período maior</button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-8">
                     {insights.map((insight) => {
                         const report = kaizenReports[insight.machineId];
-                        const isExpanded = expandedMachine === insight.machineId;
 
                         return (
                             <div
                                 key={insight.machineId}
-                                className={`bg-surface-dark rounded-2xl border-l-4 p-6 shadow-xl transition-all ${insight.risk === 'VERMELHO' ? 'border-l-danger' :
-                                        insight.risk === 'AMARELO' ? 'border-l-warning' :
-                                            'border-l-secondary'
+                                className={`bg-surface-dark/40 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl relative group transition-all duration-500 hover:translate-y-[-4px] hover:shadow-primary/5 ${insight.risk === 'VERMELHO' ? 'hover:bg-danger/5' :
+                                    insight.risk === 'AMARELO' ? 'hover:bg-warning/5' :
+                                        'hover:bg-secondary/5'
                                     }`}
                             >
-                                <div className="flex flex-col lg:flex-row gap-8">
-                                    {/* Left Column: Summary & KPIs */}
-                                    <div className="lg:w-1/3 space-y-6">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h2 className="text-2xl font-bold text-white uppercase tracking-tight">{insight.machineName}</h2>
-                                                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mt-2 ${insight.risk === 'VERMELHO' ? 'bg-danger/10 text-danger' :
-                                                        insight.risk === 'AMARELO' ? 'bg-warning/10 text-warning' :
-                                                            'bg-secondary/10 text-secondary'
-                                                    }`}>
-                                                    <span className="w-2 h-2 rounded-full animate-pulse bg-current"></span>
-                                                    RISCO {insight.risk}
+                                {/* Risk Indicator Top Bar */}
+                                <div className={`absolute top-0 left-8 right-8 h-1 rounded-b-full opacity-60 ${insight.risk === 'VERMELHO' ? 'bg-danger' :
+                                    insight.risk === 'AMARELO' ? 'bg-warning' :
+                                        'bg-secondary'
+                                    }`}></div>
+
+                                <div className="p-8">
+                                    <div className="flex flex-col lg:flex-row gap-10">
+                                        {/* Left Column: Summary & KPIs */}
+                                        <div className="lg:w-1/3 space-y-8">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h2 className="text-3xl font-black text-white tracking-tighter uppercase">{insight.machineName}</h2>
+                                                    <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black mt-3 border ${insight.risk === 'VERMELHO' ? 'bg-danger/10 text-danger border-danger/20' :
+                                                        insight.risk === 'AMARELO' ? 'bg-warning/10 text-warning border-warning/20' :
+                                                            'bg-secondary/10 text-secondary border-secondary/20'
+                                                        }`}>
+                                                        <span className="w-2 h-2 rounded-full animate-pulse bg-current"></span>
+                                                        STATUS: RISCO {insight.risk}
+                                                    </div>
                                                 </div>
+                                                <button
+                                                    onClick={() => handleExportText(insight.machineId)}
+                                                    className="p-3 bg-white/5 hover:bg-primary text-text-sub-dark hover:text-white rounded-2xl transition-all border border-white/5 hover:border-primary shadow-lg group/btn"
+                                                    title="Copiar Relatório IA"
+                                                >
+                                                    <span className="material-icons-outlined group-hover/btn:scale-110 transition-transform">share</span>
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={() => handleExportText(insight.machineId)}
-                                                className="p-2 bg-white/5 hover:bg-white/10 text-text-sub-dark hover:text-white rounded-lg transition-colors border border-white/5"
-                                                title="Exportar Relatório"
-                                            >
-                                                <span className="material-icons-outlined">content_copy</span>
-                                            </button>
-                                        </div>
 
-                                        <div className="bg-background-dark/50 p-4 rounded-xl border border-white/5 relative group">
-                                            <p className="text-sm text-text-main-dark leading-relaxed whitespace-pre-line font-medium italic">
-                                                "{insight.summary}"
-                                            </p>
-                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <span className="material-icons-outlined text-primary text-xs">auto_fix_high</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Stats */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="bg-background-dark/30 p-3 rounded-xl border border-white/5">
-                                                <p className="text-[10px] text-text-sub-dark font-bold uppercase tracking-wider mb-1">Checklists OK</p>
-                                                <p className="text-xl font-bold text-white">{insight.metrics.checklists_ok}/{insight.metrics.total_checklists}</p>
-                                            </div>
-                                            <div className="bg-background-dark/30 p-3 rounded-xl border border-white/5">
-                                                <p className="text-[10px] text-text-sub-dark font-bold uppercase tracking-wider mb-1">Alertas/Falhas</p>
-                                                <p className={`text-xl font-bold ${insight.metrics.checklists_problema + insight.metrics.checklists_nao_realizado > 0 ? 'text-danger' : 'text-white'}`}>
-                                                    {insight.metrics.checklists_problema + insight.metrics.checklists_nao_realizado}
+                                            <div className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/5 relative group/quote shadow-inner">
+                                                <span className="material-icons-outlined absolute -top-3 -left-2 text-primary/40 text-4xl select-none">format_quote</span>
+                                                <p className="text-base text-white/90 leading-relaxed font-medium italic relative z-10">
+                                                    {insight.summary}
                                                 </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Middle Column: Alerts & Kaizen */}
-                                    <div className="lg:w-2/3 flex flex-col md:flex-row gap-6">
-                                        {/* Alerts & Suggestions */}
-                                        <div className="flex-1 space-y-6">
-                                            {report?.alertas.length > 0 && (
-                                                <div className="space-y-3">
-                                                    <h3 className="text-xs font-bold text-danger flex items-center gap-2 uppercase tracking-widest">
-                                                        <span className="material-icons-outlined text-sm">notification_important</span>
-                                                        Alertas Críticos
-                                                    </h3>
-                                                    {report.alertas.map((alerta, idx) => (
-                                                        <div key={idx} className="bg-danger/10 border border-danger/20 p-3 rounded-xl animate-pulse">
-                                                            <p className="text-sm font-bold text-danger">{alerta.titulo}</p>
-                                                            <p className="text-xs text-danger/80 mt-1">{alerta.justificativa}</p>
-                                                        </div>
-                                                    ))}
+                                                <div className="mt-4 flex items-center gap-2 text-[10px] text-primary font-bold uppercase tracking-widest opacity-60">
+                                                    <span className="w-8 h-[1px] bg-primary/30"></span>
+                                                    Análise Heurística v1.2
                                                 </div>
-                                            )}
+                                            </div>
 
-                                            <div className="space-y-4">
-                                                <h3 className="text-xs font-bold text-primary flex items-center gap-2 uppercase tracking-widest">
-                                                    <span className="material-icons-outlined text-sm">trending_up</span>
-                                                    Sugestões Kaizen (Melhoria)
-                                                </h3>
-                                                {report?.sugestoes.slice(0, 3).map((sug, idx) => (
-                                                    <div key={idx} className="bg-white/5 border border-white/10 p-4 rounded-xl hover:bg-white/[0.07] transition-colors group">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-block ${getSeverityColor(sug.severidade)}`}>
-                                                                {sug.severidade} | {sug.categoria}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-sm font-bold text-white mb-1">{sug.titulo}</p>
-                                                        <p className="text-xs text-text-sub-dark mb-3 line-clamp-2 italic">"{sug.justificativa}"</p>
-                                                        <div className="bg-primary/10 border border-primary/20 p-2 rounded-lg">
-                                                            <p className="text-[10px] font-bold text-primary uppercase mb-1 flex items-center gap-1">
-                                                                <span className="material-icons-outlined text-[12px]">rocket_launch</span>
-                                                                Ação Recomendada
-                                                            </p>
-                                                            <p className="text-xs text-white/90 leading-tight">{sug.acaoRecomendada}</p>
-                                                        </div>
-
-                                                        {/* Evidence Popover/List if available */}
-                                                        {sug.evidencias.length > 0 && (
-                                                            <div className="mt-3 flex gap-2 flex-wrap">
-                                                                {sug.evidencias.slice(0, 2).map((ev, ei) => (
-                                                                    <span key={ei} className="text-[9px] font-mono text-text-sub-dark bg-black/40 px-1.5 py-0.5 rounded">
-                                                                        ID: {ev.id.substring(0, 6)}...
-                                                                    </span>
-                                                                ))}
-                                                                {sug.evidencias.length > 2 && <span className="text-[9px] text-text-sub-dark">+{sug.evidencias.length - 2} evidências</span>}
-                                                            </div>
-                                                        )}
+                                            {/* Advanced Stats Grid */}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-white/[0.03] p-4 rounded-2xl border border-white/5 group/stat">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="material-icons-outlined text-xs text-secondary">task_alt</span>
+                                                        <p className="text-[10px] text-text-sub-dark font-black uppercase tracking-widest">Aderência</p>
                                                     </div>
-                                                ))}
+                                                    <p className="text-2xl font-black text-white group-hover/stat:text-secondary transition-colors">
+                                                        {((insight.metrics.checklists_ok / (insight.metrics.total_checklists || 1)) * 100).toFixed(0)}%
+                                                    </p>
+                                                    <div className="w-full h-1 bg-white/5 rounded-full mt-2 overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-secondary transition-all duration-1000"
+                                                            style={{ width: `${(insight.metrics.checklists_ok / (insight.metrics.total_checklists || 1)) * 100}%` }}
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-white/[0.03] p-4 rounded-2xl border border-white/5 group/stat">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="material-icons-outlined text-xs text-danger">report_problem</span>
+                                                        <p className="text-[10px] text-text-sub-dark font-black uppercase tracking-widest">Anomalias</p>
+                                                    </div>
+                                                    <p className={`text-2xl font-black transition-colors ${insight.metrics.checklists_problema > 0 ? 'text-danger group-hover/stat:text-danger' : 'text-white'}`}>
+                                                        {insight.metrics.checklists_problema}
+                                                    </p>
+                                                    <p className="text-[10px] text-text-sub-dark mt-1 font-bold">Eventos Críticos</p>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Right Column: Operator Difficulty */}
-                                        <div className="md:w-64 space-y-4">
-                                            <h3 className="text-xs font-bold text-white/60 flex items-center gap-2 uppercase tracking-widest">
-                                                <span className="material-icons-outlined text-sm">groups</span>
-                                                Perfil de Operadores
-                                            </h3>
-                                            <div className="space-y-3">
-                                                {report?.dificuldades.map((diff, idx) => (
-                                                    <div key={idx} className="bg-background-dark/40 border border-white/5 p-3 rounded-xl">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <p className="text-xs font-bold text-white truncate w-32">{diff.operadorNome}</p>
-                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${diff.nivel === 'ALTA' ? 'bg-danger/20 text-danger' :
-                                                                    diff.nivel === 'MEDIA' ? 'bg-warning/20 text-warning' :
-                                                                        'bg-secondary/20 text-secondary'
-                                                                }`}>
-                                                                {diff.nivel}
-                                                            </span>
+                                        {/* Right Column: AI Engine Results */}
+                                        <div className="lg:w-2/3 flex flex-col xl:flex-row gap-8">
+                                            {/* Kaizen & Alerts Container */}
+                                            <div className="flex-1 space-y-8">
+                                                {report?.alertas.length > 0 && (
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 bg-danger/20 rounded-lg flex items-center justify-center">
+                                                                <span className="material-icons-outlined text-danger text-sm">priority_high</span>
+                                                            </div>
+                                                            <h3 className="text-sm font-black text-white uppercase tracking-widest">Ações Imediatas Requeridas</h3>
                                                         </div>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div className="text-[10px]">
-                                                                <p className="text-text-sub-dark">T. N. Realiz.</p>
-                                                                <p className={`font-mono ${diff.metricas.taxa_nao_realizado > 0 ? 'text-danger' : 'text-text-sub-dark'}`}>
-                                                                    {(diff.metricas.taxa_nao_realizado * 100).toFixed(0)}%
+                                                        {report.alertas.map((alerta, idx) => (
+                                                            <div key={idx} className="bg-gradient-to-br from-danger/20 to-danger/5 border border-danger/30 p-5 rounded-2xl relative overflow-hidden group/alert">
+                                                                <div className="absolute top-0 right-0 w-32 h-32 bg-danger/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover/alert:scale-150 transition-transform"></div>
+                                                                <p className="text-sm font-black text-danger flex items-center gap-2 relative z-10">
+                                                                    <span className="w-2 h-2 bg-danger rounded-full animate-ping"></span>
+                                                                    {alerta.titulo}
                                                                 </p>
+                                                                <p className="text-xs text-white/80 mt-2 leading-relaxed relative z-10 font-medium">"{alerta.justificativa}"</p>
                                                             </div>
-                                                            <div className="text-[10px]">
-                                                                <p className="text-text-sub-dark">T. Prob.</p>
-                                                                <p className="font-mono text-text-sub-dark">{(diff.metricas.taxa_problema * 100).toFixed(0)}%</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {report?.dificuldades.length === 0 && (
-                                                    <div className="text-center py-6 border border-dashed border-white/10 rounded-xl">
-                                                        <p className="text-[10px] text-text-sub-dark">Sem dados de operadores</p>
+                                                        ))}
                                                     </div>
                                                 )}
+
+                                                <div className="space-y-5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
+                                                            <span className="material-icons-outlined text-primary text-sm">auto_graph</span>
+                                                        </div>
+                                                        <h3 className="text-sm font-black text-white uppercase tracking-widest">Plano de Melhoria (Kaizen)</h3>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {report?.sugestoes.slice(0, 4).map((sug, idx) => (
+                                                            <div key={idx} className="bg-white/[0.03] border border-white/10 p-5 rounded-2xl hover:bg-white/[0.08] transition-all duration-300 group/k">
+                                                                <div className="flex items-center gap-2 mb-4">
+                                                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${getSeverityColor(sug.severidade).replace('bg-', 'bg-opacity-20 bg-')}`}>
+                                                                        {sug.categoria}
+                                                                    </span>
+                                                                    <span className="w-1 h-1 bg-white/20 rounded-full"></span>
+                                                                    <span className="text-[9px] text-text-sub-dark font-bold uppercase">{sug.severidade}</span>
+                                                                </div>
+
+                                                                <h4 className="text-sm font-black text-white mb-2 leading-tight group-hover/k:text-primary transition-colors">{sug.titulo}</h4>
+                                                                <p className="text-xs text-text-sub-dark mb-5 leading-relaxed italic line-clamp-2">"{sug.justificativa}"</p>
+
+                                                                <div className="bg-black/40 border border-primary/20 p-4 rounded-xl group-hover/k:border-primary/40 transition-colors">
+                                                                    <div className="flex items-center gap-2 mb-2">
+                                                                        <span className="material-icons-outlined text-primary text-[14px]">bolt</span>
+                                                                        <p className="text-[10px] font-black text-primary uppercase tracking-tighter">Ação Corretiva</p>
+                                                                    </div>
+                                                                    <p className="text-xs text-white/90 leading-tight font-medium">{sug.acaoRecomendada}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* New Feature: Operator Performance Matrix */}
+                                            <div className="xl:w-72 space-y-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
+                                                        <span className="material-icons-outlined text-white/60 text-sm">radar</span>
+                                                    </div>
+                                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Matriz Humana</h3>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    {report?.dificuldades.map((diff, idx) => (
+                                                        <div key={idx} className="bg-black/20 border border-white/5 p-4 rounded-2xl relative overflow-hidden hover:border-white/20 transition-all group/op">
+                                                            <div className="flex items-center gap-3 mb-4">
+                                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center text-xs font-black text-white border border-white/10 group-hover/op:border-primary/50 transition-all">
+                                                                    {diff.operadorNome.charAt(0)}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs font-black text-white truncate">{diff.operadorNome}</p>
+                                                                    <p className="text-[9px] text-text-sub-dark font-bold uppercase">{diff.nivel === 'ALTA' ? 'Requer Atenção' : diff.nivel === 'MEDIA' ? 'Monitorar' : 'Estável'}</p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-3">
+                                                                <div className="flex justify-between items-center text-[10px]">
+                                                                    <span className="text-text-sub-dark font-bold">Assiduidade</span>
+                                                                    <span className={`${diff.metricas.taxa_nao_realizado > 0 ? 'text-danger font-black' : 'text-secondary font-black'}`}>
+                                                                        {((1 - diff.metricas.taxa_nao_realizado) * 100).toFixed(0)}%
+                                                                    </span>
+                                                                </div>
+                                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full transition-all duration-1000 ${diff.nivel === 'ALTA' ? 'bg-danger' : 'bg-secondary'}`}
+                                                                        style={{ width: `${(1 - diff.metricas.taxa_nao_realizado) * 100}%` }}
+                                                                    ></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {report?.dificuldades.length === 0 && (
+                                                        <div className="text-center py-10 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl">
+                                                            <p className="text-xs text-text-sub-dark font-medium italic">Matriz em processamento...</p>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
