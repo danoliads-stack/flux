@@ -28,6 +28,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { useAppStore } from './src/store/useAppStore';
 import { getMachineSlug } from './src/utils/slug';
 import { logger } from './src/utils/logger';
+import { formatTime } from './src/hooks/useFormatTime';
 
 // --- PROTECTED ROUTE COMPONENT ---
 interface ProtectedRouteProps {
@@ -558,13 +559,9 @@ const App: React.FC = () => {
     // RPCs own machine state transitions to keep DB consistent.
   }, [opState, selectedMachineId, activeOP]);
 
-  // Format seconds to HH:MM:SS
-  const formatTime = (totalSeconds: number) => {
-    const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-    const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
-    const s = (totalSeconds % 60).toString().padStart(2, '0');
-    return `${h}:${m}:${s}`;
-  };
+
+  // formatTime is now imported from src/hooks/useFormatTime
+
 
   // Set operator's turno from user session (already fetched on login)
   useEffect(() => {
@@ -1080,13 +1077,13 @@ const App: React.FC = () => {
               <Route path="/maquinas/:id" element={
                 <ProtectedRoute user={currentUser} permission={Permission.VIEW_OPERATOR_DASHBOARD} userPermissions={userPermissions}>
                   {currentMachine ? (
-                      <OperatorDashboard
-                        opState={opState}
-                        statusChangeAt={localStatusChangeAt}
-                        realized={totalProduced}
-                        oee={95} // TODO: Calculate OEE
-                        opId={activeOP}
-                        opCodigo={activeOPCodigo}
+                    <OperatorDashboard
+                      opState={opState}
+                      statusChangeAt={localStatusChangeAt}
+                      realized={totalProduced}
+                      oee={95} // TODO: Calculate OEE
+                      opId={activeOP}
+                      opCodigo={activeOPCodigo}
                       onOpenSetup={() => setActiveModal('setup')}
                       onOpenStop={() => setActiveModal('stop')}
                       onOpenFinalize={() => {

@@ -7,6 +7,7 @@ import ChecklistLabelModal from './modals/ChecklistLabelModal';
 import PalletLabelModal from './modals/PalletLabelModal';
 import MaintenanceCallModal from './modals/MaintenanceCallModal';
 import { useAppStore } from '../src/store/useAppStore';
+import { formatSeconds, parseCycleTimeToSeconds } from '../src/hooks/useFormatTime';
 
 interface OperatorDashboardProps {
   opState: OPState;
@@ -125,51 +126,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     return () => clearInterval(interval);
   }, [statusChangeAt, opState, operatorSessionStartedAt]);
 
-  // Helper: Format seconds to HH:MM:SS
-  const formatSeconds = (totalSeconds: number): string => {
-    const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-    const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
-    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-    return `${hours}:${minutes}:${seconds}`;
-  };
 
+  // formatSeconds and parseCycleTimeToSeconds are now imported from src/hooks/useFormatTime
 
-  const parseCycleTimeToSeconds = (value: unknown): number => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return Math.max(0, value);
-    }
-    if (typeof value !== 'string') return 0;
-
-    const raw = value.trim().toLowerCase();
-    if (!raw) return 0;
-
-    if (raw.includes(':')) {
-      const parts = raw.split(':').map((part) => Number(part.replace(',', '.')));
-      if (parts.some((p) => Number.isNaN(p))) return 0;
-      if (parts.length === 3) {
-        return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
-      }
-      if (parts.length === 2) {
-        return Math.max(0, parts[0] * 60 + parts[1]);
-      }
-      return Math.max(0, parts[0]);
-    }
-
-    const normalized = raw.replace(',', '.');
-    const match = normalized.match(/^(\d+(?:\.\d+)?)([a-z]+)?$/);
-    if (!match) {
-      const fallback = Number(normalized);
-      return Number.isFinite(fallback) ? Math.max(0, fallback) : 0;
-    }
-
-    const amount = Number(match[1]);
-    if (!Number.isFinite(amount)) return 0;
-    const unit = match[2] || 's';
-    if (unit === 's' || unit === 'sec' || unit === 'secs') return Math.max(0, amount);
-    if (unit === 'm' || unit === 'min' || unit === 'mins') return Math.max(0, amount * 60);
-    if (unit === 'h' || unit === 'hr' || unit === 'hrs') return Math.max(0, amount * 3600);
-    return Math.max(0, amount);
-  };
 
   // Calculate current phase elapsed seconds (for adding to accumulated)
   const currentPhaseSeconds = statusChangeAt
@@ -380,7 +339,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     const tiposMap = new Map<string, string>();
     tiposParada?.forEach((t: any) => tiposMap.set(t.id, t.nome));
 
-        // 3. Buscar checklists para nome
+    // 3. Buscar checklists para nome
     const { data: checklistData } = await supabase
       .from('checklist_eventos')
       .select('*, checklists(nome), operadores(nome)')
@@ -1617,7 +1576,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           {cycleTime <= 0 && (
             <div className="text-[10px] text-warning mt-1">Ciclo estimado nao definido</div>
           )}
- 
+
         </div>
 
         <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group border-l-primary/30">
