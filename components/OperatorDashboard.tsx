@@ -272,7 +272,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if (!machineId) return;
     const loadGoal = async () => {
       const { data, error } = await supabase
-        .from('máquinas')
+        .from('maquinas')
         .select('oee_meta')
         .eq('id', machineId)
         .maybeSingle();
