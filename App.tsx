@@ -211,7 +211,8 @@ const App: React.FC = () => {
             case MachineStatus.RUNNING: dbOpState = 'PRODUCAO'; break;
             case MachineStatus.STOPPED: dbOpState = 'PARADA'; break;
             case MachineStatus.SUSPENDED: dbOpState = 'SUSPENSA'; break;
-            default: dbOpState = 'IDLE';
+            case MachineStatus.MAINTENANCE: dbOpState = 'MANUTENCAO'; break;
+            default: dbOpState = machineData.op_atual_id ? 'AGUARDANDO' : 'IDLE';
           }
         }
 
@@ -445,17 +446,15 @@ const App: React.FC = () => {
           ? {
             ...m,
             status: update.status as MachineStatus,
+            status_atual: update.status as MachineStatus,
             operador_atual_id: update.operatorId || null,
             op_atual_id: update.opId || null
           }
           : m
       ));
 
-      // Se for a máquina selecionada ou update veio do banco, faz refresh completo
-      if (update.machineId === selectedMachineId || update.source === 'database') {
-        logger.log('[App] ?? Refreshing machines due to update');
-        fetchMachines();
-      }
+      // Sempre faz refresh completo para garantir sincronia de todos os campos
+      fetchMachines();
     });
 
     return () => {
@@ -552,7 +551,8 @@ const App: React.FC = () => {
             case MachineStatus.RUNNING: mappedState = 'PRODUCAO'; break;
             case MachineStatus.STOPPED: mappedState = 'PARADA'; break;
             case MachineStatus.SUSPENDED: mappedState = 'SUSPENSA'; break;
-            default: mappedState = 'IDLE';
+            case MachineStatus.MAINTENANCE: mappedState = 'MANUTENCAO'; break;
+            default: mappedState = currentMachine.op_atual_id ? 'AGUARDANDO' : 'IDLE';
           }
           setOpState(mappedState);
         }
@@ -1045,9 +1045,23 @@ const App: React.FC = () => {
   const handleStartProduction = async () => {
     if (currentMachine) {
       if (!activeOP) {
-        alert('?? Não é possível iniciar a produção sem uma Ordem de Produção (OP) selecionada. Por favor, realize o SETUP.');
+        alert('Não é possível iniciar a produção sem uma Ordem de Produção (OP) selecionada. Por favor, realize o SETUP.');
         return;
       }
+
+      // Lock de OP: impede 2 máquinas produzindo a mesma OP simultaneamente
+      const { data: conflictMachines } = await supabase
+        .from('maquinas')
+        .select('id, nome')
+        .eq('op_atual_id', activeOP)
+        .eq('status_atual', MachineStatus.RUNNING)
+        .neq('id', currentMachine.id);
+
+      if (conflictMachines && conflictMachines.length > 0) {
+        alert(`Esta OP já está sendo produzida na máquina "${(conflictMachines[0] as any).nome}". Não é permitido 2 máquinas produzindo a mesma OP simultaneamente.`);
+        return;
+      }
+
       const now = new Date().toISOString();
 
       // Accumulate Setup Time BEFORE switching to Production

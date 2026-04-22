@@ -144,12 +144,12 @@ const AdminInsights: React.FC = () => {
     const [showExplanation, setShowExplanation] = useState(false);
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-20">
+        <div className="h-full flex flex-col overflow-hidden p-3 gap-3 animate-fade-in">
             {/* Header & Filters */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-dark/40 backdrop-blur-xl p-6 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden">
+            <div className="shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-surface-dark rounded-xl p-4 border border-border-dark relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary to-primary opacity-50"></div>
                 <div className="relative z-10">
-                    <h1 className="text-3xl font-black text-white flex items-center gap-3 tracking-tight">
+                    <h1 className="text-base md:text-xl font-black text-white flex items-center gap-2 tracking-tight">
                         <span className="material-icons-outlined text-primary text-4xl drop-shadow-glow">Auto_awesome</span>
                         Insights IA <span className="text-primary/80">Flux</span>
                     </h1>
@@ -227,6 +227,8 @@ const AdminInsights: React.FC = () => {
                 </div>
             )}
 
+            {/* Conteúdo scrollável */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-4">
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-24 bg-surface-dark/40 backdrop-blur-md rounded-3xl border border-white/10">
                     <div className="relative">
@@ -440,6 +442,7 @@ const AdminInsights: React.FC = () => {
                     })}
                 </div>
             )}
+            </div>{/* fim scroll */}
         </div>
     );
 };

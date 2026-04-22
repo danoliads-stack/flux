@@ -107,7 +107,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       )
       : (statusChangeAt ? new Date(statusChangeAt).getTime() : 0);
 
-    if (!baseStart || opState === 'IDLE') {
+    if (!baseStart || opState === 'IDLE' || opState === 'AGUARDANDO') {
       setElapsedString('00:00:00');
       return;
     }
@@ -274,7 +274,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // Alert states for timer notifications
 
   // Sidebar toggle state (replacing draggable)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeBottomPanel, setActiveBottomPanel] = useState<'ops' | 'checklists' | 'diary' | 'maintenance' | null>(null);
 
   // NEW: Manual Label Emission States
   const [showLabelTypeModal, setShowLabelTypeModal] = useState(false);
@@ -1142,7 +1142,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   }, [machineId]);
 
   return (
-    <div className="p-4 md:p-8 space-y-8 animate-fade-in">
+    <div className="h-full flex flex-col overflow-hidden p-3 gap-2 animate-fade-in">
       {/* ?? INCONSISTENCY ALERT */}
       {(opState === 'PRODUCAO' || opState === 'SETUP' || opState === 'PARADA') && !opId && (
         <div className="bg-red-900/20 border-2 border-red-500 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6 animate-pulse-border">
@@ -1168,446 +1168,218 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         </div>
       )}
 
-      {/* Open Control Panel Button (shown only when closed) */}
-      {!isSidebarOpen && (
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed top-20 right-4 z-50 p-3 rounded-xl shadow-lg transition-all duration-300 bg-surface-dark border border-border-dark text-white hover:border-primary/50"
-          title="Abrir Painel de Controle"
-        >
-          <span className="material-icons-outlined">menu_open</span>
-        </button>
-      )}
-
-      {/* Fixed Sidebar with OP Sequence and Checklists */}
-      <div
-        className={`fixed top-0 right-0 h-full z-40 w-80 md:w-96 bg-surface-dark border-l border-white/5 shadow-2xl transform transition-transform duration-300 flex flex-col ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10 bg-gradient-to-r from-surface-dark to-surface-dark/50 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <span className="material-icons-outlined text-primary text-lg">dashboard_customize</span>
-            </div>
-            <div>
-              <h3 className="text-white font-display font-bold text-sm tracking-wide uppercase">Painel de Controle</h3>
-              <p className="text-xs text-text-sub-dark">Ferramentas do Operador</p>
-            </div>
-          </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="text-text-sub-dark hover:text-white transition-colors">
-            <span className="material-icons-outlined">close</span>
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
-          {/* Quick Summary */}
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-[#14171d] to-[#0f1218] p-4">
-            <div className="flex items-center justify-between mb-3">
+      {/* Bottom Sheet Overlay */}
+      {activeBottomPanel && (
+        <div className="fixed inset-0 z-40 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setActiveBottomPanel(null)} />
+          <div className="relative bg-surface-dark border-t border-border-dark rounded-t-2xl max-h-[55vh] flex flex-col shadow-2xl animate-slide-up">
+            {/* Sheet header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="material-icons-outlined text-primary text-sm">insights</span>
-                <span className="text-white text-xs font-bold uppercase tracking-wider">Resumo rapido</span>
+                {activeBottomPanel === 'ops' && <><span className="material-icons-outlined text-primary text-lg">playlist_play</span><span className="text-white font-bold text-sm uppercase tracking-wider">Fila de Produção</span></>}
+                {activeBottomPanel === 'checklists' && <><span className="material-icons-outlined text-secondary text-lg">fact_check</span><span className="text-white font-bold text-sm uppercase tracking-wider">Checklists</span></>}
+                {activeBottomPanel === 'diary' && <><span className="material-icons-outlined text-purple-400 text-lg">menu_book</span><span className="text-white font-bold text-sm uppercase tracking-wider">Diário de Bordo</span></>}
+                {activeBottomPanel === 'maintenance' && <><span className="material-icons-outlined text-orange-400 text-lg">build</span><span className="text-white font-bold text-sm uppercase tracking-wider">Manutenção</span></>}
               </div>
-              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${opState === 'PRODUCAO'
-                ? 'bg-secondary/10 text-secondary border-secondary/30'
-                : opState === 'PARADA' ? 'bg-danger/10 text-danger border-danger/30'
-                  : opState === 'SUSPENSA' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
-                    : opState === 'MANUTENCAO' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
-                      : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
-                }`}>
-                {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : opState === 'MANUTENCAO' ? 'Manutenção' : 'Aguardando'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">OP atual</div>
-                <div className="text-sm font-bold text-white truncate">{opCodigo || opId || 'Sem OP'}</div>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">Checklists</div>
-                <div className="text-sm font-bold text-white">{checklists.length}</div>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">Diario</div>
-                <div className="text-sm font-bold text-white">{diaryEntries.length}</div>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-text-sub-dark mb-1">Sequencia</div>
-                <div className="text-sm font-bold text-white">{sequencedOPs.length}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="rounded-2xl border border-white/10 bg-[#14171d] p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="material-icons-outlined text-orange-400 text-sm">build</span>
-              <span className="text-white text-xs font-bold uppercase tracking-wider">Acoes rapidas</span>
-            </div>
-            <button
-              onClick={() => opState !== 'MANUTENCAO' && setShowMaintenanceModal(true)}
-              disabled={opState === 'MANUTENCAO'}
-              className={`w-full rounded-xl p-3 text-left border transition-all duration-200 ${opState === 'MANUTENCAO'
-                ? 'border-orange-500/50 bg-orange-500/10 text-orange-400 cursor-default'
-                : 'border-border-dark bg-surface-dark hover:border-orange-500/60 hover:bg-orange-500/10 text-white'
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="material-icons-outlined text-orange-400">
-                    {opState === 'MANUTENCAO' ? 'engineering' : 'build'}
-                  </span>
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-wider">
-                      {opState === 'MANUTENCAO' ? 'Manutenção em andamento' : 'Chamar manutenção'}
-                    </div>
-                    <div className="text-[10px] text-text-sub-dark">
-                      {opState === 'MANUTENCAO' ? 'Aguardando técnico' : 'Solicitar técnico e parar máquina'}
-                    </div>
-                  </div>
-                </div>
-                {opState === 'MANUTENCAO' && (
-                  <div className="text-right">
-                    <div className="text-[10px] text-orange-400 font-bold">MANUTENCAO</div>
-                    <div className="text-sm font-mono font-bold text-orange-400">{displayTimer}</div>
-                  </div>
+              <div className="flex items-center gap-2">
+                {activeBottomPanel === 'diary' && (
+                  <button onClick={() => setShowDiaryInputModal(true)} className="flex items-center gap-1 px-3 py-1 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-300 text-xs font-bold uppercase hover:bg-purple-500 hover:text-white transition-all">
+                    <span className="material-icons-outlined text-sm">add</span>Novo
+                  </button>
                 )}
-              </div>
-            </button>
-          </div>
-          {/* OP Sequence Section */}
-          <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            <div className="flex items-start gap-3 mb-3 px-1">
-              <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
-                1
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="material-icons-outlined text-primary text-sm">playlist_play</span>
-                  <span className="text-white text-xs font-bold uppercase tracking-wider">Fila de Producao</span>
-                </div>
-                <p className="text-[10px] text-text-sub-dark mt-1">Ordem das OPs desta máquina (a atual fica em destaque)</p>
+                <button onClick={() => setActiveBottomPanel(null)} className="p-1.5 rounded-lg text-text-sub-dark hover:text-white hover:bg-white/10 transition-colors">
+                  <span className="material-icons-outlined">close</span>
+                </button>
               </div>
             </div>
-            <div className="space-y-2">
-              {sequencedOPs.length > 0 ? (
-                sequencedOPs.slice(0, 5).map((op, idx) => (
-                  <div
-                    key={op.id}
-                    className={`relative p-3 rounded-xl border flex items-center gap-3 transition-all duration-200 group ${op.id === opId
-                      ? 'bg-primary/10 border-primary/50 text-white shadow-[0_0_15px_rgba(34,211,238,0.15)]'
-                      : 'bg-[#15181e] border-white/5 text-gray-400 hover:bg-white/5 hover:border-white/10'
-                      }`}
-                  >
-                    <div className={`w-6 h-6 flex items-center justify-center rounded-md text-[10px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-white/5 text-gray-500'
-                      }`}>
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`font-mono font-bold text-xs truncate ${op.id === opId ? 'text-primary' : 'text-gray-300'}`}>{op.codigo}</p>
-                      <p className="text-[10px] text-gray-500 truncate">{op.produto_nome || 'Produto padrao'}</p>
-                    </div>
-                    {op.id === opId ? (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded border bg-primary/15 text-primary border-primary/30">
-                        Atual
-                      </span>
-                    ) : idx === 0 ? (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded border bg-white/5 text-gray-300 border-white/10">
-                        Proxima
-                      </span>
-                    ) : null}
-                    {op.id === opId && (
-                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-glow-blue"></div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
-                  <span className="material-icons-outlined text-gray-600 text-2xl mb-2">playlist_remove</span>
-                  <p className="text-gray-500 text-xs">Fila de producao vazia</p>
-                </div>
-              )}
-            </div>
-          </div>
 
-          {/* Checklists Section */}
-          <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <div className="flex items-start gap-3 mb-3 px-1">
-              <div className="w-6 h-6 rounded-md bg-secondary/10 text-secondary flex items-center justify-center text-[10px] font-bold">
-                2
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="material-icons-outlined text-secondary text-sm">fact_check</span>
-                  <span className="text-white text-xs font-bold uppercase tracking-wider">Checklists do Setor</span>
-                </div>
-                <p className="text-[10px] text-text-sub-dark mt-1">Toque para abrir e registrar</p>
-                <p className="text-[10px] text-text-sub-dark mt-1">
-                  Proximo checklist:{' '}
-                  <span className={`font-mono ${isNextChecklistOverdue ? 'text-danger' : 'text-white'}`}>
-                    {nextChecklistCountdown}
-                  </span>
+            {/* Sheet content */}
+            <div className="overflow-y-auto custom-scrollbar p-4 space-y-2">
+              {/* Fila de OPs */}
+              {activeBottomPanel === 'ops' && (
+                sequencedOPs.length > 0 ? sequencedOPs.map((op, idx) => (
+                  <div key={op.id} className={`p-3 rounded-xl border flex items-center gap-3 ${op.id === opId ? 'bg-primary/10 border-primary/50' : 'bg-white/5 border-white/5'}`}>
+                    <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold ${op.id === opId ? 'bg-primary text-black' : 'bg-white/10 text-gray-400'}`}>{idx + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-mono font-bold text-xs ${op.id === opId ? 'text-primary' : 'text-gray-300'}`}>{op.codigo}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{op.produto_nome || 'Produto padrão'}</p>
+                    </div>
+                    {op.id === opId && <span className="text-[9px] font-bold uppercase px-2 py-1 rounded border bg-primary/15 text-primary border-primary/30">Atual</span>}
+                    {op.id === opId && <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
+                  </div>
+                )) : (
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <span className="material-icons-outlined text-gray-600 text-3xl mb-2">playlist_remove</span>
+                    <p className="text-gray-500 text-sm">Fila de produção vazia</p>
+                  </div>
+                )
+              )}
+
+              {/* Checklists */}
+              {activeBottomPanel === 'checklists' && (
+                <>
                   {nextChecklistName && (
-                    <span className="text-text-sub-dark"> - {nextChecklistName}</span>
+                    <div className={`flex items-center gap-2 p-2 rounded-lg border text-xs mb-2 ${isNextChecklistOverdue ? 'bg-danger/10 border-danger/30 text-danger' : 'bg-white/5 border-white/10 text-text-sub-dark'}`}>
+                      <span className="material-icons-outlined text-sm">timer</span>
+                      Próximo: <strong>{nextChecklistName}</strong> em <strong className="font-mono">{nextChecklistCountdown}</strong>
+                    </div>
                   )}
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-2">
-              {checklists.length > 0 ? (
-                checklists.slice(0, 5).map((checklist) => (
-                  <button
-                    key={checklist.id}
-                    onClick={() => openChecklist(checklist.id)}
-                    className="w-full p-3 rounded-xl border border-white/5 bg-[#15181e] text-left group hover:border-secondary/50 hover:bg-secondary/5 transition-all duration-200"
-                  >
-                    <div className="flex items-center gap-3 mb-1">
+                  {checklists.length > 0 ? checklists.map((checklist) => (
+                    <button key={checklist.id} onClick={() => { openChecklist(checklist.id); setActiveBottomPanel(null); }}
+                      className="w-full p-3 rounded-xl border border-white/5 bg-white/5 text-left flex items-center gap-3 hover:border-secondary/50 hover:bg-secondary/5 transition-all">
                       <div className={`p-1.5 rounded-md ${checklist.obrigatorio ? 'bg-red-500/10 text-red-500' : 'bg-secondary/10 text-secondary'}`}>
                         <span className="material-icons-outlined text-sm">{checklist.obrigatorio ? 'priority_high' : 'assignment'}</span>
                       </div>
-                      <span className="font-bold text-xs text-gray-300 group-hover:text-white flex-1 truncate">{checklist.nome}</span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${checklist.obrigatorio ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-secondary/10 text-secondary border-secondary/30'}`}>
+                      <span className="font-bold text-sm text-white flex-1 truncate">{checklist.nome}</span>
+                      <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded border ${checklist.obrigatorio ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-secondary/10 text-secondary border-secondary/30'}`}>
                         {checklist.obrigatorio ? 'Obrig.' : 'Rotina'}
                       </span>
-                      {checklist.intervalo_minutos && (
-                        <span className="text-[9px] font-mono bg-white/5 text-gray-400 px-1.5 py-0.5 rounded border border-white/5">
-                          {checklist.intervalo_minutos}m
-                        </span>
-                      )}
+                      {checklist.intervalo_minutos && <span className="text-[9px] font-mono bg-white/5 text-gray-400 px-1.5 py-0.5 rounded border border-white/5">{checklist.intervalo_minutos}m</span>}
+                    </button>
+                  )) : (
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <span className="material-icons-outlined text-gray-600 text-3xl mb-2">fact_check</span>
+                      <p className="text-gray-500 text-sm">Nenhum checklist disponível</p>
                     </div>
-                  </button>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
-                  <span className="material-icons-outlined text-gray-600 text-2xl mb-2">fact_check</span>
-                  <p className="text-gray-500 text-xs">Nenhum checklist disponivel</p>
-                </div>
+                  )}
+                </>
               )}
-            </div>
-          </div>
 
-          {/* Diary Section */}
-          <div className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
-            <div className="flex items-start gap-3 mb-3 px-1">
-              <div className="w-6 h-6 rounded-md bg-purple-500/10 text-purple-300 flex items-center justify-center text-[10px] font-bold">
-                3
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="material-icons-outlined text-purple-400 text-sm">menu_book</span>
-                    <span className="text-white text-xs font-bold uppercase tracking-wider">Diario de Bordo</span>
-                  </div>
-                  <button
-                    onClick={() => setShowDiaryInputModal(true)}
-                    className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-300 hover:bg-purple-500 hover:text-white transition-all"
-                    title="Novo registro"
-                  >
-                    <span className="material-icons-outlined text-xs">add</span>
-                    Novo
-                  </button>
-                </div>
-                <p className="text-[10px] text-text-sub-dark mt-1">Registre ocorrencias rapidas e observacoes</p>
-              </div>
-            </div>
+              {/* Diário */}
+              {activeBottomPanel === 'diary' && (
+                <>
+                  {diaryEntries.length > 0 ? diaryEntries.map((entry) => (
+                    <div key={entry.id} className="p-3 rounded-xl border border-white/5 bg-white/5 text-sm text-gray-300">
+                      <p className="leading-relaxed">{entry.descricao}</p>
+                      <p className="text-[10px] text-gray-600 font-mono mt-1">{new Date(entry.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                  )) : (
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <span className="material-icons-outlined text-gray-600 text-3xl mb-2">edit_note</span>
+                      <p className="text-gray-500 text-sm">Nenhum registro hoje</p>
+                    </div>
+                  )}
+                  {diaryEntries.length > 0 && (
+                    <button onClick={() => { fetchAllDiaryEntries(); setShowDiaryModal(true); setActiveBottomPanel(null); }}
+                      className="w-full py-2 text-xs font-bold uppercase text-gray-400 hover:text-white border border-white/10 rounded-lg flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 transition-all">
+                      <span className="material-icons-outlined text-sm">history</span>Histórico completo
+                    </button>
+                  )}
+                </>
+              )}
 
-            <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
-              {diaryEntries.length > 0 ? (
-                diaryEntries.slice(0, 5).map((entry) => (
-                  <div key={entry.id} className="p-3 rounded-xl border border-white/5 bg-[#15181e] text-xs text-gray-400 hover:text-gray-200 transition-colors">
-                    <p className="line-clamp-2 leading-relaxed">{entry.descricao}</p>
-                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                      <span className="text-[10px] text-gray-600 font-mono">{new Date(entry.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+              {/* Manutenção */}
+              {activeBottomPanel === 'maintenance' && (
+                <button onClick={() => { if (opState !== 'MANUTENCAO') { setShowMaintenanceModal(true); setActiveBottomPanel(null); } }}
+                  disabled={opState === 'MANUTENCAO'}
+                  className={`w-full p-4 rounded-xl border text-left transition-all ${opState === 'MANUTENCAO' ? 'border-orange-500/50 bg-orange-500/10 cursor-default' : 'border-border-dark bg-white/5 hover:border-orange-500/60 hover:bg-orange-500/10 cursor-pointer'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className="material-icons-outlined text-orange-400 text-2xl">{opState === 'MANUTENCAO' ? 'engineering' : 'build'}</span>
+                    <div>
+                      <div className="text-sm font-bold uppercase text-white">{opState === 'MANUTENCAO' ? 'Manutenção em andamento' : 'Chamar Manutenção'}</div>
+                      <div className="text-xs text-text-sub-dark">{opState === 'MANUTENCAO' ? `Aguardando técnico — ${displayTimer}` : 'Solicitar técnico e registrar parada'}</div>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
-                  <span className="material-icons-outlined text-gray-600 text-2xl mb-2">edit_note</span>
-                  <p className="text-gray-500 text-xs">Nenhum registro hoje</p>
-                </div>
+                </button>
               )}
             </div>
-
-            {diaryEntries.length > 0 && (
-              <button
-                onClick={() => { fetchAllDiaryEntries(); setShowDiaryModal(true); }}
-                className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 hover:text-white border border-white/10 rounded-lg transition-all flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10"
-              >
-                <span className="material-icons-outlined text-sm">history</span>
-                Histórico completo
-              </button>
-            )}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Machine Status indicator */}
-      <div className="flex items-center gap-2">
-        <span className={`w-2.5 h-2.5 rounded-full shadow-glow-green ${opState === 'PRODUCAO' ? 'bg-secondary animate-pulse' : opState === 'PARADA' ? 'bg-danger shadow-glow-red' : opState === 'SUSPENSA' ? 'bg-orange-500 shadow-glow-orange' : opState === 'MANUTENCAO' ? 'bg-orange-500 shadow-glow-orange animate-pulse' : 'bg-primary shadow-glow-blue'
-          }`}></span>
-        <span className={`text-sm font-bold tracking-wide uppercase ${opState === 'PRODUCAO' ? 'text-secondary' : opState === 'PARADA' ? 'text-danger' : opState === 'MANUTENCAO' ? 'text-orange-500' : 'text-primary'
-          }`}>
-          {opState === 'PRODUCAO' ? 'Máquina Rodando' : opState === 'PARADA' ? 'Máquina Parada' : opState === 'SETUP' ? 'Em Ajuste (Setup)' : opState === 'SUSPENSA' ? 'OP Suspensa' : opState === 'MANUTENCAO' ? 'Em Manutenção' : 'Máquina Disponível'}
-        </span>
-      </div>
-
-
-
-      {/* Main Stats Header */}
-      <div className="flex flex-col md:flex-row md:flex-wrap justify-between items-end md:items-center gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-4 mb-2">
-            <h2 className="text-4xl md:text-6xl font-display font-black tracking-tight text-white drop-shadow-lg">{machineName.toUpperCase()}</h2>
+      {/* Header compacto: máquina + info + relógio */}
+      <div className="shrink-0 flex items-center justify-between gap-3 bg-surface-dark rounded-xl px-4 py-2 border border-border-dark">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${opState === 'PRODUCAO' ? 'bg-secondary animate-pulse' : opState === 'PARADA' ? 'bg-danger' : opState === 'MANUTENCAO' ? 'bg-orange-500 animate-pulse' : 'bg-primary'}`}></span>
+            <h2 className="text-xl md:text-2xl font-display font-black tracking-tight text-white">{machineName.toUpperCase()}</h2>
+            <span className={`text-xs font-bold uppercase tracking-wider ${opState === 'PRODUCAO' ? 'text-secondary' : opState === 'PARADA' ? 'text-danger' : opState === 'MANUTENCAO' ? 'text-orange-500' : opState === 'SETUP' ? 'text-yellow-400' : opState === 'AGUARDANDO' ? 'text-blue-400' : 'text-primary'}`}>
+              {opState === 'PRODUCAO' ? '● Rodando' : opState === 'PARADA' ? '● Parada' : opState === 'SETUP' ? '● Setup' : opState === 'SUSPENSA' ? '● Suspensa' : opState === 'MANUTENCAO' ? '● Manutenção' : opState === 'AGUARDANDO' ? '● Aguardando OP' : '● Disponível'}
+            </span>
             {onChangeMachine && (
-              <button
-                onClick={onChangeMachine}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border-dark bg-surface-dark/80 hover:bg-primary/10 hover:border-primary/50 text-text-main-dark/80 hover:text-primary transition-all duration-200 group"
-                title="Voltar para seleção de máquinas"
-              >
-                <span className="material-icons-outlined text-lg text-text-main-dark/70 group-hover:text-primary transition-colors">swap_horiz</span>
-                <span className="text-sm font-semibold hidden md:inline">Trocar Maquina</span>
+              <button onClick={onChangeMachine} className="flex items-center gap-1 px-2 py-0.5 rounded border border-border-dark text-text-sub-dark hover:text-primary hover:border-primary/50 transition-colors text-xs" title="Trocar máquina">
+                <span className="material-icons-outlined text-sm">swap_horiz</span>
+                <span className="hidden md:inline">Trocar</span>
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-4 md:gap-8 text-base md:text-lg text-text-sub-dark">
-            <div className="flex items-center gap-2">
-              <span className="material-icons-outlined text-xl">grid_view</span>
-              <span>Setor: <strong className="text-text-main-dark">{sectorName.toUpperCase()}</strong></span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="material-icons-outlined text-xl">fingerprint</span>
-              <span>Ordem: <strong className="text-primary">{opCodigo || opId || 'N/A'}</strong></span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="material-icons-outlined text-xl">schedule</span>
-              <span>Turno: <strong className="text-text-main-dark">{shiftName}</strong></span>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="material-icons-outlined text-xl">person</span>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span>Operador: <strong className="text-text-main-dark">{operatorName}</strong></span>
-                {onSwitchOperator && (
-                  <button
-                    type="button"
-                    onClick={onSwitchOperator}
-                    className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border border-border-dark text-primary hover:border-primary hover:bg-primary/10 transition-colors"
-                  >
-                    Trocar
-                  </button>
-                )}
-              </div>
-            </div>
-            {productInfo?.nome && (
-              <div className="flex items-center gap-2">
-                <span className="material-icons-outlined text-xl">inventory_2</span>
-                <span>Produto: <strong className="text-secondary">{productInfo.nome}</strong></span>
-              </div>
-            )}
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-text-sub-dark mt-0.5">
+            <span><strong className="text-text-main-dark">{sectorName.toUpperCase()}</strong></span>
+            <span>OP: <strong className="text-primary">{opCodigo || opId || 'N/A'}</strong></span>
+            <span>Turno: <strong className="text-text-main-dark">{shiftName}</strong></span>
+            <span>
+              Op: <strong className="text-text-main-dark">{operatorName}</strong>
+              {onSwitchOperator && (
+                <button type="button" onClick={onSwitchOperator} className="ml-1 px-1.5 py-0.5 text-[9px] font-bold uppercase rounded border border-border-dark text-primary hover:bg-primary/10 transition-colors">Trocar</button>
+              )}
+            </span>
+            {productInfo?.nome && <span>Produto: <strong className="text-secondary">{productInfo.nome}</strong></span>}
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="text-xs uppercase tracking-wider text-text-sub-dark mb-1">Relogio do Sistema</div>
-          <div className="text-3xl md:text-5xl font-mono font-medium tracking-tight mb-2 text-white">{time}</div>
-          <div className={`inline-block px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${opState === 'PRODUCAO'
-            ? 'bg-secondary/10 text-secondary border-secondary/30'
-            : opState === 'SUSPENSA' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
-              : opState === 'MANUTENCAO' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30'
-                : 'bg-blue-900/30 text-blue-400 border-blue-500/30'
-            }`}>
-            {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : opState === 'MANUTENCAO' ? 'Manutenção' : 'Aguardando'}
+          <div className="text-xl md:text-2xl font-mono font-bold text-white tabular-nums">{time}</div>
+          <div className={`text-[10px] font-bold uppercase tracking-wider ${opState === 'PRODUCAO' ? 'text-secondary' : opState === 'SUSPENSA' ? 'text-orange-500' : opState === 'MANUTENCAO' ? 'text-orange-500' : 'text-primary'}`}>
+            {opState === 'PRODUCAO' ? 'Produzindo' : opState === 'SETUP' ? 'Setup' : opState === 'PARADA' ? 'Parada' : opState === 'SUSPENSA' ? 'Suspensa' : opState === 'MANUTENCAO' ? 'Manutenção' : opState === 'AGUARDANDO' ? 'Aguardando' : 'Disponível'}
           </div>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-        <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <span className="material-icons-outlined text-6xl">flag</span>
-          </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Meta da OP (UN)</div>
-          <div className="text-4xl md:text-5xl font-display font-bold text-text-main-dark mb-1">{opId ? targetQuantity : 0}</div>
-          <div className="text-xs text-text-sub-dark">
-            Tempo usado: <strong className="text-primary">{opId ? formatSeconds(currentRunSeconds) : '--:--'}</strong>
-          </div>
-          <div className="text-xs text-text-sub-dark mt-1">
+      {/* KPI Cards — strip compacto */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
+        <div className="bg-surface-dark rounded-lg p-2 border border-border-dark relative overflow-hidden group">
+          <div className="text-[10px] font-bold text-text-sub-dark uppercase tracking-wider mb-0.5">Meta (UN)</div>
+          <div className="text-2xl md:text-3xl font-display font-bold text-text-main-dark">{opId ? targetQuantity : 0}</div>
+          <div className="text-[10px] text-text-sub-dark">
             Falta: <strong className="text-primary">{opId && estimatedTotalSeconds > 0 ? formatSeconds(estimatedRemainingSeconds).slice(0, 5) : '--:--'}</strong>
           </div>
         </div>
 
-        <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <span className="material-icons-outlined text-6xl">inventory_2</span>
-          </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Realizado (UN)</div>
-          <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-300 ${totalProduced > 0 ? 'text-secondary' : 'text-text-sub-dark'}`}>
+        <div className="bg-surface-dark rounded-lg p-2 border border-border-dark relative overflow-hidden group">
+          <div className="text-[10px] font-bold text-text-sub-dark uppercase tracking-wider mb-0.5">Realizado (UN)</div>
+          <div className={`text-2xl md:text-3xl font-display font-bold transition-all duration-300 ${totalProduced > 0 ? 'text-secondary' : 'text-text-sub-dark'}`}>
             {totalProduced}
           </div>
-          <div className="text-xs font-bold text-secondary">
-            {targetQuantity > 0 ? `${progressPercent.toFixed(1)}% concluído` : '0% progresso'}
+          <div className="text-[10px] font-bold text-secondary">
+            {targetQuantity > 0 ? `${progressPercent.toFixed(1)}% concluído` : '0%'}
           </div>
-          <div className="text-xs text-text-sub-dark mt-1">Faltam: {Math.max(0, targetQuantity - totalProduced)} peças</div>
         </div>
 
-        <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-danger">
-            <span className="material-icons-outlined text-6xl">delete_outline</span>
-          </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Refugo (UN)</div>
-          <div className={`text-4xl md:text-5xl font-display font-bold mb-1 ${totalScrap > 0 ? 'text-danger' : 'text-text-sub-dark'}`}>{totalScrap}</div>
-          <div className="text-xs font-bold text-secondary">
+        <div className="bg-surface-dark rounded-lg p-2 border border-border-dark relative overflow-hidden group">
+          <div className="text-[10px] font-bold text-text-sub-dark uppercase tracking-wider mb-0.5">Refugo (UN)</div>
+          <div className={`text-2xl md:text-3xl font-display font-bold ${totalScrap > 0 ? 'text-danger' : 'text-text-sub-dark'}`}>{totalScrap}</div>
+          <div className="text-[10px] font-bold text-secondary">
             {totalProduced > 0 ? `${((totalScrap / (totalProduced + totalScrap)) * 100).toFixed(1)}% taxa` : '0% taxa'}
           </div>
-          <div className="text-xs text-text-sub-dark mt-1">{totalScrap === 0 ? 'Dentro do limite' : 'Atenção'}</div>
         </div>
 
-        <div className={`bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group ${isOeeOnTarget ? 'border-green-500/30' : 'border-red-500/30'}`}>
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <span className={`material-icons-outlined text-6xl ${isOeeOnTarget ? 'text-green-500' : 'text-red-500'}`}>trending_up</span>
-          </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">OEE (Eficiência)</div>
-          <div className={`text-4xl md:text-5xl font-display font-bold mb-1 transition-all duration-500 ${isOeeOnTarget ? 'text-green-500' : 'text-red-500'}`}>
+        <div className={`bg-surface-dark rounded-lg p-2 border border-border-dark relative overflow-hidden group ${isOeeOnTarget ? 'border-green-500/30' : 'border-red-500/30'}`}>
+          <div className="text-[10px] font-bold text-text-sub-dark uppercase tracking-wider mb-0.5">OEE</div>
+          <div className={`text-2xl md:text-3xl font-display font-bold transition-all duration-500 ${isOeeOnTarget ? 'text-green-500' : 'text-red-500'}`}>
             {calculatedOEE.toFixed(1)}%
           </div>
-          <div className={`text-xs font-bold ${isOeeOnTarget ? 'text-green-400' : 'text-red-400'}`}>{isOeeOnTarget ? 'Meta atingida' : 'Abaixo da meta'}</div>
-          <div className="text-xs text-text-sub-dark mt-1">Meta de OEE: {oeeGoal}%</div>
-          {cycleTime <= 0 && (
-            <div className="text-[10px] text-warning mt-1">Ciclo estimado nao definido</div>
-          )}
-
+          <div className={`text-[10px] font-bold ${isOeeOnTarget ? 'text-green-400' : 'text-red-400'}`}>{isOeeOnTarget ? 'Meta ok' : 'Abaixo'}</div>
         </div>
 
-        <div className="bg-surface-dark rounded-lg p-5 border border-border-dark relative overflow-hidden group border-l-primary/30">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <span className="material-icons-outlined text-6xl text-primary">person</span>
-          </div>
-          <div className="text-xs font-bold text-text-sub-dark uppercase tracking-wider mb-2">Sua Produção (Turno)</div>
-          <div className="text-4xl md:text-5xl font-display font-bold text-primary mb-1">{operatorShiftProduction}</div>
-          <div className="text-xs font-bold text-secondary capitalize">{shiftName?.toLowerCase() || 'Turno atual'}</div>
-          <div className="text-xs text-text-sub-dark mt-1">Total acumulado hoje</div>
-          <div className="text-xs text-text-sub-dark mt-1">Tempo no posto: {operatorSessionElapsed}</div>
+        <div className="bg-surface-dark rounded-lg p-2 border border-border-dark relative overflow-hidden group">
+          <div className="text-[10px] font-bold text-text-sub-dark uppercase tracking-wider mb-0.5">Meu Turno</div>
+          <div className="text-2xl md:text-3xl font-display font-bold text-primary">{operatorShiftProduction}</div>
+          <div className="text-[10px] text-text-sub-dark">{operatorSessionElapsed || '--:--:--'}</div>
         </div>
       </div>
 
       {/* Control Panel */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-end">
-          <h3 className="text-xl font-display font-bold text-text-main-dark">Controle de Produção</h3>
-          <div className="flex items-center gap-1 text-xs text-text-sub-dark">
-            <span className="w-2 h-2 rounded-full bg-text-sub-dark"></span>
-            Teclas de atalho disponÃ­veis
-          </div>
+      <div className="shrink-0 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-bold text-text-sub-dark uppercase tracking-widest">Controle de Produção</h3>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {/* 1. Setup Button - Only show if user has permission */}
           {hasPermission(Permission.MANAGE_MACHINE_SETUP) && (
             <button
               disabled={opState === 'PRODUCAO' || opState === 'SETUP'}
               onClick={onOpenSetup}
-              className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between relative overflow-hidden ${opState === 'SETUP'
+              className={`bg-surface-dark rounded-xl p-3 text-left transition-all duration-200 h-32 flex flex-col justify-between relative overflow-hidden ${opState === 'SETUP'
                 ? 'border-2 border-yellow-500 shadow-lg shadow-yellow-500/20 animate-pulse-border'
                 : 'border border-border-dark opacity-40 grayscale'
                 } ${(opState === 'PRODUCAO' || opState === 'SETUP') ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -1639,7 +1411,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               if (opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO') onRetomar();
             }}
             disabled={(opState !== 'SETUP' && opState !== 'PARADA' && opState !== 'SUSPENSA' && opState !== 'MANUTENCAO') || !opId}
-            className={`rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between relative overflow-hidden ${opState === 'PRODUCAO'
+            className={`rounded-xl p-3 text-left transition-all duration-200 h-32 flex flex-col justify-between relative overflow-hidden ${opState === 'PRODUCAO'
               ? 'bg-green-900/10 border-2 border-green-500 shadow-lg shadow-green-500/20 cursor-default'
               : (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO')
                 ? 'bg-primary/10 border-2 border-primary hover:bg-primary/20 cursor-pointer'
@@ -1676,7 +1448,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <button
             onClick={onOpenStop}
             disabled={opState !== 'PRODUCAO' && opState !== 'SETUP'}
-            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opState === 'PARADA'
+            className={`bg-surface-dark rounded-xl p-3 text-left transition-all duration-200 h-32 flex flex-col justify-between ${opState === 'PARADA'
               ? 'border-2 border-red-500 shadow-lg shadow-red-500/20 cursor-default'
               : (opState === 'PRODUCAO' || opState === 'SETUP')
                 ? 'border border-border-dark opacity-100 cursor-pointer hover:opacity-80 hover:border-red-500/50'
@@ -1705,7 +1477,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               onOpenFinalize();
             }}
             disabled={!opId}
-            className={`bg-surface-dark rounded-xl p-6 text-left transition-all duration-200 h-48 flex flex-col justify-between ${opId
+            className={`bg-surface-dark rounded-xl p-3 text-left transition-all duration-200 h-32 flex flex-col justify-between ${opId
               ? 'border-2 border-blue-500/50 opacity-100 cursor-pointer hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20'
               : 'border border-border-dark opacity-40 grayscale cursor-not-allowed'
               }`}
@@ -1719,9 +1491,8 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         </div>
 
         {/* Time Summary and Quick Actions */}
-        <div className="flex flex-wrap gap-4 items-center justify-between mt-4 p-4 bg-surface-dark/50 rounded-lg border border-border-dark">
-          {/* Accumulated Times Summary */}
-          <div className="flex flex-wrap gap-6 text-sm">
+        <div className="shrink-0 flex flex-wrap gap-2 items-center justify-between p-2 bg-surface-dark/50 rounded-lg border border-border-dark">
+          <div className="flex flex-wrap gap-4 text-xs">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
               <span className="text-text-sub-dark">Setup:</span>
@@ -1739,20 +1510,64 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
           </div>
 
-          {/* Generate Label Button - Opens Type Selection Modal */}
-          {opId && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowLabelTypeModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg text-primary hover:bg-primary/20 transition-all"
+              onClick={async () => { await fetchRecentRecords(3); setShowRecordsModal(true); }}
+              className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-border-dark rounded-lg text-text-sub-dark hover:text-white hover:border-white/20 transition-all"
             >
-              <span className="material-icons-outlined text-lg">qr_code_2</span>
-              <span className="font-bold text-sm uppercase">Emitir Etiqueta</span>
+              <span className="material-icons-outlined text-sm">history</span>
+              <span className="font-bold text-xs uppercase">Histórico</span>
             </button>
-          )}
+            {opId && (
+              <button
+                onClick={() => setShowLabelTypeModal(true)}
+                className="flex items-center gap-1 px-3 py-1 bg-primary/10 border border-primary/30 rounded-lg text-primary hover:bg-primary/20 transition-all"
+              >
+                <span className="material-icons-outlined text-sm">qr_code_2</span>
+                <span className="font-bold text-xs uppercase">Etiqueta</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Spacer para empurrar o nav bar pro rodapé */}
+      <div className="flex-1" />
 
+      {/* Bottom Navigation Bar */}
+      <div className="shrink-0 grid grid-cols-4 gap-1 p-1.5 bg-surface-dark rounded-xl border border-border-dark">
+        <button
+          onClick={() => setActiveBottomPanel(activeBottomPanel === 'ops' ? null : 'ops')}
+          className={`flex flex-col items-center gap-1 py-2 rounded-lg transition-all ${activeBottomPanel === 'ops' ? 'bg-primary/20 text-primary' : 'text-text-sub-dark hover:text-white hover:bg-white/5'}`}
+        >
+          <span className="material-icons-outlined text-xl">playlist_play</span>
+          <span className="text-[9px] font-bold uppercase tracking-wider">Fila OP</span>
+        </button>
+        <button
+          onClick={() => setActiveBottomPanel(activeBottomPanel === 'checklists' ? null : 'checklists')}
+          className={`flex flex-col items-center gap-1 py-2 rounded-lg transition-all relative ${activeBottomPanel === 'checklists' ? 'bg-secondary/20 text-secondary' : 'text-text-sub-dark hover:text-white hover:bg-white/5'}`}
+        >
+          {pendingAlert !== null && (
+            <span className="absolute top-1 right-3 w-2 h-2 rounded-full bg-danger animate-pulse"></span>
+          )}
+          <span className="material-icons-outlined text-xl">fact_check</span>
+          <span className="text-[9px] font-bold uppercase tracking-wider">Checklist</span>
+        </button>
+        <button
+          onClick={() => setActiveBottomPanel(activeBottomPanel === 'diary' ? null : 'diary')}
+          className={`flex flex-col items-center gap-1 py-2 rounded-lg transition-all ${activeBottomPanel === 'diary' ? 'bg-purple-500/20 text-purple-400' : 'text-text-sub-dark hover:text-white hover:bg-white/5'}`}
+        >
+          <span className="material-icons-outlined text-xl">menu_book</span>
+          <span className="text-[9px] font-bold uppercase tracking-wider">Diário</span>
+        </button>
+        <button
+          onClick={() => setActiveBottomPanel(activeBottomPanel === 'maintenance' ? null : 'maintenance')}
+          className={`flex flex-col items-center gap-1 py-2 rounded-lg transition-all ${activeBottomPanel === 'maintenance' ? 'bg-orange-500/20 text-orange-400' : opState === 'MANUTENCAO' ? 'text-orange-400' : 'text-text-sub-dark hover:text-white hover:bg-white/5'}`}
+        >
+          <span className="material-icons-outlined text-xl">build</span>
+          <span className="text-[9px] font-bold uppercase tracking-wider">Manutenção</span>
+        </button>
+      </div>
 
       {/* Checklist Execution Modal */}
       <ChecklistExecutionModal
@@ -1831,57 +1646,6 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
 
 
-      {/* Recent Records Table */}
-      <div className="bg-surface-dark border border-border-dark rounded-lg overflow-hidden flex flex-col mb-6">
-        <div className="p-4 border-b border-border-dark flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span className="material-icons-outlined text-text-sub-dark text-lg">history</span>
-            <h3 className="font-bold text-text-main-dark">Registros Recentes</h3>
-          </div>
-          <button
-            className="text-xs font-bold text-primary hover:text-blue-400 uppercase"
-            onClick={async () => {
-              await fetchRecentRecords(3);
-              setShowRecordsModal(true);
-            }}
-          >
-            Ver Todos
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#111217] text-text-sub-dark text-xs uppercase font-semibold">
-              <tr>
-                <th className="px-6 py-3 font-medium">Hora</th>
-                <th className="px-6 py-3 font-medium">Evento</th>
-                <th className="px-6 py-3 font-medium">Detalhe</th>
-                <th className="px-6 py-3 font-medium">UsuÃ¡rio</th>
-                <th className="px-6 py-3 font-medium text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-dark">
-              {records.map((rec, i) => (
-                <tr key={i} className="hover:bg-surface-dark-highlight transition-colors">
-                  <td className="px-6 py-4 text-text-main-dark">{rec.time}</td>
-                  <td className="px-6 py-4 font-bold text-primary">{rec.event}</td>
-                  <td className="px-6 py-4 text-text-sub-dark">{rec.detail}</td>
-                  <td className="px-6 py-4 text-text-main-dark">{rec.user}</td>
-                  <td className="px-6 py-4 text-right">
-                    <span className="px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase border border-secondary/20">
-                      {rec.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {records.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-text-sub-dark italic">Nenhum registro encontrado para esta máquina.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       {/* Diary Full View Modal */}
       {

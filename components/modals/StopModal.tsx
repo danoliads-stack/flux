@@ -44,7 +44,10 @@ const StopModal: React.FC<StopModalProps> = ({ onClose, onConfirm }) => {
       <div className="relative w-full max-w-4xl bg-surface-dark rounded-xl border border-border-dark shadow-2xl animate-fade-in flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-8 pt-8 pb-2">
           <div>
-            <h2 className="text-white text-2xl font-bold leading-tight tracking-tight">Motivo da Parada</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-white text-2xl font-bold leading-tight tracking-tight">Motivo da Parada</h2>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-danger border border-danger/40 bg-danger/10 px-2 py-0.5 rounded">Obrigatório</span>
+            </div>
             <p className="text-text-sub-dark text-sm mt-1">Selecione o motivo para justificar a interrupção.</p>
           </div>
           <button onClick={onClose} className="text-text-sub-dark hover:text-white p-2 rounded-lg hover:bg-white/5">
@@ -143,14 +146,17 @@ const StopModal: React.FC<StopModalProps> = ({ onClose, onConfirm }) => {
           <button onClick={onClose} className="px-6 py-3 rounded-lg text-text-sub-dark hover:text-white font-bold transition-colors">
             Cancel
           </button>
-          <button onClick={() => {
-            console.log("=== CONFIRMAR PARADA CLICADO ===");
-            console.log("Motivo selecionado (ID):", reason);
-            console.log("Notas:", notes);
-            onConfirm(reason, notes, producedDelta, scrapDelta);
-          }} className="flex items-center justify-center gap-2 px-8 py-3 rounded-lg bg-primary hover:bg-primary/80 text-white shadow-glow text-base font-bold transition-all transform active:scale-95">
+          <button
+            onClick={() => onConfirm(reason, notes, producedDelta, scrapDelta)}
+            disabled={!reason}
+            className={`flex items-center justify-center gap-2 px-8 py-3 rounded-lg text-base font-bold transition-all transform active:scale-95 ${
+              reason
+                ? 'bg-danger hover:bg-danger/80 text-white shadow-lg shadow-danger/20'
+                : 'bg-border-dark text-text-sub-dark cursor-not-allowed opacity-50'
+            }`}
+          >
             <span className="material-icons-outlined">pause_circle</span>
-            Confirm Stop
+            {reason ? 'Confirmar Parada' : 'Selecione um motivo'}
           </button>
         </div>
       </div>

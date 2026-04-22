@@ -1,6 +1,6 @@
 
 export type UserRole = 'OPERATOR' | 'SUPERVISOR' | 'ADMIN';
-export type OPState = 'IDLE' | 'SETUP' | 'PRODUCAO' | 'PARADA' | 'SUSPENSA' | 'FINALIZADA' | 'MANUTENCAO';
+export type OPState = 'IDLE' | 'AGUARDANDO' | 'SETUP' | 'PRODUCAO' | 'PARADA' | 'SUSPENSA' | 'FINALIZADA' | 'MANUTENCAO';
 
 export enum Permission {
   VIEW_OPERATOR_DASHBOARD = 'VIEW_OPERATOR_DASHBOARD',

@@ -132,12 +132,12 @@ const ExecutiveDashboard: React.FC = () => {
     };
 
     return (
-        <div className="p-8 flex flex-col h-full overflow-y-auto custom-scrollbar bg-[#0b0c10]">
+        <div className="p-4 md:p-6 flex flex-col h-full overflow-y-auto custom-scrollbar bg-[#0b0c10]">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-5">
                 <div>
-                    <h2 className="text-3xl font-bold text-white tracking-tight font-display uppercase flex items-center gap-3">
-                        <span className="material-icons-outlined text-primary text-4xl">dashboard</span>
+                    <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight font-display uppercase flex items-center gap-2">
+                        <span className="material-icons-outlined text-primary text-2xl md:text-3xl">dashboard</span>
                         Visão Geral da Operação
                     </h2>
                     <p className="text-sm text-gray-500 mt-1 ml-12">Painel Executivo • Dados em Tempo Real</p>
@@ -151,9 +151,9 @@ const ExecutiveDashboard: React.FC = () => {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                 {kpis.map((kpi, idx) => (
-                    <div key={idx} className="bg-[#15181e] border border-border-dark rounded-xl p-6 relative overflow-hidden group hover:border-primary/20 transition-all">
+                    <div key={idx} className="bg-[#15181e] border border-border-dark rounded-xl p-3 md:p-4 relative overflow-hidden group hover:border-primary/20 transition-all">
                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                             <span className="material-icons-outlined text-6xl">{kpi.icon}</span>
                         </div>
@@ -164,7 +164,7 @@ const ExecutiveDashboard: React.FC = () => {
 
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{kpi.label}</p>
                         <div className="flex items-end gap-2">
-                            <span className="text-3xl font-bold text-white">{kpi.value}<span className="text-lg text-gray-500 ml-0.5">{kpi.unit}</span></span>
+                            <span className="text-2xl font-bold text-white">{kpi.value}<span className="text-sm text-gray-500 ml-0.5">{kpi.unit}</span></span>
                         </div>
 
                         <div className="mt-3 flex items-center gap-2">

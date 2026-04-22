@@ -100,24 +100,27 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ machines })
     const getMaintenanceInfo = (machineId: string) => maintenanceInfos.find(i => i.machineId === machineId);
 
     return (
-        <div className="min-h-screen bg-background-dark p-6">
-            <div className="flex justify-between items-center mb-8 border-b border-border-dark pb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                        <span className="material-icons-outlined text-orange-500 text-4xl">engineering</span>
-                        Painel de Manutenção
-                    </h1>
-                    <p className="text-text-sub-dark mt-1">Monitoramento em tempo real de solicitações</p>
+        <div className="h-full flex flex-col overflow-hidden bg-background-dark p-3 gap-3">
+            {/* Header compacto */}
+            <div className="shrink-0 flex items-center justify-between bg-surface-dark rounded-xl px-4 py-2 border border-border-dark">
+                <div className="flex items-center gap-2">
+                    <span className="material-icons-outlined text-orange-500 text-xl">engineering</span>
+                    <div>
+                        <h1 className="text-base font-bold text-white uppercase tracking-tight">Painel de Manutenção</h1>
+                        <p className="text-[10px] text-text-sub-dark uppercase tracking-widest">Monitoramento em tempo real</p>
+                    </div>
                 </div>
                 <div className="text-right">
-                    <div className="text-4xl font-bold text-white font-mono">{currentTime.toLocaleTimeString('pt-BR')}</div>
-                    <div className="text-orange-500 font-bold uppercase text-sm tracking-wider">
+                    <div className="text-xl font-bold text-white font-mono tabular-nums">{currentTime.toLocaleTimeString('pt-BR')}</div>
+                    <div className="text-orange-500 font-bold uppercase text-[10px] tracking-wider">
                         {maintenanceInfos.length} {maintenanceInfos.length === 1 ? 'Chamado Ativo' : 'Chamados Ativos'}
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {/* Grid de máquinas — scrollável */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {machines.map(machine => {
                     const maintenanceInfo = getMaintenanceInfo(machine.id);
                     const isMaintenance = !!maintenanceInfo;
@@ -185,6 +188,7 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ machines })
                     );
                 })}
             </div>
+            </div>{/* fim scroll */}
         </div>
     );
 };

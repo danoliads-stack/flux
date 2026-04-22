@@ -324,7 +324,7 @@ const AdminDashboard: React.FC = () => {
             <div className="relative group">
               <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg group-focus-within:text-primary">search</span>
               <input
-                className="bg-surface-dark border border-border-dark rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary w-80 transition-all"
+                className="bg-surface-dark border border-border-dark rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary w-40 md:w-64 lg:w-80 transition-all"
                 placeholder="Buscar no sistema..."
               />
             </div>

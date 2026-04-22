@@ -748,11 +748,11 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
   };
 
   return (
-    <div className="p-6 md:p-10 space-y-8 animate-fade-in">
+    <div className="h-full flex flex-col overflow-hidden p-3 gap-3 animate-fade-in">
       {/* Header com turno e OEE */}
-      <div className="flex flex-col lg:flex-row lg:items-center items-start justify-between gap-3 mb-4">
+      <div className="shrink-0 flex flex-col lg:flex-row lg:items-center items-start justify-between gap-2 bg-surface-dark rounded-xl px-4 py-2 border border-border-dark">
         <div className="flex flex-wrap items-center gap-4">
-          <h2 className="text-2xl font-display font-bold tracking-tight text-white uppercase">Status Geral do Turno (v2)</h2>
+          <h2 className="text-base md:text-xl font-display font-bold tracking-tight text-white uppercase">Status do Turno</h2>
           {currentTurno && (
             <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider">
               {currentTurno.nome}
@@ -768,10 +768,10 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
       </div>
 
       {/* Grid principal: Cards de status + Painel Atenção */}
-      <div className="flex flex-col xl:flex-row gap-6">
+      <div className="shrink-0 flex flex-col lg:flex-row gap-3">
         {/* Cards de Status Clicáveis */}
         <div className="flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-2">
             {[
               { label: 'Máquinas Rodando', val: stats.running, icon: 'settings_motion_mode', color: 'text-green-500', filter: 'RUNNING' as StatusFilterType, progress: (stats.running / machines.length) * 100 },
               { label: 'Máquinas Paradas', val: stats.stopped, icon: 'warning', color: 'text-orange-500', filter: 'STOPPED' as StatusFilterType, progress: (stats.stopped / machines.length) * 100 },
@@ -791,7 +791,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                     handleStatusCardClick(kpi.filter);
                   }
                 }}
-                className={`flex flex-col gap-1 rounded-xl p-5 border bg-surface-dark shadow-sm relative overflow-hidden group transition-all
+                className={`flex flex-col gap-0.5 rounded-xl p-3 border bg-surface-dark shadow-sm relative overflow-hidden group transition-all
                   ${kpi.filter || (kpi as any).isAlertsCard ? 'cursor-pointer hover:border-primary/50' : ''}
                   ${statusFilter === kpi.filter ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border-dark'}
                   ${(kpi as any).hasNewAlerts ? 'animate-pulse ring-2 ring-danger/50' : ''}
@@ -801,7 +801,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   <span className={`material-symbols-outlined text-5xl ${kpi.color}`}>{kpi.icon}</span>
                 </div>
                 <p className="text-text-sub-dark text-[10px] font-bold uppercase tracking-widest">{kpi.label}</p>
-                <p className="text-3xl font-bold text-white transition-all duration-300">{kpi.val}</p>
+                <p className="text-2xl font-bold text-white transition-all duration-300">{kpi.val}</p>
                 {kpi.progress !== undefined && (
                   <div className="h-1 w-full bg-background-dark mt-2 rounded-full overflow-hidden">
                     <div className={`h-full transition-all duration-1000 ${kpi.color.replace('text-', 'bg-')}`} style={{ width: `${kpi.progress}%` }}></div>
@@ -828,8 +828,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         </div>
 
         {/* NOVO: Painel Atenção Necessária */}
-        <div className="w-full xl:w-[360px] shrink-0">
-          <div className="bg-surface-dark rounded-xl border border-danger/30 p-5 h-full">
+        <div className="w-full lg:w-[320px] shrink-0">
+          <div className="bg-surface-dark rounded-xl border border-danger/30 p-3 h-full">
             <h3 className="text-sm font-bold text-danger mb-4 uppercase tracking-widest flex items-center gap-2">
               <span className="material-icons-outlined">warning</span>
               Atenção Necessária
@@ -873,12 +873,13 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         </div>
       </div>
 
-      {/* Mapa Operacional + Performance */}
-      <div className="flex flex-col xl:flex-row gap-6">
+      {/* Mapa Operacional + Performance — scrollável */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+      <div className="flex flex-col lg:flex-row gap-3">
         <div className="flex-1 flex flex-col">
-          <div className="flex flex-col lg:flex-row lg:items-center items-start justify-between gap-3 mb-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <h2 className="text-xl font-display font-bold text-white uppercase tracking-wider">Mapa Operacional</h2>
+          <div className="flex flex-col lg:flex-row lg:items-center items-start justify-between gap-2 mb-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-sm md:text-base font-display font-bold text-white uppercase tracking-wider">Mapa Operacional</h2>
               {/* Indicador Live */}
               <LiveIndicator lastUpdate={lastUpdateTime} />
             </div>
@@ -914,7 +915,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {filteredAndSortedMachines
               .map((m) => {
                 // Map DB status to UI logic - normalize status to uppercase for reliable comparison
@@ -931,15 +932,21 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
 
                 // Calculate border color class - prioritize actual machine status
                 const getBorderColorClass = () => {
-                  // Only show maintenance call animation if machine is actually in MAINTENANCE status
-                  if (isMaintenance && hasMaintenanceCall) return 'border-l-red-600 shadow-red-600/20 animate-pulse-border ring-2 ring-red-600/50';
-                  if (isMaintenance) return 'border-l-red-600 shadow-red-600/5';
-                  if (isStopped) return 'border-l-orange-500 shadow-orange-500/5';
-                  if (isSetup) return 'border-l-yellow-500 shadow-yellow-500/5';
-                  if (isActive) return 'border-l-green-500 shadow-green-500/5';
-                  if (isSuspended) return 'border-l-orange-500 shadow-orange-500/5';
-                  if (isAvailable) return 'border-l-blue-500 shadow-blue-500/5';
-                  return 'border-l-gray-500 shadow-gray-500/5'; // Fallback
+                  if (isMaintenance && hasMaintenanceCall) return 'border-l-purple-400 animate-pulse-border ring-2 ring-purple-400/40';
+                  if (isMaintenance) return 'border-l-purple-500';
+                  if (isStopped) return 'border-l-red-500';
+                  if (isSetup) return 'border-l-yellow-400';
+                  if (isActive) return 'border-l-green-500';
+                  if (isSuspended) return 'border-l-orange-500';
+                  if (isAvailable) return 'border-l-blue-500';
+                  return 'border-l-gray-500';
+                };
+
+                const getCardBgClass = () => {
+                  if (isMaintenance) return 'bg-purple-950/50 border border-purple-700/25';
+                  if (isStopped) return 'bg-red-950/30 border border-red-800/20';
+                  if (isActive) return 'bg-green-950/20 border border-green-800/10';
+                  return 'bg-surface-dark';
                 };
 
                 // Safe value access
@@ -978,8 +985,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                   <div
                     key={m.id}
                     onDoubleClick={() => openHistoryModal(m)}
-                    className={`bg-surface-dark rounded-xl border-l-[6px] p-6 hover:shadow-glow transition-all cursor-pointer group flex flex-col gap-4 h-full relative ${getBorderColorClass()}`}
-                    style={{ minWidth: 420 }}
+                    className={`rounded-xl border-l-[6px] p-3 hover:shadow-glow transition-all cursor-pointer group flex flex-col gap-2 relative ${getBorderColorClass()} ${getCardBgClass()}`}
                   >
                     {/* Ícone de manutenção ou alerta */}
                     {(isMaintenance && hasMaintenanceCall) ? (
@@ -996,8 +1002,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       </div>
                     )}
 
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap items-start gap-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <h3 className="text-lg font-bold text-white mb-2 leading-snug text-left break-words">{m.nome}</h3>
                           <div className="flex flex-col gap-1 items-start">
@@ -1079,7 +1085,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                         </div>
                       )}
 
-                      <div className="space-y-4 bg-white/[0.02] p-4 rounded-xl border border-white/5">
+                      <div className="space-y-2 bg-white/[0.02] p-3 rounded-xl border border-white/5">
                         <div>
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary border border-primary/20 shadow-sm">
@@ -1099,7 +1105,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                               Tempo de producao: {operatorProductionElapsed}
                             </div>
                           )}
-                          <div className="grid grid-cols-2 gap-2 mt-3">
+                          <div className="grid grid-cols-2 gap-2 mt-2">
                             <div className="flex justify-between text-xs">
                               <span className="text-text-sub-dark uppercase tracking-widest font-bold opacity-60">Prod:</span>
                               <span className="text-primary font-mono font-bold">{productionCount} un</span>
@@ -1113,7 +1119,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                           </div>
                         </div>
 
-                        <div className="pt-3 border-t border-white/5">
+                        <div className="pt-2 border-t border-white/5">
                           <div className="flex items-center justify-between gap-2 text-[11px] mb-2 font-bold uppercase tracking-wider text-text-sub-dark">
                             <span className="min-w-0 truncate">OP: {currentOp}</span>
                             <span className="text-white font-mono shrink-0">{productionCount} un</span>
@@ -1141,8 +1147,8 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
         </div>
 
         {/* Performance do Turno - Ranking de Operadores */}
-        <div className="w-full xl:w-[320px] shrink-0 space-y-6">
-          <h2 className="text-xl font-display font-bold text-white uppercase tracking-wider">Performance do Turno</h2>
+        <div className="w-full lg:w-[280px] shrink-0 space-y-3">
+          <h2 className="text-sm md:text-base font-display font-bold text-white uppercase tracking-wider">Performance</h2>
 
           <div className="bg-surface-dark rounded-xl border border-border-dark p-6 h-full">
             <h3 className="text-sm font-bold text-white mb-6 uppercase tracking-widest flex items-center gap-2">
@@ -1165,19 +1171,10 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
                       }`}>
                       {i + 1}
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-surface-dark-highlight border border-border-dark flex items-center justify-center text-xs font-bold text-white group-hover:border-primary/50 transition-colors relative">
+                    <div className={`w-10 h-10 rounded-full border flex items-center justify-center text-xs font-bold text-white group-hover:border-primary/50 transition-colors ${
+                      isBelowCritical ? 'bg-danger/20 border-danger/40' : 'bg-surface-dark-highlight border-border-dark'
+                    }`}>
                       {op.operatorName.charAt(0)}
-                      {/* FASE 2: Ícone de desvio */}
-                      {isAboveGoal && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-secondary rounded-full flex items-center justify-center">
-                          <span className="material-icons-outlined text-[10px] text-white">arrow_upward</span>
-                        </span>
-                      )}
-                      {isBelowCritical && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-danger rounded-full flex items-center justify-center">
-                          <span className="material-icons-outlined text-[10px] text-white">arrow_downward</span>
-                        </span>
-                      )}
                     </div>
                     <div className="flex-1">
                       <div className="flex justify-between text-xs mb-1">
@@ -1223,6 +1220,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
           </div>
         </div>
       </div>
+      </div>{/* fim do scroll container */}
 
       {/* FASE 2: Modal de Alertas */}
       {
