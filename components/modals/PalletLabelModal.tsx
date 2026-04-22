@@ -384,7 +384,7 @@ const PalletLabelModal: React.FC<PalletLabelModalProps> = ({
 
                                 {/* Footer */}
                                 <div className="bg-black text-white h-5 flex items-center justify-between px-3">
-                                    <span className="text-[6px] font-black tracking-[0.3em] uppercase">Flux Insight</span>
+                                    <span className="text-[6px] font-black tracking-[0.3em] uppercase">Flux Insights</span>
                                     <span className="text-[5px] opacity-50">PALLET TRACKING SYSTEM © 2026</span>
                                 </div>
                             </div>

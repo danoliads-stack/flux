@@ -33,7 +33,7 @@ const Preloader: React.FC = () => {
                     {/* Main Logo Image with Glow */}
                     <img
                         src="/assets/logo-square.png"
-                        alt="Flux Insight"
+                        alt="Flux Insights"
                         className="w-full h-full object-contain relative z-10 animate-[logo-glow_3s_ease-in-out_infinite]"
                     />
 

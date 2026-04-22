@@ -147,6 +147,12 @@ const StatusTimer: React.FC<{ statusChangeAt?: string; status: string; operatorS
       const now = Date.now();
       const diff = Math.max(0, Math.floor((now - baseStart) / 1000));
 
+      // Se passou mais de 24h sem reset, o estado no banco está desatualizado
+      if (diff > 86400) {
+        setElapsed('--:--:--');
+        return;
+      }
+
       const h = Math.floor(diff / 3600).toString().padStart(2, '0');
       const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
       const s = (diff % 60).toString().padStart(2, '0');

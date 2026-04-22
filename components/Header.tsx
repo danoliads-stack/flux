@@ -16,11 +16,11 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme, operatorSes
 
   const getTitle = () => {
     if (location.pathname.startsWith('/maquinas/')) return 'Painel do Operador';
-    if (location.pathname === '/maquinas') return 'Flux Insight';
+    if (location.pathname === '/maquinas') return 'Flux Insights';
     if (location.pathname.startsWith('/supervisao')) return 'Supervisão Operacional';
     if (location.pathname.startsWith('/administracao')) return 'Administração de Sistema';
     if (location.pathname.startsWith('/relatorios')) return 'Relatórios de Produção';
-    return 'Flux Insight';
+    return 'Flux Insights';
   };
 
   return (

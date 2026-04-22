@@ -292,7 +292,7 @@ const LabelModal: React.FC<LabelModalProps> = ({
                 {/* Footer Bar */}
                 <div className="bg-black text-white h-[20px] flex items-center justify-center px-4">
                   <div className="flex justify-between w-full items-center">
-                    <span className="text-[7px] font-black tracking-[0.4em] uppercase">Flux Insight</span>
+                    <span className="text-[7px] font-black tracking-[0.4em] uppercase">Flux Insights</span>
                     <span className="text-[6px] font-bold opacity-30">PROPRIETARY MANUFACTURING SYSTEM © 2025</span>
                   </div>
                 </div>
