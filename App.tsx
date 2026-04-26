@@ -1049,12 +1049,13 @@ const App: React.FC = () => {
         return;
       }
 
-      // Lock de OP: impede 2 máquinas produzindo a mesma OP simultaneamente
+      // BUG-009 FIX: Lock de OP - checa RUNNING e SETUP (nao so RUNNING)
+      // O UNIQUE INDEX no banco ja protege, mas mostramos mensagem amigavel
       const { data: conflictMachines } = await supabase
         .from('maquinas')
         .select('id, nome')
         .eq('op_atual_id', activeOP)
-        .eq('status_atual', MachineStatus.RUNNING)
+        .in('status_atual', [MachineStatus.RUNNING, MachineStatus.SETUP])
         .neq('id', currentMachine.id);
 
       if (conflictMachines && conflictMachines.length > 0) {
@@ -1424,13 +1425,8 @@ const App: React.FC = () => {
             onConfirm={(op) => {
               const handleMachineSetup = async (op: ProductionOrder) => {
                 if (selectedMachineId && currentUser) {
-                  await supabase.from('op_operadores').update({ fim: new Date().toISOString() }).eq('maquina_id', selectedMachineId).is('fim', null);
-                  await supabase.from('op_operadores').insert({
-                    op_id: op.id,
-                    operador_id: activeOperatorId,
-                    maquina_id: selectedMachineId,
-                    inicio: new Date().toISOString()
-                  });
+                  // BUG-007 FIX: removido insert duplicado em op_operadores (legacy).
+                  // mes_switch_operator (chamado abaixo) ja insere em op_operator_sessions.
                   const now = new Date().toISOString();
                   const operatorId = activeOperatorId;
                   const { error: setupError } = await supabase.rpc('mes_start_setup', {
@@ -1833,11 +1829,14 @@ const App: React.FC = () => {
 
                 await refreshOpSummary(activeOP);
 
-                await supabase
-                  .from('op_operadores')
-                  .update({ fim: new Date().toISOString() })
-                  .eq('maquina_id', currentMachine.id)
-                  .is('fim', null);
+                // BUG-007 FIX: fecha sessao do operador na tabela correta (op_operator_sessions)
+                if (activeOP) {
+                  await supabase
+                    .from('op_operator_sessions')
+                    .update({ ended_at: new Date().toISOString() })
+                    .eq('op_id', activeOP)
+                    .is('ended_at', null);
+                }
 
                 // Refresh snapshot after apontamento parcial
                 await refreshOpSummary(activeOP);
