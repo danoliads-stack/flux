@@ -33,7 +33,17 @@ const LoginScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     const result = await loginAsAdmin(email, password);
-    if (result.error) setError('E-mail ou senha inválidos');
+    if (result.error) {
+      // Mostra mensagem específica do Supabase pra facilitar debug
+      const msg = (result.error as any)?.message || 'E-mail ou senha inválidos';
+      if (msg.toLowerCase().includes('email not confirmed')) {
+        setError('E-mail não confirmado. Confirme o usuário no painel do Supabase.');
+      } else if (msg.toLowerCase().includes('invalid login credentials')) {
+        setError('E-mail ou senha inválidos');
+      } else {
+        setError(msg);
+      }
+    }
     setLoading(false);
   };
 
