@@ -99,36 +99,35 @@ const AdminDashboard: React.FC = () => {
 
   const handleAddOperator = async () => {
     if (!newOp.nome || !newOp.matricula || !newOp.setor_id) return;
+    if (!newOp.pin || newOp.pin.length < 4) {
+      alert('PIN deve ter pelo menos 4 dígitos.');
+      return;
+    }
 
     try {
-      // ✅ Hash the PIN server-side before storing
-      // PIN será hasheado automaticamente pelo Trigger no banco de dados
-      // Mantemos o pin no payload, o trigger vai gerar o pin_hash e (opcionalmente) limpar o pin
-      const pinToSave = newOp.pin;
+      // ✅ Usa RPC dedicada que hasheia o PIN no servidor (bcrypt)
+      // a coluna 'pin' nao existe mais (Fix Pack 2 - seguranca)
+      const { data: newId, error: rpcError } = await supabase.rpc('mes_create_operator', {
+        p_nome: newOp.nome,
+        p_matricula: newOp.matricula,
+        p_pin: newOp.pin,
+        p_setor_id: newOp.setor_id,
+        p_turno_id: newOp.turno_id || null,
+        p_avatar: newOp.avatar || newOp.nome.substring(0, 2).toUpperCase()
+      });
 
-      // Insert the operator with hashed PIN
-      const { data: insertedOp, error: insertError } = await supabase.from('operadores').insert({
-        nome: newOp.nome,
-        matricula: newOp.matricula,
-        pin: pinToSave, // Envia o PIN normal, trigger processa
-        setor_id: newOp.setor_id,
-        turno_id: newOp.turno_id || null,
-        avatar: newOp.avatar || newOp.nome.substring(0, 2).toUpperCase(),
-        ativo: true
-      }).select().single();
-
-      if (insertError) {
-        console.error('[AdminDashboard] Insert error:', insertError);
-        alert('Erro ao criar operador: ' + insertError.message);
+      if (rpcError) {
+        console.error('[AdminDashboard] Create operator error:', rpcError);
+        alert('Erro ao criar operador: ' + rpcError.message);
         return;
       }
 
-      // Upload avatar if file is selected
-      if (newOpAvatarFile && insertedOp?.id) {
+      // Upload avatar se um arquivo foi selecionado
+      if (newOpAvatarFile && newId) {
         setUploadingAvatar(true);
-        const avatarUrl = await uploadOperatorAvatar(newOpAvatarFile, insertedOp.id);
+        const avatarUrl = await uploadOperatorAvatar(newOpAvatarFile, newId);
         if (avatarUrl) {
-          await supabase.from('operadores').update({ avatar: avatarUrl }).eq('id', insertedOp.id);
+          await supabase.from('operadores').update({ avatar: avatarUrl }).eq('id', newId);
         }
         setUploadingAvatar(false);
       }
@@ -172,7 +171,7 @@ const AdminDashboard: React.FC = () => {
         setUploadingAvatar(false);
       }
 
-      // ✅ Prepare update object
+      // ✅ Update das colunas normais (sem PIN — PIN agora vai por RPC dedicada)
       const updateData: any = {
         nome: editingOp.nome,
         matricula: editingOp.matricula,
@@ -182,12 +181,28 @@ const AdminDashboard: React.FC = () => {
         ativo: editingOp.ativo
       };
 
-      // ✅ Update: Envia o PIN novo (se houve troca), o Trigger cuida do Hash
-      if (editingOp.pin && editingOp.pin.trim() !== '') {
-        updateData.pin = editingOp.pin;
+      const { error: updateError } = await supabase
+        .from('operadores').update(updateData).eq('id', editingOp.id);
+      if (updateError) {
+        alert('Erro ao atualizar operador: ' + updateError.message);
+        return;
       }
 
-      await supabase.from('operadores').update(updateData).eq('id', editingOp.id);
+      // Se houve troca de PIN, chama RPC dedicada que faz o hash bcrypt
+      if (editingOp.pin && editingOp.pin.trim() !== '') {
+        if (editingOp.pin.length < 4) {
+          alert('PIN deve ter pelo menos 4 dígitos.');
+          return;
+        }
+        const { error: pinError } = await supabase.rpc('mes_update_operator_pin', {
+          p_operator_id: editingOp.id,
+          p_new_pin: editingOp.pin
+        });
+        if (pinError) {
+          alert('Operador atualizado, mas erro ao trocar o PIN: ' + pinError.message);
+          return;
+        }
+      }
 
       setIsEditModalOpen(false);
       setEditingOp(null);
