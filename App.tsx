@@ -20,6 +20,9 @@ import LabelHistoryPage from './components/LabelHistoryPage';
 import MaintenanceDashboard from './components/MaintenanceDashboard';
 import TraceabilityPage from './components/TraceabilityPage';
 import Preloader from './components/Preloader';
+import FluxNotifications from './components/FluxNotifications';
+import { notify } from './src/utils/notify';
+import { confirmDialog } from './src/utils/confirmDialog';
 import { ROLE_CONFIGS } from './constants';
 import { useAuth } from './AuthContext';
 import { supabase } from './src/lib/supabase-client';
@@ -1045,7 +1048,7 @@ const App: React.FC = () => {
   const handleStartProduction = async () => {
     if (currentMachine) {
       if (!activeOP) {
-        alert('Não é possível iniciar a produção sem uma Ordem de Produção (OP) selecionada. Por favor, realize o SETUP.');
+        notify.warn('Não é possível iniciar a produção sem uma OP selecionada. Realize o SETUP primeiro.');
         return;
       }
 
@@ -1059,7 +1062,7 @@ const App: React.FC = () => {
         .neq('id', currentMachine.id);
 
       if (conflictMachines && conflictMachines.length > 0) {
-        alert(`Esta OP já está sendo produzida na máquina "${(conflictMachines[0] as any).nome}". Não é permitido 2 máquinas produzindo a mesma OP simultaneamente.`);
+        notify.error(`Esta OP já está rodando na máquina "${(conflictMachines[0] as any).nome}". Não é permitido 2 máquinas com a mesma OP.`);
         return;
       }
 
@@ -1084,7 +1087,7 @@ const App: React.FC = () => {
       if (resumeError && !`${resumeError.message}`.includes('no_open_stop')) {
         // Ignora erro de "no_open_stop", mas falha para outros casos
         logger.error('Erro ao retomar maquina antes de iniciar producao:', resumeError);
-        alert(`Erro ao retomar maquina: ${resumeError.message}`);
+        notify.error(`Erro ao retomar máquina: ${resumeError.message}`);
         return;
       }
 
@@ -1095,7 +1098,7 @@ const App: React.FC = () => {
       });
       if (prodStartError) {
         logger.error('Erro ao iniciar producao:', prodStartError);
-        alert(`Erro ao iniciar producao: ${prodStartError.message}`);
+        notify.error(`Erro ao iniciar produção: ${prodStartError.message}`);
         return;
       }
 
@@ -1139,7 +1142,7 @@ const App: React.FC = () => {
       });
       if (resumeError) {
         logger.error('Erro ao retomar maquina:', resumeError);
-        alert(`Erro ao retomar maquina: ${resumeError.message}`);
+        notify.error(`Erro ao retomar máquina: ${resumeError.message}`);
         return;
       }
 
@@ -1174,7 +1177,7 @@ const App: React.FC = () => {
 
       if (error) {
         logger.error('Erro ao abrir chamado:', error);
-        alert('Erro ao registrar chamado de manutenção.');
+        notify.error('Erro ao registrar chamado de manutenção.');
         return;
       }
 
@@ -1209,7 +1212,7 @@ const App: React.FC = () => {
         })
       );
       setOpState('MANUTENCAO');
-      alert('Chamado de manutenção registrado. A máquina está aguardando atendimento.');
+      notify.success('Chamado de manutenção registrado. A máquina está aguardando atendimento.');
     }
   };
 
@@ -1221,6 +1224,8 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-background-dark text-text-main-dark overflow-hidden selection:bg-primary/30 selection:text-white">
+      {/* Sistema de notificacoes do FLUX (substitui alert/confirm do browser) */}
+      <FluxNotifications />
       {location.pathname !== '/login' && !location.pathname.startsWith('/r/') && (
         <Sidebar
           onLogout={handleLogoutWithNav}
@@ -1436,7 +1441,7 @@ const App: React.FC = () => {
                   });
                   if (setupError) {
                     logger.error('Erro ao iniciar setup:', setupError);
-                    alert(`Erro ao iniciar setup: ${setupError.message}`);
+                    notify.error(`Erro ao iniciar setup: ${setupError.message}`);
                     return;
                   }
 
@@ -1482,11 +1487,11 @@ const App: React.FC = () => {
             onConfirm={async (reason, notes, producedDelta, scrapDelta) => {
               if (currentMachine && currentUser) {
                 if (!reason) {
-                  alert('Selecione o motivo da parada.');
+                  notify.warn('Selecione o motivo da parada.');
                   return;
                 }
                 if (!opIdForSession) {
-                  alert('Nao e possivel registrar parada sem OP ativa.');
+                  notify.warn('Não é possível registrar parada sem OP ativa.');
                   return;
                 }
                 logger.log('Salvando parada:', {
@@ -1517,7 +1522,7 @@ const App: React.FC = () => {
                   });
                   if (prodError) {
                     logger.error('Erro ao registrar producao parcial na parada:', prodError);
-                    alert(`Erro ao registrar producao parcial: ${prodError.message}`);
+                    notify.error(`Erro ao registrar produção parcial: ${prodError.message}`);
                     return;
                   }
                 }
@@ -1532,7 +1537,7 @@ const App: React.FC = () => {
                 });
                 if (stopError) {
                   logger.error('Erro ao salvar parada:', stopError);
-                  alert(`Erro ao salvar parada: ${stopError.message}`);
+                  notify.error(`Erro ao salvar parada: ${stopError.message}`);
                   return;
                 }
 
@@ -1608,7 +1613,7 @@ const App: React.FC = () => {
 
               if (recordError) {
                 logger.error('Erro ao registrar apontamento parcial:', recordError);
-                alert(`Erro ao registrar apontamento parcial: ${recordError.message}`);
+                notify.error(`Erro ao registrar apontamento parcial: ${recordError.message}`);
                 return;
               }
 
@@ -1641,7 +1646,7 @@ const App: React.FC = () => {
                 });
                 if (recordError) {
                   logger.error('Erro ao registrar producao:', recordError);
-                  alert(`Erro ao registrar producao: ${recordError.message}`);
+                  notify.error(`Erro ao registrar produção: ${recordError.message}`);
                   return;
                 }
 
@@ -1684,7 +1689,7 @@ const App: React.FC = () => {
                   hasUser: !!currentUser,
                   hasOP: !!activeOP
                 });
-                alert('Erro: Não foi possível finalizar a OP. Verifique se você está logado e se a máquina está selecionada corretamente.');
+                notify.error('Não foi possível finalizar a OP. Verifique se você está logado e se a máquina está selecionada.');
                 return;
               }
 
@@ -1692,7 +1697,7 @@ const App: React.FC = () => {
                 const target = activeOPData?.quantidade_meta || 0;
                 if (good < target) {
                   const saldo = Math.max(0, target - good);
-                  alert(`Ainda faltam ${saldo} un para atingir a meta. Registre o saldo antes de encerrar.`);
+                  notify.warn(`Ainda faltam ${saldo} un para atingir a meta. Registre o saldo antes de encerrar.`);
                   return;
                 }
 
@@ -1797,7 +1802,7 @@ const App: React.FC = () => {
 
               } catch (error: any) {
                 console.error('[App] ? Erro CRÍTICO ao finalizar OP:', error);
-                alert(`ERRO AO FINALIZAR OP: ${error.message || 'Erro desconhecido'}. \n\nPor favor, anote os valores e contate o suporte.`);
+                notify.error(`Erro ao finalizar OP: ${error.message || 'Erro desconhecido'}. Anote os valores e contate o suporte.`, 0);
               }
             }}
 
@@ -1822,7 +1827,7 @@ const App: React.FC = () => {
 
                 if (prodError) {
                   console.error('Erro ao salvar producao parcial:', prodError);
-                  alert(`Erro ao salvar producao: ${prodError.message}`);
+                  notify.error(`Erro ao salvar produção: ${prodError.message}`);
                 }
 
                 setProductionData({ totalProduced: totalProduced + delta });

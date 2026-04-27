@@ -8,6 +8,8 @@ import PalletLabelModal from './modals/PalletLabelModal';
 import MaintenanceCallModal from './modals/MaintenanceCallModal';
 import { useAppStore } from '../src/store/useAppStore';
 import { formatSeconds, parseCycleTimeToSeconds } from '../src/hooks/useFormatTime';
+import { notify } from '../src/utils/notify';
+import { confirmDialog } from '../src/utils/confirmDialog';
 
 interface OperatorDashboardProps {
   opState: OPState;
@@ -702,14 +704,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     } catch (error) {
       console.error('Error in quick update:', error);
       // Revert optimistic update on error
-      alert('Erro ao atualizar quantidade.');
+      notify.error('Erro ao atualizar quantidade.');
     }
   };
 
   // Manual partial production without stopping/suspending
   const handlePartialProduction = async () => {
     if (!opId || !machineId) {
-      alert('Selecione uma OP antes de apontar produção parcial.');
+      notify.warn('Selecione uma OP antes de apontar produção parcial.');
       return;
     }
 
@@ -717,7 +719,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     const scrap = Math.max(0, Number(partialScrap) || 0);
 
     if (good === 0 && scrap === 0) {
-      alert('Informe pelo menos uma quantidade produzida ou refugo.');
+      notify.warn('Informe pelo menos uma quantidade produzida ou refugo.');
       return;
     }
 
@@ -741,7 +743,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
       const { error: refreshError } = await supabase.rpc('mes_refresh_op_summary', { p_op_id: opId });
       if (refreshError) {
-        alert(`Produção registrada, mas falhou atualizar o resumo: ${refreshError.message}`);
+        notify.warn(`Produção registrada, mas falhou atualizar o resumo: ${refreshError.message}`);
       }
 
       await fetchProductionStats();
@@ -750,7 +752,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     } catch (error) {
       console.error('Erro ao apontar produção parcial:', error);
       const msg = (error as any)?.message || 'Erro ao apontar produção parcial.';
-      alert(msg);
+      notify.error(msg);
     } finally {
       setIsSavingPartial(false);
     }
@@ -813,7 +815,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       setTimeout(fetchDiaryEntries, 500);
     } catch (error) {
       console.error('Error adding diary entry:', error);
-      alert('Erro ao salvar anotação.');
+      notify.error('Erro ao salvar anotação.');
     }
   };
 
@@ -828,7 +830,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     if (error) {
       console.error('Error updating diary entry:', error);
-      alert('Erro ao atualizar anotação.');
+      notify.error('Erro ao atualizar anotação.');
     } else {
       setEditingDiaryId(null);
       setEditingDiaryText('');
@@ -838,7 +840,14 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   // Delete diary entry
   const handleDeleteDiaryEntry = async (entryId: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta anotação?')) return;
+    const ok = await confirmDialog({
+      title: 'Excluir anotação',
+      message: 'Tem certeza que deseja excluir esta anotação? Esta ação não pode ser desfeita.',
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar',
+      danger: true,
+    });
+    if (!ok) return;
 
     const { error } = await supabase
       .from('diario_bordo_eventos')
@@ -847,8 +856,9 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     if (error) {
       console.error('Error deleting diary entry:', error);
-      alert('Erro ao excluir anotação.');
+      notify.error('Erro ao excluir anotação.');
     } else {
+      notify.success('Anotação excluída.');
       fetchDiaryEntries();
     }
   };
@@ -946,7 +956,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   // Open checklist modal
   const openChecklist = (checklistId: string) => {
     if (!opId) {
-      alert('Selecione uma OP ativa antes de registrar o checklist.');
+      notify.warn('Selecione uma OP ativa antes de registrar o checklist.');
       return;
     }
     setSelectedChecklistId(checklistId);
@@ -1404,7 +1414,7 @@ const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           <button
             onClick={() => {
               if (!opId && (opState === 'SETUP' || opState === 'PARADA' || opState === 'SUSPENSA' || opState === 'MANUTENCAO')) {
-                alert('Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
+                notify.warn('Não é possível iniciar a produção sem uma OP vinculada em SETUP.');
                 return;
               }
               if (opState === 'SETUP') onStartProduction();

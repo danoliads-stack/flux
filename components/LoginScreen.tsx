@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { logger } from '../src/utils/logger';
+import { confirmDialog } from '../src/utils/confirmDialog';
 
 const LoginScreen: React.FC = () => {
   const { loginAsAdmin, loginAsOperator } = useAuth();
@@ -47,8 +48,15 @@ const LoginScreen: React.FC = () => {
     setLoading(false);
   };
 
-  const handleClearCache = () => {
-    if (window.confirm('Isso irá limpar todos os dados salvos neste navegador e recarregar a aplicação. Resolver problemas de acesso?')) {
+  const handleClearCache = async () => {
+    const ok = await confirmDialog({
+      title: 'Limpar cache',
+      message: 'Isso irá limpar todos os dados salvos neste navegador e recarregar a aplicação. Continuar?',
+      confirmText: 'Limpar',
+      cancelText: 'Cancelar',
+      danger: true,
+    });
+    if (ok) {
       logger.log('Clearing cache and reloading...');
       localStorage.clear();
       sessionStorage.clear();
