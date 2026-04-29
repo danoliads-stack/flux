@@ -1,8 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { logger } from '../src/utils/logger';
 import { confirmDialog } from '../src/utils/confirmDialog';
+import { notify } from '../src/utils/notify';
+import PrivacyModal from './modals/PrivacyModal';
+import { supabase } from '../src/lib/supabase-client';
 
 const LoginScreen: React.FC = () => {
   const { loginAsAdmin, loginAsOperator } = useAuth();
@@ -13,8 +16,40 @@ const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [pendingOperatorLogin, setPendingOperatorLogin] = useState<{ matricula: string; pin: string } | null>(null);
+
+  useEffect(() => {
+    // Mostra privacy modal na primeira visita (quando não há consentimento gravado)
+    const hasAcceptedPrivacy = localStorage.getItem('flux_privacy_accepted');
+    if (!hasAcceptedPrivacy) {
+      setShowPrivacyModal(true);
+    }
+  }, []);
+
+  const handlePrivacyAccept = async () => {
+    localStorage.setItem('flux_privacy_accepted', JSON.stringify({
+      acceptedAt: new Date().toISOString(),
+      policyVersion: 1,
+    }));
+    setShowPrivacyModal(false);
+    notify.success('Política de Privacidade aceita');
+  };
+
+  const handlePrivacyDecline = () => {
+    notify.error('Você deve aceitar a Política de Privacidade para usar FLUX');
+    setShowPrivacyModal(false);
+  };
 
   const handleOperatorLogin = async () => {
+    // Verifica se já aceitou política
+    const hasAcceptedPrivacy = localStorage.getItem('flux_privacy_accepted');
+    if (!hasAcceptedPrivacy) {
+      setShowPrivacyModal(true);
+      setPendingOperatorLogin({ matricula, pin });
+      return;
+    }
+
     if (!matricula || !pin) {
       setError('Informe matrícula e PIN');
       return;
@@ -65,7 +100,13 @@ const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-full flex items-center justify-center relative bg-background-dark overflow-hidden font-body">
+    <>
+      <PrivacyModal
+        isOpen={showPrivacyModal}
+        onAccept={handlePrivacyAccept}
+        onDecline={handlePrivacyDecline}
+      />
+      <div className="h-screen w-full flex items-center justify-center relative bg-background-dark overflow-hidden font-body">
       {/* Dynamic Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[120px] animate-drift animate-blob"></div>
@@ -232,7 +273,8 @@ const LoginScreen: React.FC = () => {
           perspective: 1000px;
         }
       `}</style>
-    </div>
+      </div>
+    </>
   );
 };
 
