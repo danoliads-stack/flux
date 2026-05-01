@@ -262,7 +262,7 @@ const AdminDashboard: React.FC = () => {
                 <NavItem icon="people" label="Operadores" active={activePage === 'operadores'} onClick={() => setActivePage('operadores')} collapsed={sidebarCollapsed} />
                 <NavItem icon="grid_view" label="Setores" active={activePage === 'setores'} onClick={() => setActivePage('setores')} collapsed={sidebarCollapsed} />
                 <NavItem icon="schedule" label="Turnos" active={activePage === 'turnos'} onClick={() => setActivePage('turnos')} collapsed={sidebarCollapsed} />
-                <NavItem icon="precision_manufacturing" label="Máquinas" active={activePage === 'maquinas'} onClick={() => setActivePage('maquinas')} collapsed={sidebarCollapsed} />
+                <NavItem icon="settings" label="Máquinas" active={activePage === 'maquinas'} onClick={() => setActivePage('maquinas')} collapsed={sidebarCollapsed} />
                 <NavItem icon="assignment" label="Ordens de Produção" active={activePage === 'ordens'} onClick={() => setActivePage('ordens')} collapsed={sidebarCollapsed} />
               </nav>
             </div>

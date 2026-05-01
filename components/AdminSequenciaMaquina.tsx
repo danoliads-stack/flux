@@ -313,7 +313,7 @@ const AdminSequenciaMaquina: React.FC<AdminSequenciaMaquinaProps> = ({ onNavigat
                                     className="w-full flex items-center justify-between px-4 py-3 bg-[#0b0c10] border border-border-dark rounded-xl text-white text-base font-bold focus:ring-2 focus:ring-primary transition-all hover:bg-[#15181e]"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <span className="material-icons-outlined text-primary">precision_manufacturing</span>
+                                        <span className="material-icons-outlined text-primary">settings</span>
                                         {selectedMachineData ? (
                                             <span>{selectedMachineData.nome} <span className="text-gray-500 font-normal text-sm ml-1">({selectedMachineData.codigo})</span></span>
                                         ) : (
@@ -337,7 +337,7 @@ const AdminSequenciaMaquina: React.FC<AdminSequenciaMaquinaProps> = ({ onNavigat
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <span className={`material-icons-outlined ${selectedMachine === m.id ? 'text-primary' : 'text-gray-500'}`}>precision_manufacturing</span>
+                                                        <span className={`material-icons-outlined ${selectedMachine === m.id ? 'text-primary' : 'text-gray-500'}`}>settings</span>
                                                         <div className="text-left">
                                                             <div className="font-bold">{m.nome}</div>
                                                             <div className="text-[10px] opacity-70 font-mono">{m.codigo}</div>
@@ -360,7 +360,7 @@ const AdminSequenciaMaquina: React.FC<AdminSequenciaMaquinaProps> = ({ onNavigat
                         {selectedMachineData && (
                             <div className="mt-3 flex items-center gap-4 text-sm">
                                 <div className="flex items-center gap-2 text-gray-400">
-                                    <span className="material-icons-outlined text-lg text-primary">precision_manufacturing</span>
+                                    <span className="material-icons-outlined text-lg text-primary">settings</span>
                                     <span className="font-bold text-white">{selectedMachineData.nome}</span>
                                 </div>
                                 <div className="flex items-center gap-1 text-gray-500">

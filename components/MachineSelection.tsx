@@ -194,7 +194,7 @@ const MachineSelection: React.FC<MachineSelectionProps> = ({ user, machines: pro
           </div>
         ) : filteredMachines.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-            <span className="material-icons-outlined text-6xl mb-4">precision_manufacturing</span>
+            <span className="material-icons-outlined text-6xl mb-4">settings</span>
             <p>Nenhuma máquina encontrada.</p>
           </div>
         ) : (
@@ -301,7 +301,7 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, currentUserId, onSel
         <div className="flex items-start justify-between">
           {/* Machine Icon */}
           <div className={`w-14 h-14 rounded-xl ${status.bg} border ${status.border} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
-            <span className={`material-icons-outlined text-2xl ${status.text}`}>precision_manufacturing</span>
+            <span className={`material-icons-outlined text-2xl ${status.text}`}>settings</span>
           </div>
 
           {/* Status Badge */}

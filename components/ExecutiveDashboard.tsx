@@ -23,7 +23,7 @@ const ExecutiveDashboard: React.FC = () => {
     const [kpis, setKpis] = useState<KPI[]>([
         { label: 'OEE Global', value: 0, unit: '%', trend: 'neutral', trendValue: '0%', icon: 'donut_large', color: 'text-secondary' },
         { label: 'Produção Total', value: 0, unit: 'un', trend: 'neutral', trendValue: '0%', icon: 'inventory_2', color: 'text-primary' },
-        { label: 'Máquinas Ativas', value: 0, unit: '', trend: 'neutral', trendValue: '0', icon: 'precision_manufacturing', color: 'text-blue-400' },
+        { label: 'Máquinas Ativas', value: 0, unit: '', trend: 'neutral', trendValue: '0', icon: 'settings', color: 'text-blue-400' },
         { label: 'Refugo', value: 0, unit: '%', trend: 'neutral', trendValue: '0%', icon: 'delete_forever', color: 'text-danger' }
     ]);
 
@@ -87,7 +87,7 @@ const ExecutiveDashboard: React.FC = () => {
             setKpis([
                 { label: 'OEE Global', value: oeeGlobal.toFixed(1), unit: '%', trend: 'up', trendValue: '+2.1%', icon: 'donut_large', color: 'text-secondary' },
                 { label: 'Produção Hoje', value: totalProduced.toLocaleString(), unit: 'un', trend: 'up', trendValue: '+5.4%', icon: 'inventory_2', color: 'text-primary' },
-                { label: 'Máquinas Ativas', value: `${activeCount}/${machines.length}`, unit: '', trend: 'neutral', trendValue: '0', icon: 'precision_manufacturing', color: 'text-blue-400' },
+                { label: 'Máquinas Ativas', value: `${activeCount}/${machines.length}`, unit: '', trend: 'neutral', trendValue: '0', icon: 'settings', color: 'text-blue-400' },
                 { label: 'Taxa de Refugo', value: scrapRate.toFixed(2), unit: '%', trend: scrapRate > 2 ? 'down' : 'up', trendValue: '-0.5%', icon: 'delete_forever', color: scrapRate > 2 ? 'text-danger' : 'text-green-500' }
             ]);
 

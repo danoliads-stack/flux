@@ -156,7 +156,7 @@ const AdminMaquinas: React.FC = () => {
                 </div>
             ) : filteredMaquinas.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-600">
-                    <span className="material-icons-outlined text-5xl">precision_manufacturing</span>
+                    <span className="material-icons-outlined text-5xl">settings</span>
                     <p className="text-sm">Nenhuma máquina encontrada.</p>
                 </div>
             ) : (
@@ -172,7 +172,7 @@ const AdminMaquinas: React.FC = () => {
                                     {/* Ícone com status */}
                                     <div className="relative">
                                         <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                                            <span className="material-icons-outlined text-primary text-3xl">precision_manufacturing</span>
+                                            <span className="material-icons-outlined text-primary text-3xl">settings</span>
                                         </div>
                                         <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#15181e] ${statusInfo.color}`}></span>
                                     </div>
