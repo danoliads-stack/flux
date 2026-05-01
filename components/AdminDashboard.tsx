@@ -393,11 +393,8 @@ const AdminDashboard: React.FC = () => {
         ) : activePage === 'operadores' ? (
           <div className="p-8 flex flex-col flex-1 overflow-hidden">
             {/* Header Title & Top Buttons */}
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-3xl font-bold text-white tracking-tight font-display uppercase">Operadores</h2>
-                <p className="text-sm text-gray-500 mt-1">Gerencie os operadores do sistema, suas atribuições e status de acesso.</p>
-              </div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white tracking-tight font-display uppercase">Operadores</h2>
               <div className="flex gap-3">
                 <button className="flex items-center gap-2 px-5 py-2.5 bg-[#1a1c23] hover:bg-[#252831] border border-border-dark text-white text-sm font-bold rounded-lg transition-all">
                   <span className="material-icons-outlined text-lg">upload</span>
@@ -413,24 +410,61 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+              <div className="bg-[#15181e] border border-border-dark rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total de Operadores</p>
+                    <p className="text-2xl font-bold text-white mt-2">{operators.length}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <span className="material-icons-outlined text-primary">people</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#15181e] border border-border-dark rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Ativos</p>
+                    <p className="text-2xl font-bold text-white mt-2">{operators.filter(o => o.ativo).length}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-secondary/10 border border-secondary/20 flex items-center justify-center">
+                    <span className="material-icons-outlined text-secondary">check_circle</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#15181e] border border-border-dark rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Inativos</p>
+                    <p className="text-2xl font-bold text-white mt-2">{operators.filter(o => !o.ativo).length}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center">
+                    <span className="material-icons-outlined text-gray-500">cancel</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Filter Bar */}
-            <div className="bg-[#15181e] p-4 rounded-xl border border-border-dark flex gap-4 mb-6">
+            <div className="bg-[#15181e] p-3 rounded-xl border border-border-dark flex gap-3 mb-6">
               <div className="relative flex-1">
                 <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
                 <input
-                  className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-primary"
+                  className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-primary"
                   placeholder="Filtrar por nome ou matrícula..."
                 />
               </div>
               <div className="w-64">
-                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
+                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
                   <option>Todos os Setores</option>
                   <option>Usinagem</option>
                   <option>Montagem</option>
                 </select>
               </div>
               <div className="w-48">
-                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
+                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
                   <option>Status</option>
                   <option>Ativo</option>
                   <option>Inativo</option>
@@ -448,7 +482,6 @@ const AdminDashboard: React.FC = () => {
                   <thead>
                     <tr className="bg-[#1a1c23]/30 text-[10px] uppercase font-bold text-gray-500 border-b border-border-dark tracking-[0.1em]">
                       <th className="px-8 py-5">Operador</th>
-                      <th className="px-6 py-5">Matrícula</th>
                       <th className="px-6 py-5">Setor</th>
                       <th className="px-6 py-5">Turno</th>
                       <th className="px-6 py-5">Máquina Padrão</th>
@@ -481,7 +514,6 @@ const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-6 font-mono text-gray-400">{op.matricula}</td>
                         <td className="px-6 py-6">
                           <span className="px-3 py-1 bg-[#0b0c10] border border-border-dark text-gray-400 text-[11px] font-bold uppercase rounded">
                             {getSectorName(op.setor_id)}
@@ -494,17 +526,23 @@ const AdminDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-6 text-gray-400">--</td>
                         <td className="px-6 py-6">
-                          <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase ${
+                            op.ativo
+                              ? 'bg-secondary/20 text-secondary'
+                              : 'bg-gray-800 text-gray-500'
+                          }`}>
                             <span className={`w-2 h-2 rounded-full ${op.ativo ? 'bg-secondary' : 'bg-gray-600'}`}></span>
-                            <span className={`text-xs font-bold ${op.ativo ? 'text-secondary' : 'text-gray-600'}`}>{op.ativo ? 'Ativo' : 'Inativo'}</span>
-                          </div>
+                            {op.ativo ? 'Ativo' : 'Inativo'}
+                          </span>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openEditModal(op)} className="text-gray-500 hover:text-primary p-1 rounded hover:bg-primary/10"><span className="material-icons-outlined text-lg">edit</span></button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => openEditModal(op)} className="text-gray-500 hover:text-primary p-2 rounded hover:bg-primary/10 transition-colors">
+                              <span className="material-icons-outlined text-lg">edit</span>
+                            </button>
                             <button
                               onClick={() => handleDeleteOperator(op.id)}
-                              className="text-gray-500 hover:text-danger p-1 rounded hover:bg-danger/10"
+                              className="text-gray-500 hover:text-danger p-2 rounded hover:bg-danger/10 transition-colors"
                             >
                               <span className="material-icons-outlined text-lg">delete</span>
                             </button>
