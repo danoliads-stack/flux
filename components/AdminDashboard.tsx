@@ -23,6 +23,7 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user: currentUser, logout } = useAuth();
   const [activePage, setActivePage] = useState<AdminPage>('overview');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [operators, setOperators] = useState<any[]>([]);
   const [sectors, setSectors] = useState<any[]>([]);
   const [turnos, setTurnos] = useState<any[]>([]);
@@ -227,101 +228,103 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="flex h-full bg-[#0b0c10] text-gray-400 font-admin select-none">
       {/* Admin Sidebar Section */}
-      <aside className="w-64 border-r border-border-dark flex flex-col shrink-0 overflow-y-auto bg-[#0b0c10]">
-        <div className="p-6">
-          <div className="mb-10 flex flex-col items-center">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-2">
-              <span className="material-icons-outlined text-2xl text-primary">admin_panel_settings</span>
+      <aside className={`${sidebarCollapsed ? 'w-14' : 'w-64'} transition-all duration-200 border-r border-border-dark flex flex-col shrink-0 overflow-y-auto overflow-x-hidden bg-[#0b0c10]`}>
+        {/* Toggle + Logo */}
+        <div className={`flex items-center border-b border-border-dark shrink-0 ${sidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'}`}>
+          {!sidebarCollapsed && (
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <span className="material-icons-outlined text-sm text-primary">admin_panel_settings</span>
+              </div>
+              <span className="text-white font-bold text-xs uppercase tracking-widest opacity-60">Admin</span>
             </div>
-            <div className="h-px w-full bg-border-dark mb-4"></div>
-            <span className="text-white font-bold text-xs uppercase tracking-widest opacity-60">Administration</span>
-          </div>
+          )}
+          <button
+            onClick={() => setSidebarCollapsed(c => !c)}
+            className="text-gray-600 hover:text-white transition-colors p-1 rounded hover:bg-white/5"
+            title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            <span className="material-icons-outlined text-lg">
+              {sidebarCollapsed ? 'menu' : 'menu_open'}
+            </span>
+          </button>
+        </div>
 
-          <div className="space-y-8">
-            {/* Overview Section */}
-            <section>
-              <nav className="space-y-1">
-                <NavItem icon="dashboard" label="Visão Geral" active={activePage === 'overview'} onClick={() => setActivePage('overview')} />
-              </nav>
-            </section>
+        <div className={`${sidebarCollapsed ? 'py-3 px-1' : 'p-4'} flex-1`}>
+          <div className="space-y-6">
+            <nav className="space-y-1">
+              <NavItem icon="dashboard" label="Visão Geral" active={activePage === 'overview'} onClick={() => setActivePage('overview')} collapsed={sidebarCollapsed} />
+            </nav>
 
-            {/* Category: Cadastros */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Cadastros</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Cadastros</p>}
               <nav className="space-y-1">
-                <NavItem icon="people" label="Operadores" active={activePage === 'operadores'} onClick={() => setActivePage('operadores')} />
-                <NavItem icon="grid_view" label="Setores" active={activePage === 'setores'} onClick={() => setActivePage('setores')} />
-                <NavItem icon="schedule" label="Turnos" active={activePage === 'turnos'} onClick={() => setActivePage('turnos')} />
-                <NavItem icon="precision_manufacturing" label="Máquinas" active={activePage === 'maquinas'} onClick={() => setActivePage('maquinas')} />
-                <NavItem icon="assignment" label="Ordens de Produção" active={activePage === 'ordens'} onClick={() => setActivePage('ordens')} />
+                <NavItem icon="people" label="Operadores" active={activePage === 'operadores'} onClick={() => setActivePage('operadores')} collapsed={sidebarCollapsed} />
+                <NavItem icon="grid_view" label="Setores" active={activePage === 'setores'} onClick={() => setActivePage('setores')} collapsed={sidebarCollapsed} />
+                <NavItem icon="schedule" label="Turnos" active={activePage === 'turnos'} onClick={() => setActivePage('turnos')} collapsed={sidebarCollapsed} />
+                <NavItem icon="precision_manufacturing" label="Máquinas" active={activePage === 'maquinas'} onClick={() => setActivePage('maquinas')} collapsed={sidebarCollapsed} />
+                <NavItem icon="assignment" label="Ordens de Produção" active={activePage === 'ordens'} onClick={() => setActivePage('ordens')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Produção */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Produção</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Produção</p>}
               <nav className="space-y-1">
-                <NavItem icon="list_alt" label="OPs Gerais" active={activePage === 'ops_gerais'} onClick={() => setActivePage('ops_gerais')} />
-                <NavItem icon="reorder" label="Sequência por Máquina" active={activePage === 'sequencia'} onClick={() => setActivePage('sequencia')} />
+                <NavItem icon="list_alt" label="OPs Gerais" active={activePage === 'ops_gerais'} onClick={() => setActivePage('ops_gerais')} collapsed={sidebarCollapsed} />
+                <NavItem icon="reorder" label="Sequência" active={activePage === 'sequencia'} onClick={() => setActivePage('sequencia')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Qualidade */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Qualidade</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Qualidade</p>}
               <nav className="space-y-1">
-                <NavItem icon="warning_amber" label="Tipos de Parada" active={activePage === 'tipos_parada'} onClick={() => setActivePage('tipos_parada')} />
-                <NavItem icon="cancel" label="Tipos de Refugo" active={activePage === 'tipos_refugo'} onClick={() => setActivePage('tipos_refugo')} />
-                <NavItem icon="fact_check" label="Checklists" active={activePage === 'checklists'} onClick={() => setActivePage('checklists')} />
-                <NavItem icon="verified_user" label="Monitoramento de Qualidade" active={activePage === 'monitoramento_qualidade'} onClick={() => setActivePage('monitoramento_qualidade')} />
+                <NavItem icon="warning_amber" label="Tipos de Parada" active={activePage === 'tipos_parada'} onClick={() => setActivePage('tipos_parada')} collapsed={sidebarCollapsed} />
+                <NavItem icon="cancel" label="Tipos de Refugo" active={activePage === 'tipos_refugo'} onClick={() => setActivePage('tipos_refugo')} collapsed={sidebarCollapsed} />
+                <NavItem icon="fact_check" label="Checklists" active={activePage === 'checklists'} onClick={() => setActivePage('checklists')} collapsed={sidebarCollapsed} />
+                <NavItem icon="verified_user" label="Monit. Qualidade" active={activePage === 'monitoramento_qualidade'} onClick={() => setActivePage('monitoramento_qualidade')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Integrações */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Integrações</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Integrações</p>}
               <nav className="space-y-1">
-                <NavItem icon="settings_input_component" label="ERP Connector" active={activePage === 'erp'} onClick={() => setActivePage('erp')} />
-                <NavItem icon="key" label="API Keys" active={activePage === 'api_keys'} onClick={() => setActivePage('api_keys')} />
-                <NavItem icon="sensors" label="CLP / Sensores" active={activePage === 'clp_sensores'} onClick={() => setActivePage('clp_sensores')} />
+                <NavItem icon="settings_input_component" label="ERP Connector" active={activePage === 'erp'} onClick={() => setActivePage('erp')} collapsed={sidebarCollapsed} />
+                <NavItem icon="key" label="API Keys" active={activePage === 'api_keys'} onClick={() => setActivePage('api_keys')} collapsed={sidebarCollapsed} />
+                <NavItem icon="sensors" label="CLP / Sensores" active={activePage === 'clp_sensores'} onClick={() => setActivePage('clp_sensores')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Sistema */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Sistema</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Sistema</p>}
               <nav className="space-y-1">
-                <NavItem icon="account_circle" label="Usuários" active={activePage === 'usuarios'} onClick={() => setActivePage('usuarios')} />
-                <NavItem icon="lock_person" label="Perfis e Permissões" active={activePage === 'perfis'} onClick={() => setActivePage('perfis')} />
-                <NavItem icon="history_edu" label="Logs e Auditoria" active={activePage === 'logs'} onClick={() => setActivePage('logs')} />
+                <NavItem icon="account_circle" label="Usuários" active={activePage === 'usuarios'} onClick={() => setActivePage('usuarios')} collapsed={sidebarCollapsed} />
+                <NavItem icon="lock_person" label="Perfis e Permissões" active={activePage === 'perfis'} onClick={() => setActivePage('perfis')} collapsed={sidebarCollapsed} />
+                <NavItem icon="history_edu" label="Logs e Auditoria" active={activePage === 'logs'} onClick={() => setActivePage('logs')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
           </div>
         </div>
 
         {/* User Profile Footer */}
-        <div className="mt-auto p-4 border-t border-border-dark flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-border-dark bg-primary flex items-center justify-center text-white font-bold">
-              {currentUser?.avatar?.startsWith('http') ? (
-                <img
-                  src={currentUser.avatar}
-                  alt="profile"
-                  className="w-full h-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              ) : (
-                currentUser?.avatar || currentUser?.name?.charAt(0) || '?'
-              )}
-            </div>
-            <div>
-              <p className="text-white text-sm font-bold leading-tight">{currentUser?.name}</p>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{currentUser?.role} • Produção</p>
-            </div>
+        <div className={`border-t border-border-dark flex items-center ${sidebarCollapsed ? 'justify-center p-3' : 'justify-between p-3'}`}>
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-border-dark bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {currentUser?.avatar?.startsWith('http') ? (
+              <img src={currentUser.avatar} alt="profile" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            ) : (
+              currentUser?.avatar || currentUser?.name?.charAt(0) || '?'
+            )}
           </div>
-          <button onClick={handleLogout} className="text-gray-500 hover:text-white transition-colors">
-            <span className="material-icons-outlined">logout</span>
-          </button>
+          {!sidebarCollapsed && (
+            <>
+              <div className="ml-2 flex-1 min-w-0">
+                <p className="text-white text-xs font-bold truncate">{currentUser?.name}</p>
+                <p className="text-[9px] text-gray-500 uppercase">{currentUser?.role}</p>
+              </div>
+              <button onClick={handleLogout} className="text-gray-500 hover:text-white transition-colors ml-2">
+                <span className="material-icons-outlined text-lg">logout</span>
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
@@ -809,16 +812,19 @@ interface NavItemProps {
   label: string;
   active?: boolean;
   onClick?: () => void;
+  collapsed?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, collapsed }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all group ${active ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-      }`}
+    title={collapsed ? label : undefined}
+    className={`w-full flex items-center rounded-lg text-sm font-medium transition-all group ${
+      collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
+    } ${active ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}
   >
-    <span className={`material-icons-outlined text-lg ${active ? 'text-primary' : 'text-gray-600 group-hover:text-gray-400'}`}>{icon}</span>
-    <span className="flex-1 text-left">{label}</span>
+    <span className={`material-icons-outlined text-lg shrink-0 ${active ? 'text-primary' : 'text-gray-600 group-hover:text-gray-400'}`}>{icon}</span>
+    {!collapsed && <span className="flex-1 text-left truncate">{label}</span>}
   </button>
 );
 
