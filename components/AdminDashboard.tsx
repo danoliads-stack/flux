@@ -327,31 +327,12 @@ const AdminDashboard: React.FC = () => {
 
       {/* Main Admin Area */}
       <div className="flex-1 flex flex-col bg-[#0b0c10]">
-        {/* Top Breadcrumb & Actions Header */}
-        <header className="h-16 border-b border-border-dark flex items-center justify-between px-8">
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-gray-500">Cadastros</span>
-            <span className="material-icons-outlined text-sm text-gray-600">chevron_right</span>
-            <span className="text-white font-medium capitalize">{activePage}</span>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="relative group">
-              <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg group-focus-within:text-primary">search</span>
-              <input
-                className="bg-surface-dark border border-border-dark rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary w-40 md:w-64 lg:w-80 transition-all"
-                placeholder="Buscar no sistema..."
-              />
-            </div>
-            <div className="flex items-center gap-4 text-gray-500">
-              <button className="relative hover:text-white transition-colors">
-                <span className="material-icons-outlined">notifications</span>
-                <span className="absolute top-0 right-0 w-2 h-2 bg-danger rounded-full border-2 border-[#0b0c10]"></span>
-              </button>
-              <button className="hover:text-white transition-colors">
-                <span className="material-icons-outlined">help_outline</span>
-              </button>
-            </div>
+        {/* Top Breadcrumb */}
+        <header className="h-10 border-b border-border-dark flex items-center px-6 shrink-0">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-600">Admin</span>
+            <span className="material-icons-outlined text-xs text-gray-700" style={{fontSize:'12px'}}>chevron_right</span>
+            <span className="text-gray-400 font-medium capitalize">{activePage}</span>
           </div>
         </header>
 
@@ -475,98 +456,84 @@ const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Table Container */}
-            <div className="bg-[#15181e]/50 border border-border-dark rounded-xl flex-1 flex flex-col overflow-hidden">
-              <div className="overflow-x-auto flex-1">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-[#1a1c23]/30 text-[10px] uppercase font-bold text-gray-500 border-b border-border-dark tracking-[0.1em]">
-                      <th className="px-8 py-5">Operador</th>
-                      <th className="px-6 py-5">Setor</th>
-                      <th className="px-6 py-5">Turno</th>
-                      <th className="px-6 py-5">Máquina Padrão</th>
-                      <th className="px-6 py-5">Status</th>
-                      <th className="px-8 py-5 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-dark text-sm">
-                    {loading ? (
-                      <tr><td colSpan={7} className="px-8 py-10 text-center text-text-sub-dark italic">Carregando operadores...</td></tr>
-                    ) : operators.map((op, i) => (
-                      <tr key={op.id} className="hover:bg-white/[0.02] transition-colors group">
-                        <td className="px-8 py-6">
-                          <div className="flex items-center gap-4">
-                            {op.avatar?.startsWith('http') ? (
-                              <img
-                                src={op.avatar}
-                                alt={op.nome}
-                                className="w-10 h-10 rounded-full object-cover border border-primary/30"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold bg-primary">
-                                {op.avatar || op.nome?.substring(0, 2).toUpperCase()}
-                              </div>
-                            )}
-                            <div>
-                              <p className="font-bold text-white text-base">{op.nome}</p>
-                              <p className="text-xs text-gray-500">{op.matricula}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-6">
-                          <span className="px-3 py-1 bg-[#0b0c10] border border-border-dark text-gray-400 text-[11px] font-bold uppercase rounded">
-                            {getSectorName(op.setor_id)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-6">
-                          <div className="leading-relaxed text-gray-400">
-                            {getTurnoName(op.turno_id)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 text-gray-400">--</td>
-                        <td className="px-6 py-6">
-                          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase ${
-                            op.ativo
-                              ? 'bg-secondary/20 text-secondary'
-                              : 'bg-gray-800 text-gray-500'
-                          }`}>
-                            <span className={`w-2 h-2 rounded-full ${op.ativo ? 'bg-secondary' : 'bg-gray-600'}`}></span>
-                            {op.ativo ? 'Ativo' : 'Inativo'}
-                          </span>
-                        </td>
-                        <td className="px-8 py-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => openEditModal(op)} className="text-gray-500 hover:text-primary p-2 rounded hover:bg-primary/10 transition-colors">
-                              <span className="material-icons-outlined text-lg">edit</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteOperator(op.id)}
-                              className="text-gray-500 hover:text-danger p-2 rounded hover:bg-danger/10 transition-colors"
-                            >
-                              <span className="material-icons-outlined text-lg">delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Operators Grid */}
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Carregando operadores...</div>
+            ) : operators.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-600">
+                <span className="material-icons-outlined text-5xl">people_outline</span>
+                <p className="text-sm">Nenhum operador cadastrado.</p>
               </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
+                  {operators.map((op) => (
+                    <div
+                      key={op.id}
+                      className={`bg-[#15181e] border rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:border-primary/40 ${
+                        op.ativo ? 'border-border-dark' : 'border-border-dark opacity-60'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className="relative">
+                        {op.avatar?.startsWith('http') ? (
+                          <img
+                            src={op.avatar}
+                            alt={op.nome}
+                            className="w-16 h-16 rounded-full object-cover border-2 border-primary/30"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold select-none">
+                            {op.nome?.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#15181e] ${op.ativo ? 'bg-secondary' : 'bg-gray-600'}`}></span>
+                      </div>
 
-              {/* Pagination */}
-              <div className="px-8 py-6 border-t border-border-dark flex items-center justify-between">
-                <p className="text-sm text-gray-500">Mostrando <span className="text-white font-bold">1 a 5</span> de {operators.length} resultados</p>
-                <div className="flex gap-2">
-                  <button className="w-10 h-10 rounded-lg border border-border-dark flex items-center justify-center text-gray-600 hover:text-white hover:border-gray-500 transition-all disabled:opacity-20 disabled:cursor-not-allowed">
-                    <span className="material-icons-outlined">chevron_left</span>
-                  </button>
-                  <button className="w-10 h-10 rounded-lg border border-border-dark flex items-center justify-center text-gray-600 hover:text-white hover:border-gray-500 transition-all">
-                    <span className="material-icons-outlined">chevron_right</span>
-                  </button>
+                      {/* Nome e matrícula */}
+                      <div className="text-center min-w-0 w-full">
+                        <p className="font-bold text-white text-sm leading-tight truncate">{op.nome}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 font-mono">{op.matricula}</p>
+                      </div>
+
+                      {/* Badges setor e turno */}
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <span className="text-[10px] text-center px-2 py-1 bg-[#0b0c10] border border-border-dark rounded text-gray-400 font-bold uppercase truncate">
+                          {getSectorName(op.setor_id)}
+                        </span>
+                        {getTurnoName(op.turno_id) !== '--' && (
+                          <span className="text-[10px] text-center px-2 py-1 bg-[#0b0c10] border border-border-dark rounded text-gray-500 truncate">
+                            {getTurnoName(op.turno_id)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Status + ações */}
+                      <div className="flex items-center justify-between w-full mt-auto pt-2 border-t border-border-dark/50">
+                        <span className={`text-[10px] font-bold uppercase ${op.ativo ? 'text-secondary' : 'text-gray-600'}`}>
+                          {op.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openEditModal(op)}
+                            className="text-gray-600 hover:text-primary p-1 rounded hover:bg-primary/10 transition-colors"
+                          >
+                            <span className="material-icons-outlined text-base">edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOperator(op.id)}
+                            className="text-gray-600 hover:text-danger p-1 rounded hover:bg-danger/10 transition-colors"
+                          >
+                            <span className="material-icons-outlined text-base">delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Add Operator Modal */}
             {isAddModalOpen && (
