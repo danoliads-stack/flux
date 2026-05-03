@@ -304,7 +304,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     });
 
     setMachineOeeMap(nextMap);
-  }, [machines, machineOeeMap, getMachineOeeGoal]);
+  }, [machines]);
 
   useEffect(() => {
     return () => {
@@ -527,26 +527,38 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     setlastUpdateTime(new Date());
   }, [turnoStartTime]);
 
+  // Refs estáveis para os callbacks — evita recriar o canal a cada mudança de machines
+  const fetchShiftDataRef = useRef(fetchShiftData);
+  const fetchMachineOeeRef = useRef(fetchMachineOee);
+  useEffect(() => { fetchShiftDataRef.current = fetchShiftData; });
+  useEffect(() => { fetchMachineOeeRef.current = fetchMachineOee; });
+
+  // Busca inicial de dados — roda quando o turno é identificado
   useEffect(() => {
     fetchShiftData();
     fetchMachineOee();
+  }, [fetchShiftData, fetchMachineOee]);
+
+  // Canal Realtime — criado UMA VEZ na montagem, destruído na desmontagem
+  // Usa refs para sempre chamar a versão mais atual dos callbacks sem recriar o canal
+  useEffect(() => {
     const channel = supabase
-      .channel('shift-production-updates')
+      .channel(`supervision-updates-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'registros_producao' }, () => {
-        fetchShiftData();
-        fetchMachineOee();
+        fetchShiftDataRef.current();
+        fetchMachineOeeRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ordens_producao' }, () => {
-        fetchShiftData();
-        fetchMachineOee();
+        fetchShiftDataRef.current();
+        fetchMachineOeeRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maquinas' }, () => {
-        fetchShiftData();
-        fetchMachineOee();
+        fetchShiftDataRef.current();
+        fetchMachineOeeRef.current();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchShiftData, fetchMachineOee]);
+  }, []); // deps vazio: canal criado uma vez, nunca recriado por mudança de prop
 
   useEffect(() => {
     const tick = setInterval(() => setNowTimestamp(Date.now()), 1000);

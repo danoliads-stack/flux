@@ -94,51 +94,60 @@ const StopModal: React.FC<StopModalProps> = ({ onClose, onConfirm }) => {
             </div>
           )}
 
+          {/* Contagem da máquina — campo principal, destaque visual */}
+          <div className="rounded-xl border border-secondary/30 bg-secondary/5 p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <span className="material-icons-outlined text-secondary">speed</span>
+              <span className="text-white font-bold text-sm">Contagem da máquina</span>
+              <span className="ml-auto text-[10px] font-bold uppercase text-secondary border border-secondary/30 bg-secondary/10 px-2 py-0.5 rounded">Registre antes de parar</span>
+            </div>
+            <p className="text-text-sub-dark text-xs -mt-2">Leia o contador da máquina e informe abaixo. Fica registrado no histórico da OP.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-text-sub-dark uppercase tracking-wider flex items-center gap-1" htmlFor="produced">
+                  <span className="w-2 h-2 rounded-full bg-secondary inline-block"></span>
+                  Produzido (bom)
+                </label>
+                <input
+                  id="produced"
+                  type="number"
+                  min={0}
+                  value={producedDelta || ''}
+                  onChange={(e) => setProducedDelta(Math.max(0, Number(e.target.value)))}
+                  className="rounded-lg border border-secondary/30 bg-background-dark text-white px-4 py-3 text-xl font-bold text-center focus:ring-2 focus:ring-secondary focus:border-secondary transition-all"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-text-sub-dark uppercase tracking-wider flex items-center gap-1" htmlFor="scrap">
+                  <span className="w-2 h-2 rounded-full bg-danger inline-block"></span>
+                  Refugo
+                </label>
+                <input
+                  id="scrap"
+                  type="number"
+                  min={0}
+                  value={scrapDelta || ''}
+                  onChange={(e) => setScrapDelta(Math.max(0, Number(e.target.value)))}
+                  className="rounded-lg border border-danger/30 bg-background-dark text-white px-4 py-3 text-xl font-bold text-center focus:ring-2 focus:ring-danger focus:border-danger transition-all"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-2">
             <label className="text-white text-sm font-bold leading-normal flex items-center gap-2" htmlFor="notes">
               <span className="material-icons-outlined text-lg text-text-sub-dark">edit_note</span>
-              Additional Notes <span className="text-text-sub-dark font-normal text-xs">(Optional)</span>
+              Observações <span className="text-text-sub-dark font-normal text-xs">(opcional)</span>
             </label>
             <textarea
               id="notes"
-              className="flex w-full min-h-[100px] resize-none rounded-lg text-white focus:ring-2 focus:ring-primary border border-border-dark bg-background-dark placeholder:text-text-sub-dark p-4 text-base font-normal leading-normal transition-all"
-              placeholder="Add specific details regarding the stoppage (e.g., motor 2 bearing noise)..."
+              className="flex w-full min-h-[80px] resize-none rounded-lg text-white focus:ring-2 focus:ring-primary border border-border-dark bg-background-dark placeholder:text-text-sub-dark p-4 text-base font-normal leading-normal transition-all"
+              placeholder="Detalhes adicionais sobre a parada (ex: barulho no motor 2)..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-white text-sm font-bold leading-normal flex items-center gap-2" htmlFor="produced">
-                <span className="material-icons-outlined text-lg text-text-sub-dark">check_circle</span>
-                Quantidade boa produzida (opcional)
-              </label>
-              <input
-                id="produced"
-                type="number"
-                min={0}
-                value={producedDelta}
-                onChange={(e) => setProducedDelta(Math.max(0, Number(e.target.value)))}
-                className="rounded-lg border border-border-dark bg-background-dark text-white px-4 py-3 focus:ring-2 focus:ring-primary"
-                placeholder="Ex: 120"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-white text-sm font-bold leading-normal flex items-center gap-2" htmlFor="scrap">
-                <span className="material-icons-outlined text-lg text-text-sub-dark">warning</span>
-                Quantidade refugo (opcional)
-              </label>
-              <input
-                id="scrap"
-                type="number"
-                min={0}
-                value={scrapDelta}
-                onChange={(e) => setScrapDelta(Math.max(0, Number(e.target.value)))}
-                className="rounded-lg border border-border-dark bg-background-dark text-white px-4 py-3 focus:ring-2 focus:ring-primary"
-                placeholder="Ex: 5"
-              />
-            </div>
           </div>
         </div>
 

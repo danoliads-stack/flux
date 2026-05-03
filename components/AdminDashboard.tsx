@@ -23,6 +23,7 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user: currentUser, logout } = useAuth();
   const [activePage, setActivePage] = useState<AdminPage>('overview');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [operators, setOperators] = useState<any[]>([]);
   const [sectors, setSectors] = useState<any[]>([]);
   const [turnos, setTurnos] = useState<any[]>([]);
@@ -227,131 +228,114 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="flex h-full bg-[#0b0c10] text-gray-400 font-admin select-none">
       {/* Admin Sidebar Section */}
-      <aside className="w-64 border-r border-border-dark flex flex-col shrink-0 overflow-y-auto bg-[#0b0c10]">
-        <div className="p-6">
-          <div className="mb-10 flex flex-col items-center">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-2">
-              <span className="material-icons-outlined text-2xl text-primary">admin_panel_settings</span>
+      <aside className={`${sidebarCollapsed ? 'w-14' : 'w-64'} transition-all duration-200 border-r border-border-dark flex flex-col shrink-0 overflow-y-auto overflow-x-hidden bg-[#0b0c10]`}>
+        {/* Toggle + Logo */}
+        <div className={`flex items-center border-b border-border-dark shrink-0 ${sidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'}`}>
+          {!sidebarCollapsed && (
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <span className="material-icons-outlined text-sm text-primary">admin_panel_settings</span>
+              </div>
+              <span className="text-white font-bold text-xs uppercase tracking-widest opacity-60">Admin</span>
             </div>
-            <div className="h-px w-full bg-border-dark mb-4"></div>
-            <span className="text-white font-bold text-xs uppercase tracking-widest opacity-60">Administration</span>
-          </div>
+          )}
+          <button
+            onClick={() => setSidebarCollapsed(c => !c)}
+            className="text-gray-600 hover:text-white transition-colors p-1 rounded hover:bg-white/5"
+            title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            <span className="material-icons-outlined text-lg">
+              {sidebarCollapsed ? 'menu' : 'menu_open'}
+            </span>
+          </button>
+        </div>
 
-          <div className="space-y-8">
-            {/* Overview Section */}
-            <section>
-              <nav className="space-y-1">
-                <NavItem icon="dashboard" label="Visão Geral" active={activePage === 'overview'} onClick={() => setActivePage('overview')} />
-              </nav>
-            </section>
+        <div className={`${sidebarCollapsed ? 'py-3 px-1' : 'p-4'} flex-1`}>
+          <div className="space-y-6">
+            <nav className="space-y-1">
+              <NavItem icon="dashboard" label="Visão Geral" active={activePage === 'overview'} onClick={() => setActivePage('overview')} collapsed={sidebarCollapsed} />
+            </nav>
 
-            {/* Category: Cadastros */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Cadastros</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Cadastros</p>}
               <nav className="space-y-1">
-                <NavItem icon="people" label="Operadores" active={activePage === 'operadores'} onClick={() => setActivePage('operadores')} />
-                <NavItem icon="grid_view" label="Setores" active={activePage === 'setores'} onClick={() => setActivePage('setores')} />
-                <NavItem icon="schedule" label="Turnos" active={activePage === 'turnos'} onClick={() => setActivePage('turnos')} />
-                <NavItem icon="precision_manufacturing" label="Máquinas" active={activePage === 'maquinas'} onClick={() => setActivePage('maquinas')} />
-                <NavItem icon="assignment" label="Ordens de Produção" active={activePage === 'ordens'} onClick={() => setActivePage('ordens')} />
+                <NavItem icon="people" label="Operadores" active={activePage === 'operadores'} onClick={() => setActivePage('operadores')} collapsed={sidebarCollapsed} />
+                <NavItem icon="grid_view" label="Setores" active={activePage === 'setores'} onClick={() => setActivePage('setores')} collapsed={sidebarCollapsed} />
+                <NavItem icon="schedule" label="Turnos" active={activePage === 'turnos'} onClick={() => setActivePage('turnos')} collapsed={sidebarCollapsed} />
+                <NavItem icon="settings" label="Máquinas" active={activePage === 'maquinas'} onClick={() => setActivePage('maquinas')} collapsed={sidebarCollapsed} />
+                <NavItem icon="assignment" label="Ordens de Produção" active={activePage === 'ordens'} onClick={() => setActivePage('ordens')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Produção */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Produção</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Produção</p>}
               <nav className="space-y-1">
-                <NavItem icon="list_alt" label="OPs Gerais" active={activePage === 'ops_gerais'} onClick={() => setActivePage('ops_gerais')} />
-                <NavItem icon="reorder" label="Sequência por Máquina" active={activePage === 'sequencia'} onClick={() => setActivePage('sequencia')} />
+                <NavItem icon="list_alt" label="OPs Gerais" active={activePage === 'ops_gerais'} onClick={() => setActivePage('ops_gerais')} collapsed={sidebarCollapsed} />
+                <NavItem icon="reorder" label="Sequência" active={activePage === 'sequencia'} onClick={() => setActivePage('sequencia')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Qualidade */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Qualidade</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Qualidade</p>}
               <nav className="space-y-1">
-                <NavItem icon="warning_amber" label="Tipos de Parada" active={activePage === 'tipos_parada'} onClick={() => setActivePage('tipos_parada')} />
-                <NavItem icon="cancel" label="Tipos de Refugo" active={activePage === 'tipos_refugo'} onClick={() => setActivePage('tipos_refugo')} />
-                <NavItem icon="fact_check" label="Checklists" active={activePage === 'checklists'} onClick={() => setActivePage('checklists')} />
-                <NavItem icon="verified_user" label="Monitoramento de Qualidade" active={activePage === 'monitoramento_qualidade'} onClick={() => setActivePage('monitoramento_qualidade')} />
+                <NavItem icon="warning_amber" label="Tipos de Parada" active={activePage === 'tipos_parada'} onClick={() => setActivePage('tipos_parada')} collapsed={sidebarCollapsed} />
+                <NavItem icon="cancel" label="Tipos de Refugo" active={activePage === 'tipos_refugo'} onClick={() => setActivePage('tipos_refugo')} collapsed={sidebarCollapsed} />
+                <NavItem icon="fact_check" label="Checklists" active={activePage === 'checklists'} onClick={() => setActivePage('checklists')} collapsed={sidebarCollapsed} />
+                <NavItem icon="verified_user" label="Monit. Qualidade" active={activePage === 'monitoramento_qualidade'} onClick={() => setActivePage('monitoramento_qualidade')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Integrações */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Integrações</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Integrações</p>}
               <nav className="space-y-1">
-                <NavItem icon="settings_input_component" label="ERP Connector" active={activePage === 'erp'} onClick={() => setActivePage('erp')} />
-                <NavItem icon="key" label="API Keys" active={activePage === 'api_keys'} onClick={() => setActivePage('api_keys')} />
-                <NavItem icon="sensors" label="CLP / Sensores" active={activePage === 'clp_sensores'} onClick={() => setActivePage('clp_sensores')} />
+                <NavItem icon="settings_input_component" label="ERP Connector" active={activePage === 'erp'} onClick={() => setActivePage('erp')} collapsed={sidebarCollapsed} />
+                <NavItem icon="key" label="API Keys" active={activePage === 'api_keys'} onClick={() => setActivePage('api_keys')} collapsed={sidebarCollapsed} />
+                <NavItem icon="sensors" label="CLP / Sensores" active={activePage === 'clp_sensores'} onClick={() => setActivePage('clp_sensores')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
 
-            {/* Category: Sistema */}
-            <section>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Sistema</h3>
+            <div>
+              {!sidebarCollapsed && <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-2">Sistema</p>}
               <nav className="space-y-1">
-                <NavItem icon="account_circle" label="Usuários" active={activePage === 'usuarios'} onClick={() => setActivePage('usuarios')} />
-                <NavItem icon="lock_person" label="Perfis e Permissões" active={activePage === 'perfis'} onClick={() => setActivePage('perfis')} />
-                <NavItem icon="history_edu" label="Logs e Auditoria" active={activePage === 'logs'} onClick={() => setActivePage('logs')} />
+                <NavItem icon="account_circle" label="Usuários" active={activePage === 'usuarios'} onClick={() => setActivePage('usuarios')} collapsed={sidebarCollapsed} />
+                <NavItem icon="lock_person" label="Perfis e Permissões" active={activePage === 'perfis'} onClick={() => setActivePage('perfis')} collapsed={sidebarCollapsed} />
+                <NavItem icon="history_edu" label="Logs e Auditoria" active={activePage === 'logs'} onClick={() => setActivePage('logs')} collapsed={sidebarCollapsed} />
               </nav>
-            </section>
+            </div>
           </div>
         </div>
 
         {/* User Profile Footer */}
-        <div className="mt-auto p-4 border-t border-border-dark flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-border-dark bg-primary flex items-center justify-center text-white font-bold">
-              {currentUser?.avatar?.startsWith('http') ? (
-                <img
-                  src={currentUser.avatar}
-                  alt="profile"
-                  className="w-full h-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              ) : (
-                currentUser?.avatar || currentUser?.name?.charAt(0) || '?'
-              )}
-            </div>
-            <div>
-              <p className="text-white text-sm font-bold leading-tight">{currentUser?.name}</p>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{currentUser?.role} • Produção</p>
-            </div>
+        <div className={`border-t border-border-dark flex items-center ${sidebarCollapsed ? 'justify-center p-3' : 'justify-between p-3'}`}>
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-border-dark bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {currentUser?.avatar?.startsWith('http') ? (
+              <img src={currentUser.avatar} alt="profile" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            ) : (
+              currentUser?.avatar || currentUser?.name?.charAt(0) || '?'
+            )}
           </div>
-          <button onClick={handleLogout} className="text-gray-500 hover:text-white transition-colors">
-            <span className="material-icons-outlined">logout</span>
-          </button>
+          {!sidebarCollapsed && (
+            <>
+              <div className="ml-2 flex-1 min-w-0">
+                <p className="text-white text-xs font-bold truncate">{currentUser?.name}</p>
+                <p className="text-[9px] text-gray-500 uppercase">{currentUser?.role}</p>
+              </div>
+              <button onClick={handleLogout} className="text-gray-500 hover:text-white transition-colors ml-2">
+                <span className="material-icons-outlined text-lg">logout</span>
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
       {/* Main Admin Area */}
       <div className="flex-1 flex flex-col bg-[#0b0c10]">
-        {/* Top Breadcrumb & Actions Header */}
-        <header className="h-16 border-b border-border-dark flex items-center justify-between px-8">
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-gray-500">Cadastros</span>
-            <span className="material-icons-outlined text-sm text-gray-600">chevron_right</span>
-            <span className="text-white font-medium capitalize">{activePage}</span>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="relative group">
-              <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg group-focus-within:text-primary">search</span>
-              <input
-                className="bg-surface-dark border border-border-dark rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary w-40 md:w-64 lg:w-80 transition-all"
-                placeholder="Buscar no sistema..."
-              />
-            </div>
-            <div className="flex items-center gap-4 text-gray-500">
-              <button className="relative hover:text-white transition-colors">
-                <span className="material-icons-outlined">notifications</span>
-                <span className="absolute top-0 right-0 w-2 h-2 bg-danger rounded-full border-2 border-[#0b0c10]"></span>
-              </button>
-              <button className="hover:text-white transition-colors">
-                <span className="material-icons-outlined">help_outline</span>
-              </button>
-            </div>
+        {/* Top Breadcrumb */}
+        <header className="h-10 border-b border-border-dark flex items-center px-6 shrink-0">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-600">Admin</span>
+            <span className="material-icons-outlined text-xs text-gray-700" style={{fontSize:'12px'}}>chevron_right</span>
+            <span className="text-gray-400 font-medium capitalize">{activePage}</span>
           </div>
         </header>
 
@@ -393,11 +377,8 @@ const AdminDashboard: React.FC = () => {
         ) : activePage === 'operadores' ? (
           <div className="p-8 flex flex-col flex-1 overflow-hidden">
             {/* Header Title & Top Buttons */}
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-3xl font-bold text-white tracking-tight font-display uppercase">Operadores</h2>
-                <p className="text-sm text-gray-500 mt-1">Gerencie os operadores do sistema, suas atribuições e status de acesso.</p>
-              </div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white tracking-tight font-display uppercase">Operadores</h2>
               <div className="flex gap-3">
                 <button className="flex items-center gap-2 px-5 py-2.5 bg-[#1a1c23] hover:bg-[#252831] border border-border-dark text-white text-sm font-bold rounded-lg transition-all">
                   <span className="material-icons-outlined text-lg">upload</span>
@@ -413,24 +394,61 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+              <div className="bg-[#15181e] border border-border-dark rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total de Operadores</p>
+                    <p className="text-2xl font-bold text-white mt-2">{operators.length}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <span className="material-icons-outlined text-primary">people</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#15181e] border border-border-dark rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Ativos</p>
+                    <p className="text-2xl font-bold text-white mt-2">{operators.filter(o => o.ativo).length}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-secondary/10 border border-secondary/20 flex items-center justify-center">
+                    <span className="material-icons-outlined text-secondary">check_circle</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#15181e] border border-border-dark rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Inativos</p>
+                    <p className="text-2xl font-bold text-white mt-2">{operators.filter(o => !o.ativo).length}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center">
+                    <span className="material-icons-outlined text-gray-500">cancel</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Filter Bar */}
-            <div className="bg-[#15181e] p-4 rounded-xl border border-border-dark flex gap-4 mb-6">
+            <div className="bg-[#15181e] p-3 rounded-xl border border-border-dark flex gap-3 mb-6">
               <div className="relative flex-1">
                 <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
                 <input
-                  className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-primary"
+                  className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-primary"
                   placeholder="Filtrar por nome ou matrícula..."
                 />
               </div>
               <div className="w-64">
-                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
+                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
                   <option>Todos os Setores</option>
                   <option>Usinagem</option>
                   <option>Montagem</option>
                 </select>
               </div>
               <div className="w-48">
-                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
+                <select className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 px-3 text-sm text-white focus:ring-1 focus:ring-primary">
                   <option>Status</option>
                   <option>Ativo</option>
                   <option>Inativo</option>
@@ -441,94 +459,84 @@ const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Table Container */}
-            <div className="bg-[#15181e]/50 border border-border-dark rounded-xl flex-1 flex flex-col overflow-hidden">
-              <div className="overflow-x-auto flex-1">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-[#1a1c23]/30 text-[10px] uppercase font-bold text-gray-500 border-b border-border-dark tracking-[0.1em]">
-                      <th className="px-8 py-5">Operador</th>
-                      <th className="px-6 py-5">Matrícula</th>
-                      <th className="px-6 py-5">Setor</th>
-                      <th className="px-6 py-5">Turno</th>
-                      <th className="px-6 py-5">Máquina Padrão</th>
-                      <th className="px-6 py-5">Status</th>
-                      <th className="px-8 py-5 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-dark text-sm">
-                    {loading ? (
-                      <tr><td colSpan={7} className="px-8 py-10 text-center text-text-sub-dark italic">Carregando operadores...</td></tr>
-                    ) : operators.map((op, i) => (
-                      <tr key={op.id} className="hover:bg-white/[0.02] transition-colors group">
-                        <td className="px-8 py-6">
-                          <div className="flex items-center gap-4">
-                            {op.avatar?.startsWith('http') ? (
-                              <img
-                                src={op.avatar}
-                                alt={op.nome}
-                                className="w-10 h-10 rounded-full object-cover border border-primary/30"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold bg-primary">
-                                {op.avatar || op.nome?.substring(0, 2).toUpperCase()}
-                              </div>
-                            )}
-                            <div>
-                              <p className="font-bold text-white text-base">{op.nome}</p>
-                              <p className="text-xs text-gray-500">{op.matricula}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 font-mono text-gray-400">{op.matricula}</td>
-                        <td className="px-6 py-6">
-                          <span className="px-3 py-1 bg-[#0b0c10] border border-border-dark text-gray-400 text-[11px] font-bold uppercase rounded">
-                            {getSectorName(op.setor_id)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-6">
-                          <div className="leading-relaxed text-gray-400">
-                            {getTurnoName(op.turno_id)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 text-gray-400">--</td>
-                        <td className="px-6 py-6">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${op.ativo ? 'bg-secondary' : 'bg-gray-600'}`}></span>
-                            <span className={`text-xs font-bold ${op.ativo ? 'text-secondary' : 'text-gray-600'}`}>{op.ativo ? 'Ativo' : 'Inativo'}</span>
-                          </div>
-                        </td>
-                        <td className="px-8 py-6 text-right">
-                          <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openEditModal(op)} className="text-gray-500 hover:text-primary p-1 rounded hover:bg-primary/10"><span className="material-icons-outlined text-lg">edit</span></button>
-                            <button
-                              onClick={() => handleDeleteOperator(op.id)}
-                              className="text-gray-500 hover:text-danger p-1 rounded hover:bg-danger/10"
-                            >
-                              <span className="material-icons-outlined text-lg">delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Operators Grid */}
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Carregando operadores...</div>
+            ) : operators.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-600">
+                <span className="material-icons-outlined text-5xl">people_outline</span>
+                <p className="text-sm">Nenhum operador cadastrado.</p>
               </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
+                  {operators.map((op) => (
+                    <div
+                      key={op.id}
+                      className={`bg-[#15181e] border rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:border-primary/40 ${
+                        op.ativo ? 'border-border-dark' : 'border-border-dark opacity-60'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className="relative">
+                        {op.avatar?.startsWith('http') ? (
+                          <img
+                            src={op.avatar}
+                            alt={op.nome}
+                            className="w-16 h-16 rounded-full object-cover border-2 border-primary/30"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold select-none">
+                            {op.nome?.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#15181e] ${op.ativo ? 'bg-secondary' : 'bg-gray-600'}`}></span>
+                      </div>
 
-              {/* Pagination */}
-              <div className="px-8 py-6 border-t border-border-dark flex items-center justify-between">
-                <p className="text-sm text-gray-500">Mostrando <span className="text-white font-bold">1 a 5</span> de {operators.length} resultados</p>
-                <div className="flex gap-2">
-                  <button className="w-10 h-10 rounded-lg border border-border-dark flex items-center justify-center text-gray-600 hover:text-white hover:border-gray-500 transition-all disabled:opacity-20 disabled:cursor-not-allowed">
-                    <span className="material-icons-outlined">chevron_left</span>
-                  </button>
-                  <button className="w-10 h-10 rounded-lg border border-border-dark flex items-center justify-center text-gray-600 hover:text-white hover:border-gray-500 transition-all">
-                    <span className="material-icons-outlined">chevron_right</span>
-                  </button>
+                      {/* Nome e matrícula */}
+                      <div className="text-center min-w-0 w-full">
+                        <p className="font-bold text-white text-sm leading-tight truncate">{op.nome}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 font-mono">{op.matricula}</p>
+                      </div>
+
+                      {/* Badges setor e turno */}
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <span className="text-[10px] text-center px-2 py-1 bg-[#0b0c10] border border-border-dark rounded text-gray-400 font-bold uppercase truncate">
+                          {getSectorName(op.setor_id)}
+                        </span>
+                        {getTurnoName(op.turno_id) !== '--' && (
+                          <span className="text-[10px] text-center px-2 py-1 bg-[#0b0c10] border border-border-dark rounded text-gray-500 truncate">
+                            {getTurnoName(op.turno_id)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Status + ações */}
+                      <div className="flex items-center justify-between w-full mt-auto pt-2 border-t border-border-dark/50">
+                        <span className={`text-[10px] font-bold uppercase ${op.ativo ? 'text-secondary' : 'text-gray-600'}`}>
+                          {op.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openEditModal(op)}
+                            className="text-gray-600 hover:text-primary p-1 rounded hover:bg-primary/10 transition-colors"
+                          >
+                            <span className="material-icons-outlined text-base">edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOperator(op.id)}
+                            className="text-gray-600 hover:text-danger p-1 rounded hover:bg-danger/10 transition-colors"
+                          >
+                            <span className="material-icons-outlined text-base">delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Add Operator Modal */}
             {isAddModalOpen && (
@@ -804,16 +812,19 @@ interface NavItemProps {
   label: string;
   active?: boolean;
   onClick?: () => void;
+  collapsed?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, collapsed }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all group ${active ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-      }`}
+    title={collapsed ? label : undefined}
+    className={`w-full flex items-center rounded-lg text-sm font-medium transition-all group ${
+      collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
+    } ${active ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}
   >
-    <span className={`material-icons-outlined text-lg ${active ? 'text-primary' : 'text-gray-600 group-hover:text-gray-400'}`}>{icon}</span>
-    <span className="flex-1 text-left">{label}</span>
+    <span className={`material-icons-outlined text-lg shrink-0 ${active ? 'text-primary' : 'text-gray-600 group-hover:text-gray-400'}`}>{icon}</span>
+    {!collapsed && <span className="flex-1 text-left truncate">{label}</span>}
   </button>
 );
 

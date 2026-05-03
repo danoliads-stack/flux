@@ -281,7 +281,7 @@ const AdminSetores: React.FC = () => {
                                         <div className="p-4 md:p-6">
                                             <div className="flex items-center justify-between mb-3">
                                                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                                                    <span className="material-icons-outlined text-sm">precision_manufacturing</span>
+                                                    <span className="material-icons-outlined text-sm">settings</span>
                                                     Máquinas ({setor.maquinas.length})
                                                 </h4>
                                                 <button

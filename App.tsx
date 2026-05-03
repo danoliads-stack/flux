@@ -1810,67 +1810,85 @@ const App: React.FC = () => {
               if (currentMachine && activeOP) {
                 const delta = Math.max(0, produced - totalProduced);
 
-                // Save partial production record (the delta)
+                // Registra produção parcial antes de suspender
                 const operatorId = activeOperatorId;
-                const { error: prodError } = await supabase.rpc('mes_record_production', {
-                  p_op_id: activeOP,
-                  p_machine_id: currentMachine.id,
-                  p_operator_id: operatorId,
-                  p_good_qty: delta,
-                  p_scrap_qty: 0,
-                  p_data_inicio: localStatusChangeAt || new Date().toISOString(),
-                  p_data_fim: new Date().toISOString(),
-                  p_turno: 'Parcial',
-                  p_client_event_id: generateClientEventId(),
-                  p_tipo_refugo_id: null
-                });
+                if (delta > 0) {
+                  const { error: prodError } = await supabase.rpc('mes_record_production', {
+                    p_op_id: activeOP,
+                    p_machine_id: currentMachine.id,
+                    p_operator_id: operatorId,
+                    p_good_qty: delta,
+                    p_scrap_qty: 0,
+                    p_data_inicio: localStatusChangeAt || new Date().toISOString(),
+                    p_data_fim: new Date().toISOString(),
+                    p_turno: 'Parcial',
+                    p_client_event_id: generateClientEventId(),
+                    p_tipo_refugo_id: null
+                  });
 
-                if (prodError) {
-                  console.error('Erro ao salvar producao parcial:', prodError);
-                  notify.error(`Erro ao salvar produção: ${prodError.message}`);
+                  if (prodError) {
+                    logger.error('Erro ao salvar producao parcial na suspensao:', prodError);
+                    notify.error(`Erro ao salvar produção: ${prodError.message}`);
+                  } else {
+                    setProductionData({ totalProduced: totalProduced + delta });
+                  }
                 }
-
-                setProductionData({ totalProduced: totalProduced + delta });
 
                 await refreshOpSummary(activeOP);
 
-                // BUG-007 FIX: fecha sessao do operador na tabela correta (op_operator_sessions)
-                if (activeOP) {
-                  await supabase
-                    .from('op_operator_sessions')
-                    .update({ ended_at: new Date().toISOString() })
-                    .eq('op_id', activeOP)
-                    .is('ended_at', null);
+                // Fecha sessão do operador na OP
+                await supabase
+                  .from('op_operator_sessions')
+                  .update({ ended_at: new Date().toISOString() })
+                  .eq('op_id', activeOP)
+                  .is('ended_at', null);
+
+                // Marca a OP como SUSPENSA no banco, registrando o setor onde foi suspensa
+                // para que apareça na lista do SetupModal quando for retomada
+                const { error: suspendOpError } = await supabase
+                  .from('ordens_producao')
+                  .update({
+                    status: 'SUSPENSA',
+                    setor_suspensao_id: currentMachine.setor_id
+                  })
+                  .eq('id', activeOP);
+
+                if (suspendOpError) {
+                  logger.error('Erro ao suspender OP:', suspendOpError);
+                  notify.error(`Erro ao suspender OP: ${suspendOpError.message}`);
+                  return;
                 }
 
-                // Refresh snapshot after apontamento parcial
-                await refreshOpSummary(activeOP);
-
-                // Update Machine Status & Timestamp (KEEP operator logged in)
+                // Libera a máquina para nova OP — status AVAILABLE, não SUSPENDED
+                // A OP suspensa fica rastreada em ordens_producao.status = SUSPENSA
                 await supabase.from('maquinas').update({
-                  status_atual: MachineStatus.SUSPENDED,
+                  status_atual: MachineStatus.AVAILABLE,
                   status_change_at: new Date().toISOString(),
                   op_atual_id: null
-                  // ? operador_atual_id NOT cleared - operator stays logged in
                 }).eq('id', currentMachine.id);
 
                 await realtimeManager.broadcastMachineUpdate(
-                  createMachineUpdate(currentMachine.id, MachineStatus.SUSPENDED, {
-                    operatorId: currentUser?.id, // ? Operator remains on machine
+                  createMachineUpdate(currentMachine.id, MachineStatus.AVAILABLE, {
+                    operatorId: currentUser?.id,
                     opId: null
                   })
                 );
 
-                // ? CRITICAL FIX: Atualizar currentMachine local
                 setCurrentMachine({
                   ...currentMachine,
                   op_atual_id: null,
-                  status_atual: MachineStatus.SUSPENDED
+                  status_atual: MachineStatus.AVAILABLE
                 });
 
-                setActiveOP(null); // ? Clear local OP state
-                setOpState('IDLE'); // ? Return dashboard to IDLE (Free machine)
+                setActiveOP(null);
+                setOpState('IDLE');
+
+                // Resetar acumuladores — o op_summary preserva o histórico
+                syncTimers({ accSetup: 0, accProd: 0, accStop: 0, statusChangeAt: new Date().toISOString() });
+                setProductionData({ totalProduced: 0, totalScrap: 0 });
+
                 closeModals();
+                notify.success('OP suspensa. A máquina está livre para nova produção. Para retomá-la, faça o SETUP e selecione esta OP na lista de OPs Suspensas.');
               }
             }}
           />

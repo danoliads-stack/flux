@@ -117,11 +117,8 @@ const AdminMaquinas: React.FC = () => {
     return (
         <div className="p-4 md:p-8 flex flex-col flex-1 overflow-hidden">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <div>
-                    <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight font-display uppercase">Máquinas</h2>
-                    <p className="text-xs md:text-sm text-gray-500 mt-1">Cadastre e gerencie as máquinas da fábrica.</p>
-                </div>
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white tracking-tight font-display uppercase">Máquinas</h2>
                 <button
                     onClick={() => setIsAddModalOpen(true)}
                     className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-lg shadow-glow transition-all"
@@ -132,18 +129,18 @@ const AdminMaquinas: React.FC = () => {
             </div>
 
             {/* Filters */}
-            <div className="bg-[#15181e] p-4 rounded-xl border border-border-dark flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="bg-[#15181e] p-3 rounded-xl border border-border-dark flex gap-3 mb-6">
                 <div className="relative flex-1">
                     <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
                     <input
-                        className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-primary"
+                        className="w-full bg-[#0b0c10] border border-border-dark rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-primary"
                         placeholder="Buscar por nome ou código..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
                 <select
-                    className="bg-[#0b0c10] border border-border-dark rounded-lg py-2.5 px-4 text-sm text-white focus:ring-1 focus:ring-primary min-w-[180px]"
+                    className="bg-[#0b0c10] border border-border-dark rounded-lg py-2 px-4 text-sm text-white focus:ring-1 focus:ring-primary min-w-[180px]"
                     value={filterSetor}
                     onChange={(e) => setFilterSetor(e.target.value)}
                 >
@@ -152,78 +149,71 @@ const AdminMaquinas: React.FC = () => {
                 </select>
             </div>
 
-            {/* Table */}
+            {/* Machines Grid */}
             {loading ? (
-                <div className="flex-1 flex items-center justify-center text-gray-500">
-                    <span className="material-icons-outlined animate-spin text-4xl mr-3">sync</span>
+                <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">
                     Carregando máquinas...
                 </div>
+            ) : filteredMaquinas.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-600">
+                    <span className="material-icons-outlined text-5xl">settings</span>
+                    <p className="text-sm">Nenhuma máquina encontrada.</p>
+                </div>
             ) : (
-                <div className="flex-1 overflow-auto bg-[#15181e]/50 border border-border-dark rounded-xl">
-                    <table className="w-full text-left min-w-[600px]">
-                        <thead>
-                            <tr className="bg-[#1a1c23]/50 text-[10px] uppercase font-bold text-gray-500 border-b border-border-dark tracking-widest">
-                                <th className="px-4 md:px-6 py-4">Máquina</th>
-                                <th className="px-4 md:px-6 py-4">Código</th>
-                                <th className="px-4 md:px-6 py-4">Setor</th>
-                                <th className="px-4 md:px-6 py-4">Status</th>
-                                <th className="px-4 md:px-6 py-4 text-right">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border-dark text-sm">
-                            {filteredMaquinas.length === 0 ? (
-                                <tr><td colSpan={5} className="px-6 py-10 text-center text-gray-500 italic">Nenhuma máquina encontrada.</td></tr>
-                            ) : filteredMaquinas.map((maq) => {
-                                const statusInfo = getStatusInfo(maq.status_atual);
-                                return (
-                                    <tr key={maq.id} className="hover:bg-white/[0.02] transition-colors group">
-                                        <td className="px-4 md:px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                                                    <span className="material-icons-outlined text-primary">precision_manufacturing</span>
-                                                </div>
-                                                <span className="font-bold text-white">{maq.nome}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 md:px-6 py-4 font-mono text-gray-400">{maq.codigo}</td>
-                                        <td className="px-4 md:px-6 py-4">
-                                            {maq.setores?.nome ? (
-                                                <span className="px-2 py-1 bg-[#0b0c10] border border-border-dark text-gray-400 text-xs font-bold uppercase rounded">
-                                                    {maq.setores.nome}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-600 italic text-xs">Sem setor</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 md:px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`w-2 h-2 rounded-full ${statusInfo.color}`}></span>
-                                                <span className="text-xs font-bold text-gray-400 uppercase">{statusInfo.label}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 md:px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => openEditModal(maq)}
-                                                    className="text-gray-500 hover:text-primary p-1.5 rounded hover:bg-primary/10"
-                                                    title="Editar"
-                                                >
-                                                    <span className="material-icons-outlined text-lg">edit</span>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteMaquina(maq.id, maq.nome)}
-                                                    className="text-gray-500 hover:text-danger p-1.5 rounded hover:bg-danger/10"
-                                                    title="Excluir"
-                                                >
-                                                    <span className="material-icons-outlined text-lg">delete</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
+                        {filteredMaquinas.map((maq) => {
+                            const statusInfo = getStatusInfo(maq.status_atual);
+                            return (
+                                <div
+                                    key={maq.id}
+                                    className="bg-[#15181e] border border-border-dark rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:border-primary/40"
+                                >
+                                    {/* Ícone com status */}
+                                    <div className="relative">
+                                        <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                                            <span className="material-icons-outlined text-primary text-3xl">settings</span>
+                                        </div>
+                                        <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#15181e] ${statusInfo.color}`}></span>
+                                    </div>
+
+                                    {/* Nome e código */}
+                                    <div className="text-center min-w-0 w-full">
+                                        <p className="font-bold text-white text-sm leading-tight truncate">{maq.nome}</p>
+                                        <p className="text-[11px] text-gray-500 mt-0.5 font-mono">{maq.codigo}</p>
+                                    </div>
+
+                                    {/* Setor */}
+                                    <div className="w-full">
+                                        <span className="block text-[10px] text-center px-2 py-1 bg-[#0b0c10] border border-border-dark rounded text-gray-400 font-bold uppercase truncate">
+                                            {maq.setores?.nome || 'Sem setor'}
+                                        </span>
+                                    </div>
+
+                                    {/* Status + ações */}
+                                    <div className="flex items-center justify-between w-full mt-auto pt-2 border-t border-border-dark/50">
+                                        <span className={`text-[10px] font-bold uppercase text-gray-400`}>
+                                            {statusInfo.label}
+                                        </span>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => openEditModal(maq)}
+                                                className="text-gray-600 hover:text-primary p-1 rounded hover:bg-primary/10 transition-colors"
+                                            >
+                                                <span className="material-icons-outlined text-base">edit</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteMaquina(maq.id, maq.nome)}
+                                                className="text-gray-600 hover:text-danger p-1 rounded hover:bg-danger/10 transition-colors"
+                                            >
+                                                <span className="material-icons-outlined text-base">delete</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
 

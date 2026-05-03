@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { AppUser, UserRole } from './types';
 import { SessionStorage } from './src/utils/storageManager';
 import { logger } from './src/utils/logger';
+import { gdprService } from './src/services/gdprService';
 import type { Session } from '@supabase/supabase-js';
 
 // Namespace para sessão de operador
@@ -303,6 +304,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(opUser);
 
         logger.log('[AUTH] Operator logged in:', opUser.name);
+
+        // Registra consentimento GDPR no banco (background, não-bloqueante)
+        gdprService.recordConsentAfterLogin(opUser.id).catch(e => {
+          logger.error('[AUTH] Erro ao registrar consentimento GDPR', e);
+        });
+
         return { error: null };
     }, []);
 

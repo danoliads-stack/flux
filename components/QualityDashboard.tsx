@@ -365,7 +365,7 @@ const QualityDashboard: React.FC = () => {
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center">
-                                                    <span className="material-icons-outlined text-primary text-xs">precision_manufacturing</span>
+                                                    <span className="material-icons-outlined text-primary text-xs">settings</span>
                                                 </div>
                                                 <span className="text-sm font-bold text-white">{event.machine_name}</span>
                                             </div>
@@ -436,7 +436,7 @@ const QualityDashboard: React.FC = () => {
                                     <h3 className="text-xl font-bold text-white uppercase tracking-tight">{viewingEvent.checklist_nome}</h3>
                                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                                         <span className="text-xs text-text-sub-dark flex items-center gap-1">
-                                            <span className="material-icons-outlined text-sm">precision_manufacturing</span>
+                                            <span className="material-icons-outlined text-sm">settings</span>
                                             {viewingEvent.machine_name}
                                         </span>
                                         <span className="text-xs text-text-sub-dark flex items-center gap-1">
