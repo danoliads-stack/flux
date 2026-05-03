@@ -304,7 +304,7 @@ const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ machines })
     });
 
     setMachineOeeMap(nextMap);
-  }, [machines, machineOeeMap, getMachineOeeGoal]);
+  }, [machines]);
 
   useEffect(() => {
     return () => {
